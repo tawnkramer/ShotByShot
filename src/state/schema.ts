@@ -46,9 +46,19 @@ export const scriptLineSchema = z.object({
   sceneId: z.string().optional(),
 });
 
-// Later milestones fill in shots, stages, characters and props. Until their
-// schemas exist, they are kept as opaque records so files round-trip intact.
+// Later milestones fill in stages, characters and props. Until their schemas
+// exist, they are kept as opaque records so files round-trip intact.
 const looseRecord = z.record(z.string(), z.unknown());
+
+export const BREAKDOWN_MODES = ['line', 'pair', 'mixed'] as const;
+export type BreakdownMode = (typeof BREAKDOWN_MODES)[number];
+
+/** A shot covers a contiguous run of script lines. Later milestones add setup, camera and timing. */
+export const shotSchema = z.looseObject({
+  id: z.string(),
+  number: z.string(),
+  lineIds: z.array(z.string()).min(1),
+});
 
 export const projectSchema = z.object({
   schemaVersion: z.number().int(),
@@ -58,7 +68,8 @@ export const projectSchema = z.object({
   fps: z.number().int().positive(),
   step: z.enum(STEPS),
   script: z.array(scriptLineSchema),
-  shots: z.array(looseRecord),
+  breakdownMode: z.enum(BREAKDOWN_MODES).default('mixed'),
+  shots: z.array(shotSchema),
   stages: z.array(looseRecord),
   characters: z.array(looseRecord),
   props: z.array(looseRecord),
@@ -68,6 +79,8 @@ export const projectSchema = z.object({
 
 export type Project = z.infer<typeof projectSchema>;
 export type ScriptLine = z.infer<typeof scriptLineSchema>;
+export type LineType = ScriptLine['type'];
+export type Shot = z.infer<typeof shotSchema>;
 
 export function newId(): string {
   // randomUUID only exists in secure contexts; phones testing the dev server over
@@ -90,6 +103,7 @@ export function createProject(name: string): Project {
     fps: 24,
     step: 'story',
     script: [],
+    breakdownMode: 'mixed',
     shots: [],
     stages: [],
     characters: [],

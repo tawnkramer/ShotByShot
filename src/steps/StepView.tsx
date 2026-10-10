@@ -1,6 +1,7 @@
 import type { Step } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { ASPECT_RATIOS } from '../state/schema';
+import { StoryStep } from './story/StoryStep';
 
 const COMING: Record<Step, { summary: string; milestone: string }> = {
   story: { summary: 'Import a text script, label each line, and break it into shots.', milestone: 'M1' },
@@ -13,6 +14,11 @@ const COMING: Record<Step, { summary: string; milestone: string }> = {
 };
 
 export function StepView({ step }: { step: Step }) {
+  if (step === 'story') return <StoryStep />;
+  return <ComingSoon step={step} />;
+}
+
+function ComingSoon({ step }: { step: Step }) {
   const project = useProjectStore((s) => s.project)!;
   const aspect = ASPECT_RATIOS.find((a) => a.id === project.aspect)!;
   const info = COMING[step];

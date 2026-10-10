@@ -64,7 +64,12 @@ export function Header({ step, onStep, primary }: Props) {
             {primary.label}
           </button>
         ) : next ? (
-          <button className="btn primary" onClick={() => onStep(next)}>
+          <button
+            className="btn primary"
+            disabled={step === 'story' && project.shots.length === 0}
+            title={step === 'story' && project.shots.length === 0 ? 'Import a script first' : undefined}
+            onClick={() => onStep(next)}
+          >
             Next
           </button>
         ) : null}

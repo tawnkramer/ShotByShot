@@ -32,7 +32,7 @@ describe('referencedBlobKeys', () => {
   it('finds blob references anywhere in the project', () => {
     const p = createProject('Assets');
     p.stages.push({ objects: [{ source: { kind: 'asset', blob: 'model1' } }] });
-    p.shots.push({ thumbBlob: 'thumb1', dialogue: [{ audioBlob: 'clip1' }] });
+    p.shots.push({ id: 's1', number: '1', lineIds: ['l1'], thumbBlob: 'thumb1', dialogue: [{ audioBlob: 'clip1' }] });
     expect(referencedBlobKeys(p).sort()).toEqual(['clip1', 'model1', 'thumb1']);
   });
 });

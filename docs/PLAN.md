@@ -643,6 +643,24 @@ AI tools only depend on M1.
 
 ---
 
+### Progress
+
+- **M0 done:** app shell, Projects home, IndexedDB autosave, undo/redo, project
+  file save/open, project and app settings, Pages deploy workflow.
+- **M1 done:** text import (file, paste, or sample), instant line labelling with
+  review highlights, tap-to-cycle and long-press line editing, multi-select
+  relabel/delete, three breakdown modes, tap-between-lines cuts, scene-based
+  shot numbers. The AI refine pass and AI "Mixed" breakdown arrive with the
+  agent (M5); until then Mixed uses the rules below.
+
+**Mixed (rule-based) breakdown:** action lines get one shot each, except that a
+scene's establishing shot can carry one short follow-up action line. A speaker
+continuing stays in the same shot, and two short lines in a row (8 words or
+fewer each) play as one two-shot. Otherwise the shot cuts on each new speaker.
+A short camera heading ("ANGLE ON MAYA") starts the shot it directs. A
+descriptive camera line ("CLOSE ON the envelope. A police seal.") is a shot of
+its own. Transitions ("CUT TO:") end the shot before them.
+
 ## 10. Key risks & mitigations
 
 | Risk | Mitigation |
