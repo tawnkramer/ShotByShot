@@ -26,7 +26,8 @@ through the same commands the UI uses, so all its actions can be undone.
 | Character motion | Yes, simple: **start and end keyframe** per character per shot, interpolated (same model as the camera) |
 | Collaboration | Single user only for now |
 | Script import | Plain text (Fountain conventions are understood but not required) |
-| Aspect ratios | **Movie 2.39:1**, **16:9**, **YouTube Short 9:16**, set per project |
+| Aspect ratios | All common film ratios (2.39, 2.20, 2.00, 1.85, 1.66, 1.43, 1.37:1), TV 4:3, **16:9**, **YouTube Short 9:16**; set per project |
+| Publishing | Repo goes public when ready; the site lives at `tawnkramer.github.io/ShotByShot/` (no custom domain) |
 | Audio | **Text-to-speech** for dialogue, voice per character, included in previs and the MP4 |
 
 ---
@@ -447,7 +448,7 @@ type Quat = [number, number, number, number];
 type Transform = { position: Vec3; rotation: Quat; scale: Vec3 };
 
 type LineType = 'title'|'description'|'character'|'dialogue'|'action'|'scene'|'camera';
-type AspectRatio = '2.39:1' | '16:9' | '9:16';
+type AspectRatio = '2.39:1' | '2.20:1' | '2.00:1' | '1.85:1' | '1.66:1' | '1.43:1' | '1.37:1' | '4:3' | '16:9' | '9:16';
 
 interface Project {
   schemaVersion: number; id: string; name: string;
@@ -674,11 +675,14 @@ AI tools only depend on M1.
 
 ---
 
-## 12. Open questions
+## 12. Deployment
 
-1. **Movie aspect ratio.** The plan uses 2.39:1 for "Movie" and keeps 16:9 as a
-   third option (it is also standard YouTube). Should 1.85:1 be offered too?
-2. **Repository visibility.** GitHub Pages on a private repo needs a paid GitHub
-   plan. Is the repo going to be public, or is a paid plan available?
-3. **Domain.** Use the default `tawnkramer.github.io/ShotByShot/`, or a custom
-   domain?
+- `.github/workflows/deploy.yml` builds, tests, and publishes `dist/` to GitHub
+  Pages on every push to `main`. `.github/workflows/ci.yml` runs tests and a
+  build on other branches and pull requests.
+- One-time setup: in the repo's **Settings → Pages**, set **Source** to
+  **GitHub Actions**. GitHub Pages on a private repo needs a paid plan, so the
+  site goes live once the repo is public (or on a paid plan).
+- Until then, test on a phone with `npm run dev`, which serves on the local
+  network (`--host`). Over plain http the offline service worker and the share
+  sheet are unavailable, but everything else works.

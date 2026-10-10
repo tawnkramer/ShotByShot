@@ -1,0 +1,57 @@
+/// <reference types="vitest/config" />
+import { defineConfig, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+// GitHub Pages can't set response headers, so the Content Security Policy is a
+// <meta> tag. It is only added to production builds because the dev server
+// injects inline scripts for hot reload.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' blob: data:",
+  "media-src 'self' blob: data:",
+  "font-src 'self'",
+  "worker-src 'self' blob:",
+  "connect-src 'self' blob: data: https://api.openai.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join('; ');
+
+function cspMeta(): Plugin {
+  return {
+    name: 'csp-meta',
+    apply: 'build',
+    transformIndexHtml: () => [
+      { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP }, injectTo: 'head-prepend' },
+    ],
+  };
+}
+
+export default defineConfig({
+  base: '/ShotByShot/',
+  plugins: [
+    react(),
+    cspMeta(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'script-defer',
+      includeAssets: ['icon.svg'],
+      manifest: {
+        name: 'ShotByShot',
+        short_name: 'ShotByShot',
+        description: 'Shot breakdown and previs',
+        theme_color: '#141416',
+        background_color: '#141416',
+        display: 'standalone',
+        orientation: 'portrait',
+        icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }],
+      },
+    }),
+  ],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['tests/setup.ts'],
+  },
+});

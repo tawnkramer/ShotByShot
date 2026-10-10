@@ -1,0 +1,70 @@
+import { ASPECT_RATIOS, type AspectRatioId } from '../state/schema';
+import { useProjectStore } from '../state/store';
+
+const FPS_OPTIONS = [24, 25, 30];
+
+export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
+  const project = useProjectStore((s) => s.project)!;
+  const dispatch = useProjectStore((s) => s.dispatch);
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="sheet" role="dialog" aria-label="Project settings">
+        <div className="sheet-head">
+          <strong>Project settings</strong>
+          <button className="btn ghost" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <label className="field">
+          <span>Name</span>
+          <input
+            defaultValue={project.name}
+            onBlur={(e) => {
+              const name = e.target.value.trim();
+              if (name && name !== project.name) dispatch({ label: 'Rename project', apply: (d) => void (d.name = name) });
+            }}
+          />
+        </label>
+        <div className="field">
+          <span>Aspect ratio</span>
+          <div className="aspect-grid">
+            {ASPECT_RATIOS.map((a) => (
+              <button
+                key={a.id}
+                className={`aspect-option ${project.aspect === a.id ? 'selected' : ''}`}
+                aria-pressed={project.aspect === a.id}
+                onClick={() => dispatch({ label: 'Change aspect ratio', apply: (d) => void (d.aspect = a.id as AspectRatioId) })}
+              >
+                <span className="aspect-box">
+                  <span className="aspect-swatch" style={swatchSize(a.ratio)} />
+                </span>
+                <span className="small">{a.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="field">
+          <span>Frame rate</span>
+          <select
+            value={project.fps}
+            onChange={(e) => dispatch({ label: 'Change frame rate', apply: (d) => void (d.fps = Number(e.target.value)) })}
+          >
+            {FPS_OPTIONS.map((f) => (
+              <option key={f} value={f}>
+                {f} fps
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </>
+  );
+}
+
+/** Fits a swatch of the given ratio inside a 64×36 box. */
+function swatchSize(ratio: number) {
+  const [maxW, maxH] = [64, 36];
+  return ratio >= maxW / maxH ? { width: maxW, height: maxW / ratio } : { width: maxH * ratio, height: maxH };
+}
