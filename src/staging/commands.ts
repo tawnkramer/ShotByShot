@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Draft } from 'immer';
 import type { Command } from '../state/commands';
-import { newId, type ObjectSource, type Project, type ScriptLine, type Stage, type StageObject, type Transform } from '../state/schema';
+import { newId, type ObjectSource, type Project, type Prop, type ScriptLine, type Stage, type StageObject, type Transform } from '../state/schema';
 import { itemDef } from '../three/library';
 
 export const IDENTITY: Transform = { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] };
@@ -106,6 +106,7 @@ export function duplicateStage(stageId: string, newStageId = newId()): Command {
 
 export function defaultName(source: ObjectSource): string {
   if (source.kind === 'asset') return source.fileName?.replace(/\.[^.]+$/, '') || 'Model';
+  if (source.kind === 'composite') return 'Custom prop';
   return itemDef(source).label;
 }
 
@@ -116,13 +117,23 @@ export function uniqueName(objects: { name: string }[], base: string): string {
   for (let n = 2; ; n++) if (!names.has(`${base} ${n}`)) return `${base} ${n}`;
 }
 
-export function addObject(stageId: string, source: ObjectSource, transform: Transform = IDENTITY, id = newId(), name?: string): Command {
+export function addObject(
+  stageId: string,
+  source: ObjectSource,
+  transform: Transform = IDENTITY,
+  id = newId(),
+  name?: string,
+  extra: Pick<StageObject, 'propId' | 'grey'> = {},
+): Command {
   return {
     label: `Add ${name ?? defaultName(source)}`,
     apply: (d) => {
       const stage = findStage(d, stageId);
       if (!stage) return;
-      stage.objects.push({ id, name: uniqueName(stage.objects, name ?? defaultName(source)), transform: structuredClone(transform), source });
+      const obj: StageObject = { id, name: uniqueName(stage.objects, name ?? defaultName(source)), transform: structuredClone(transform), source: structuredClone(source) };
+      if (extra.propId) obj.propId = extra.propId;
+      if (extra.grey !== undefined) obj.grey = extra.grey;
+      stage.objects.push(obj);
     },
   };
 }
@@ -145,7 +156,7 @@ export function updateObject(stageId: string, objectId: string, patch: ObjectPat
         else obj.grey = patch.grey;
       }
       if (patch.transform) Object.assign(obj.transform, patch.transform);
-      if (patch.params && obj.source.kind !== 'asset') obj.source.params = { ...obj.source.params, ...patch.params };
+      if (patch.params && (obj.source.kind === 'library' || obj.source.kind === 'primitive')) obj.source.params = { ...obj.source.params, ...patch.params };
     },
   };
 }
@@ -193,4 +204,10 @@ export function quatFromDegrees([x, y, z]: [number, number, number]): Transform[
 export function round(v: number, digits = 3): number {
   const f = 10 ** digits;
   return Math.round(v * f) / f;
+}
+
+/** Places a prop from the project's library onto a stage. */
+export function placeProp(stageId: string, prop: Prop, position: Transform['position'], id = newId()): Command {
+  const s = prop.defaultScale;
+  return addObject(stageId, prop.source, { position, rotation: [0, 0, 0, 1], scale: [s, s, s] }, id, prop.name, { propId: prop.id, grey: prop.grey });
 }

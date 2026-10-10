@@ -668,7 +668,16 @@ AI tools only depend on M1.
   head, shoulder → elbow, hip → knee) with eyes, a nose, and a colored floor
   ring with a notch toward the front. Five pose presets: stand, sit, walk,
   lean, lie. Card thumbnails come from one shared offscreen renderer.
-  Props are next.
+- **M3 (Props) done:** a project prop library. Props mentioned in action
+  lines are suggested (envelope, glass, phone, gun, knife, bag, …). New
+  library props: glass, phone, envelope, book, briefcase, bag, laptop, lamp,
+  pistol, knife (plus bottle and mug). Props can also be shapes or imported
+  models. The prop viewer shows real size, a 175 cm person for scale, scale
+  and size sliders, shade, and "place on a stage". Staging's Add sheet lists
+  the project's props first. Placed copies remember which prop they came
+  from. The **composite** format (a list of boxes, cylinders, spheres, cones
+  and tori) is in the schema and renderer, ready for the assistant to model
+  props in M5.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

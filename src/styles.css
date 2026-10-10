@@ -412,3 +412,10 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .swatch.none { background: linear-gradient(135deg, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%), var(--surface-2); }
 .chip.tag { color: var(--text); border-color: var(--border); background: var(--surface-2); }
 .voice input { min-height: 40px; }
+
+/* Props */
+.char-thumb.square { aspect-ratio: 1; }
+.suggestions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.suggestion { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--border); background: var(--bg); cursor: pointer; }
+.suggestion:active { border-color: var(--accent); }
+.viewport-toolbar .btn.on { border-color: var(--accent); color: var(--accent); }

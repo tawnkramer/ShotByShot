@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { LibraryItem, PrimitiveShape } from '../state/schema';
+import type { CompositeNode, LibraryItem, ObjectSource, ParamSource, PrimitiveShape } from '../state/schema';
 import { glassMaterial, greyMaterial } from './materials';
 
 /**
@@ -18,6 +18,8 @@ export interface ParamDef {
 
 export interface ItemDef {
   label: string;
+  /** Set pieces furnish a stage; props are things characters handle. */
+  category?: 'set' | 'prop';
   params: ParamDef[];
   build: (p: Record<string, number>) => THREE.Group;
 }
@@ -125,6 +127,7 @@ export const LIBRARY: Record<LibraryItem, ItemDef> = {
       group(cyl(0.2, 0.2, 0.02, 0.4), cyl(0.025, 0.025, h - 0.05, 0.45, 0, 0.02), cyl(0.18, 0.18, 0.05, 0.75, 0, h - 0.05), cyl(0.15, 0.15, 0.015, 0.4, 0, 0.3)),
   },
   bottle: {
+    category: 'prop',
     label: 'Bottle',
     params: [P('height', 'Height', 0.3, 0.15, 0.5, 0.01)],
     build: ({ height: h }) => {
@@ -136,6 +139,7 @@ export const LIBRARY: Record<LibraryItem, ItemDef> = {
     },
   },
   mug: {
+    category: 'prop',
     label: 'Mug',
     params: [],
     build: () => {
@@ -143,6 +147,97 @@ export const LIBRARY: Record<LibraryItem, ItemDef> = {
       handle.rotation.z = -Math.PI / 2;
       return group(cyl(0.04, 0.038, 0.1, 0.8), handle);
     },
+  },
+  glass: {
+    label: 'Glass',
+    category: 'prop',
+    params: [],
+    build: () => {
+      const pts = [[0, 0], [0.032, 0], [0.036, 0.1], [0.033, 0.1], [0.029, 0.006], [0, 0.006]].map(([x, y]) => new THREE.Vector2(x, y));
+      return group(part(new THREE.LatheGeometry(pts, 18), 0.85));
+    },
+  },
+  phone: {
+    label: 'Phone',
+    category: 'prop',
+    params: [],
+    build: () => group(box(0.075, 0.008, 0.155, 0.25), box(0.068, 0.001, 0.145, 0.12, 0, 0.008)),
+  },
+  envelope: {
+    label: 'Envelope',
+    category: 'prop',
+    params: [],
+    build: () => group(box(0.23, 0.004, 0.115, 0.9)),
+  },
+  book: {
+    label: 'Book',
+    category: 'prop',
+    params: [P('thickness', 'Thickness', 0.03, 0.005, 0.1, 0.005)],
+    build: ({ thickness: t }) => group(box(0.16, t, 0.235, 0.45), box(0.15, t - 0.004, 0.225, 0.92, 0.006, 0.002)),
+  },
+  briefcase: {
+    label: 'Briefcase',
+    category: 'prop',
+    params: [],
+    build: () => {
+      const handle = part(new THREE.TorusGeometry(0.045, 0.008, 8, 16, Math.PI), 0.2, 0, 0.34, 0);
+      return group(box(0.45, 0.33, 0.1, 0.32), handle);
+    },
+  },
+  bag: {
+    label: 'Bag',
+    category: 'prop',
+    params: [],
+    build: () => {
+      const body = part(new THREE.CapsuleGeometry(0.14, 0.34, 6, 14), 0.4, 0, 0.14, 0);
+      body.rotation.z = Math.PI / 2;
+      const strap = part(new THREE.TorusGeometry(0.12, 0.012, 8, 20, Math.PI), 0.3, 0, 0.26, 0);
+      return group(body, strap);
+    },
+  },
+  laptop: {
+    label: 'Laptop',
+    category: 'prop',
+    params: [],
+    build: () => {
+      // The lid hinges at the back edge and leans back past upright.
+      const lid = new THREE.Group();
+      lid.position.set(0, 0.016, -0.11);
+      lid.rotation.x = -THREE.MathUtils.degToRad(15);
+      lid.add(box(0.33, 0.22, 0.01, 0.3));
+      return group(box(0.33, 0.016, 0.23, 0.4), lid);
+    },
+  },
+  lamp: {
+    label: 'Lamp',
+    category: 'prop',
+    params: [P('height', 'Height', 0.5, 0.25, 1.8, 0.05)],
+    build: ({ height: h }) =>
+      group(cyl(0.08, 0.09, 0.025, 0.3), cyl(0.01, 0.01, h - 0.2, 0.3, 0, 0.025), cyl(0.08, 0.15, 0.2, 0.9, 0, h - 0.2)),
+  },
+  pistol: {
+    label: 'Pistol',
+    category: 'prop',
+    params: [],
+    // Lying on its side, barrel toward +Z.
+    build: () => {
+      const g = new THREE.Group();
+      const slide = box(0.03, 0.035, 0.19, 0.25, 0, 0, 0.03);
+      const grip = box(0.028, 0.11, 0.035, 0.3, 0, -0.1, -0.04);
+      grip.rotation.x = THREE.MathUtils.degToRad(15);
+      const gun = new THREE.Group();
+      gun.add(slide, grip);
+      gun.rotation.z = Math.PI / 2;
+      gun.position.y = 0.018;
+      g.add(gun);
+      return g;
+    },
+  },
+  knife: {
+    label: 'Knife',
+    category: 'prop',
+    params: [],
+    build: () => group(box(0.022, 0.018, 0.11, 0.25, 0, 0, -0.06), box(0.026, 0.003, 0.15, 0.85, 0, 0.007, 0.07)),
   },
   wall: {
     label: 'Wall',
@@ -209,8 +304,59 @@ export function resolveParams(def: ItemDef, params?: Record<string, number>): Re
   return out;
 }
 
+export function isParamSource(source: ObjectSource): source is ParamSource {
+  return source.kind === 'library' || source.kind === 'primitive';
+}
+
+/** Size parameters for a source, if it has any. */
+export function paramDefFor(source: ObjectSource): ItemDef | null {
+  return isParamSource(source) ? itemDef(source) : null;
+}
+
+const UNIT_GEOMETRY: Record<CompositeNode['shape'], () => THREE.BufferGeometry> = {
+  box: () => new THREE.BoxGeometry(1, 1, 1),
+  cylinder: () => new THREE.CylinderGeometry(0.5, 0.5, 1, 20),
+  cone: () => new THREE.ConeGeometry(0.5, 1, 20),
+  sphere: () => new THREE.SphereGeometry(0.5, 20, 14),
+  // Lies flat; scaled so x/z is the outer diameter and y the tube thickness.
+  torus: () => new THREE.TorusGeometry(0.375, 0.125, 10, 24).rotateX(Math.PI / 2),
+};
+
+/** Builds a model from a list of shapes, then sets it on the floor. */
+export function buildComposite(nodes: CompositeNode[]): THREE.Group {
+  const inner = new THREE.Group();
+  for (const n of nodes) {
+    const shade = n.grey ?? 0.7;
+    const geometry = UNIT_GEOMETRY[n.shape]();
+    if (n.shape === 'torus') geometry.scale(n.size[0], n.size[1] * 4, n.size[2]);
+    else geometry.scale(...n.size);
+    const mesh = part(geometry, shade, ...n.position);
+    if (n.rotation) mesh.rotation.set(...(n.rotation.map((d) => THREE.MathUtils.degToRad(d)) as [number, number, number]), 'YXZ');
+    inner.add(mesh);
+  }
+  inner.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(inner);
+  if (!box.isEmpty()) inner.position.y = -box.min.y;
+  return group(inner);
+}
+
+/** Builds any source that doesn't need loading (everything but imported models). */
+export function buildStatic(source: Exclude<ObjectSource, { kind: 'asset' }>): THREE.Group {
+  return source.kind === 'composite' ? withShadows(buildComposite(source.nodes)) : buildItem(source);
+}
+
+function withShadows(g: THREE.Group): THREE.Group {
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.castShadow = !m.userData.glass && !m.userData.floor;
+    m.receiveShadow = true;
+  });
+  return g;
+}
+
 /** Builds a library item or primitive with shadows set up. */
-export function buildItem(source: Parameters<typeof itemDef>[0] & { params?: Record<string, number> }): THREE.Group {
+export function buildItem(source: ParamSource): THREE.Group {
   const def = itemDef(source);
   const g = def.build(resolveParams(def, source.params));
   g.traverse((o) => {

@@ -1,7 +1,7 @@
 import type { Stage, StageObject } from '../../state/schema';
 import { useProjectStore } from '../../state/store';
 import { eulerDegrees, quatFromDegrees, round, updateObject, type ObjectPatch } from '../../staging/commands';
-import { itemDef, resolveParams } from '../../three/library';
+import { isParamSource, paramDefFor, resolveParams } from '../../three/library';
 import { NumberField, Slider } from './fields';
 
 export function Inspector({ stage, object }: { stage: Stage; object: StageObject }) {
@@ -9,8 +9,8 @@ export function Inspector({ stage, object }: { stage: Stage; object: StageObject
   const update = (patch: ObjectPatch, label: string, mergeKey?: string) => dispatch(updateObject(stage.id, object.id, patch, label, mergeKey));
   const { position, scale } = object.transform;
   const rot = eulerDegrees(object.transform);
-  const def = object.source.kind === 'asset' ? null : itemDef(object.source);
-  const params = def && object.source.kind !== 'asset' ? resolveParams(def, object.source.params) : {};
+  const def = paramDefFor(object.source);
+  const params = def && isParamSource(object.source) ? resolveParams(def, object.source.params) : {};
   const uniform = scale[0] === scale[1] && scale[1] === scale[2];
 
   const setPos = (i: number, v: number) => {

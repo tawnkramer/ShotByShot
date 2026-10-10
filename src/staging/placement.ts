@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ObjectSource, Stage, StageObject, Transform } from '../state/schema';
-import { buildItem } from '../three/library';
+import { buildStatic } from '../three/library';
 import { disposeObject } from '../three/materials';
 
 /** Half-width (x) and half-depth (z) of an object's footprint, before rotation. */
@@ -13,7 +13,7 @@ export function footprint(source: ObjectSource): Extent {
   const key = JSON.stringify(source);
   let e = cache.get(key);
   if (!e) {
-    const g = buildItem(source);
+    const g = buildStatic(source);
     const box = new THREE.Box3().setFromObject(g);
     disposeObject(g);
     e = { hx: Math.max(0.05, (box.max.x - box.min.x) / 2), hz: Math.max(0.05, (box.max.z - box.min.z) / 2) };

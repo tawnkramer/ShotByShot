@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useProjectStore } from '../../state/store';
-import { newId, type ObjectSource, type Stage, type Transform } from '../../state/schema';
+import { newId, type ObjectSource, type Prop, type Stage, type Transform } from '../../state/schema';
 import { freeSpot } from '../../staging/placement';
-import { addObject, duplicateObject, IDENTITY, removeObject, updateObject } from '../../staging/commands';
+import { addObject, duplicateObject, IDENTITY, placeProp, removeObject, updateObject } from '../../staging/commands';
 import { useStagingUI, type GizmoMode } from '../../staging/uiStore';
 import { useLongPress } from '../../shell/useLongPress';
 import { StageViewport } from './StageViewport';
@@ -65,6 +65,13 @@ export function StagingStep() {
     const id = newId();
     const position = freeSpot(stage, source);
     dispatch(addObject(stage.id, source, { ...IDENTITY, position }, id));
+    select(id);
+    setSheet(null);
+  };
+
+  const addProp = (prop: Prop) => {
+    const id = newId();
+    dispatch(placeProp(stage.id, prop, freeSpot(stage, prop.source), id));
     select(id);
     setSheet(null);
   };
@@ -133,7 +140,7 @@ export function StagingStep() {
           <ObjectList stage={stage} onPick={select} onAdd={() => setSheet('add')} />
         )}
       </div>
-      {sheet === 'add' && <AddSheet onAdd={add} onClose={() => setSheet(null)} />}
+      {sheet === 'add' && <AddSheet onAdd={add} projectProps={project.props} onAddProp={addProp} onClose={() => setSheet(null)} />}
       {sheet === 'new' && <NewStageSheet onCreated={(id) => { setStage(id); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === 'actions' && <StageActionsSheet stage={stage} onSelect={setStage} onClose={() => setSheet(null)} />}
     </div>

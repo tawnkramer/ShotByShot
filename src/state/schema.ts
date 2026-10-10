@@ -46,17 +46,37 @@ export const scriptLineSchema = z.object({
   sceneId: z.string().optional(),
 });
 
-export const LIBRARY_ITEMS = ['table', 'chair', 'door', 'window', 'bar', 'stool', 'bottle', 'mug', 'wall', 'room'] as const;
+export const SET_ITEMS = ['table', 'chair', 'door', 'window', 'bar', 'stool', 'wall', 'room'] as const;
+export const PROP_ITEMS = ['bottle', 'mug', 'glass', 'phone', 'envelope', 'book', 'briefcase', 'bag', 'laptop', 'lamp', 'pistol', 'knife'] as const;
+export const LIBRARY_ITEMS = [...SET_ITEMS, ...PROP_ITEMS] as const;
+export const COMPOSITE_SHAPES = ['box', 'cylinder', 'sphere', 'cone', 'torus'] as const;
 export const PRIMITIVE_SHAPES = ['box', 'cylinder', 'sphere', 'cone', 'plane'] as const;
 export type LibraryItem = (typeof LIBRARY_ITEMS)[number];
 export type PrimitiveShape = (typeof PRIMITIVE_SHAPES)[number];
 
 const params = z.record(z.string(), z.number()).optional();
+
+/**
+ * One part of a composite model (how the assistant models props). Sizes are
+ * full extents in meters: box w/h/d; cylinder, cone and sphere use x/z as
+ * diameters and y as height; a torus lies flat with x/z as outer diameter and
+ * y as tube thickness. Position is the part's center; rotation is in degrees.
+ */
+export const compositeNodeSchema = z.object({
+  shape: z.enum(COMPOSITE_SHAPES),
+  size: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+  position: z.tuple([z.number(), z.number(), z.number()]),
+  rotation: z.tuple([z.number(), z.number(), z.number()]).optional(),
+  grey: z.number().min(0).max(1).optional(),
+});
+export type CompositeNode = z.infer<typeof compositeNodeSchema>;
 export const objectSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('library'), item: z.enum(LIBRARY_ITEMS), params }),
   z.object({ kind: z.literal('primitive'), shape: z.enum(PRIMITIVE_SHAPES), params }),
   z.object({ kind: z.literal('asset'), blob: z.string(), format: z.enum(['obj', 'gltf', 'glb']), fileName: z.string().optional() }),
+  z.object({ kind: z.literal('composite'), nodes: z.array(compositeNodeSchema).min(1).max(200) }),
 ]);
+export type ParamSource = Extract<ObjectSource, { kind: 'library' | 'primitive' }>;
 export type ObjectSource = z.infer<typeof objectSourceSchema>;
 
 export const stageObjectSchema = z.object({
@@ -66,6 +86,8 @@ export const stageObjectSchema = z.object({
   source: objectSourceSchema,
   /** 0 (black) .. 1 (white). Overrides the item's own shades. */
   grey: z.number().min(0).max(1).optional(),
+  /** Set when the object was placed from the project's prop library. */
+  propId: z.string().optional(),
 });
 export type StageObject = z.infer<typeof stageObjectSchema>;
 
@@ -109,9 +131,15 @@ export const characterSchema = z.object({
 export type Character = z.infer<typeof characterSchema>;
 export type Voice = z.infer<typeof voiceSchema>;
 
-// Later milestones fill in props. Until their schemas
-// exist, they are kept as opaque records so files round-trip intact.
-const looseRecord = z.record(z.string(), z.unknown());
+export const propSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  source: objectSourceSchema,
+  /** Uniform scale applied when the prop is placed. */
+  defaultScale: z.number().positive(),
+  grey: z.number().min(0).max(1).optional(),
+});
+export type Prop = z.infer<typeof propSchema>;
 
 export const BREAKDOWN_MODES = ['line', 'pair', 'mixed'] as const;
 export type BreakdownMode = (typeof BREAKDOWN_MODES)[number];
@@ -135,7 +163,7 @@ export const projectSchema = z.object({
   shots: z.array(shotSchema),
   stages: z.array(stageSchema),
   characters: z.array(characterSchema),
-  props: z.array(looseRecord),
+  props: z.array(propSchema),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

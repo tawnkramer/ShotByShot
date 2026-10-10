@@ -5,6 +5,8 @@ import { DRACO_GLTF_CONFIG, DRACOLoader } from 'three/examples/jsm/loaders/DRACO
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { getBlob, putBlob } from '../storage/db';
 import { applyGrey } from './materials';
+import { buildStatic } from './library';
+import type { ObjectSource } from '../state/schema';
 
 export type AssetFormat = 'obj' | 'gltf' | 'glb';
 
@@ -128,4 +130,10 @@ export async function loadAsset(blob: string, format: AssetFormat): Promise<THRE
     p.catch(() => loaded.delete(blob));
   }
   return (await p).clone(true);
+}
+
+/** Builds any object source, loading imported models from storage. */
+export async function buildSource(source: ObjectSource): Promise<THREE.Object3D> {
+  if (source.kind === 'asset') return loadAsset(source.blob, source.format);
+  return buildStatic(source);
 }

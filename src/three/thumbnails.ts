@@ -41,13 +41,13 @@ export interface ThumbnailOptions {
 }
 
 /** Renders a freshly built object framed to fit, then disposes it. Returns an object URL, cached by `key`. */
-export function renderThumbnail(key: string, build: () => THREE.Object3D, opts: ThumbnailOptions = {}): Promise<string | null> {
+export function renderThumbnail(key: string, build: () => THREE.Object3D | Promise<THREE.Object3D>, opts: ThumbnailOptions = {}): Promise<string | null> {
   const hit = cache.get(key);
   if (hit) return Promise.resolve(hit);
   const job = queue.then(async () => {
     if (!setup() || !renderer) return null;
     const { width = 240, height = 240, azimuth = 25, elevation = 12 } = opts;
-    const object = build();
+    const object = await build();
     scene.add(object);
     object.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(object);
@@ -77,7 +77,7 @@ export function renderThumbnail(key: string, build: () => THREE.Object3D, opts: 
   return job;
 }
 
-export function useThumbnail(key: string, build: () => THREE.Object3D, opts?: ThumbnailOptions): string | null {
+export function useThumbnail(key: string, build: () => THREE.Object3D | Promise<THREE.Object3D>, opts?: ThumbnailOptions): string | null {
   const [url, setUrl] = useState<string | null>(() => cache.get(key) ?? null);
   useEffect(() => {
     let cancelled = false;

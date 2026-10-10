@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import { useThree } from '@react-three/fiber';
 import type { StageObject } from '../../state/schema';
-import { buildItem } from '../../three/library';
+import { buildStatic } from '../../three/library';
 import { loadAsset } from '../../three/assets';
 import { applyGrey, disposeObject } from '../../three/materials';
 
@@ -25,7 +25,7 @@ function placeholder(): THREE.Group {
 function useModel(object: StageObject): THREE.Object3D {
   const invalidate = useThree((s) => s.invalidate);
   const sourceKey = JSON.stringify(object.source);
-  const built = useMemo(() => (object.source.kind === 'asset' ? null : buildItem(object.source)), [sourceKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const built = useMemo(() => (object.source.kind === 'asset' ? null : buildStatic(object.source)), [sourceKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [asset, setAsset] = useState<THREE.Object3D | null>(null);
 
   useEffect(() => {
