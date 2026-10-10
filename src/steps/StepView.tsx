@@ -6,6 +6,9 @@ import { lazy, Suspense } from 'react';
 
 // three.js is large; load it only when a 3D step opens.
 const StagingStep = lazy(() => import('./staging/StagingStep').then((m) => ({ default: m.StagingStep })));
+const CharactersStep = lazy(() => import('./characters/CharactersStep').then((m) => ({ default: m.CharactersStep })));
+
+const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep };
 
 const COMING: Record<Step, { summary: string; milestone: string }> = {
   story: { summary: 'Import a text script, label each line, and break it into shots.', milestone: 'M1' },
@@ -19,10 +22,11 @@ const COMING: Record<Step, { summary: string; milestone: string }> = {
 
 export function StepView({ step }: { step: Step }) {
   if (step === 'story') return <StoryStep />;
-  if (step === 'staging') {
+  const Lazy = LAZY[step];
+  if (Lazy) {
     return (
       <Suspense fallback={<div className="page muted">Loading 3D…</div>}>
-        <StagingStep />
+        <Lazy />
       </Suspense>
     );
   }

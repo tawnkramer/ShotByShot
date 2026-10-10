@@ -78,7 +78,38 @@ export const stageSchema = z.object({
 export type Stage = z.infer<typeof stageSchema>;
 export type Transform = z.infer<typeof transformSchema>;
 
-// Later milestones fill in characters and props. Until their schemas
+export const SEXES = ['female', 'male', 'other'] as const;
+export const BUILDS = ['slim', 'average', 'heavy'] as const;
+export const AGE_BANDS = ['child', 'teen', '20s', '30s', '40s', '50s', '60s', '70+'] as const;
+export const POSES = ['standing', 'sitting', 'walking', 'leaning', 'lying'] as const;
+export type Sex = (typeof SEXES)[number];
+export type Build = (typeof BUILDS)[number];
+export type PoseId = (typeof POSES)[number];
+
+export const voiceSchema = z.object({
+  provider: z.enum(['openai', 'browser']),
+  voiceId: z.string(),
+  speed: z.number().min(0.25).max(4),
+  /** Speaking style, e.g. "gravelly, tired". */
+  instructions: z.string().optional(),
+});
+
+export const characterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  sex: z.enum(SEXES),
+  heightCm: z.number().min(50).max(250),
+  build: z.enum(BUILDS),
+  ageBand: z.enum(AGE_BANDS).optional(),
+  attributes: z.array(z.string()),
+  /** Color that tells characters apart in the grey world, e.g. "#6aa6ff". */
+  tint: z.string().optional(),
+  voice: voiceSchema,
+});
+export type Character = z.infer<typeof characterSchema>;
+export type Voice = z.infer<typeof voiceSchema>;
+
+// Later milestones fill in props. Until their schemas
 // exist, they are kept as opaque records so files round-trip intact.
 const looseRecord = z.record(z.string(), z.unknown());
 
@@ -103,7 +134,7 @@ export const projectSchema = z.object({
   breakdownMode: z.enum(BREAKDOWN_MODES).default('mixed'),
   shots: z.array(shotSchema),
   stages: z.array(stageSchema),
-  characters: z.array(looseRecord),
+  characters: z.array(characterSchema),
   props: z.array(looseRecord),
   createdAt: z.number(),
   updatedAt: z.number(),

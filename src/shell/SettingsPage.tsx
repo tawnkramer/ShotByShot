@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_KEY_SETTING, testOpenAIKey, type KeyCheck } from '../ai/openai';
 import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { requestPersistentStorage } from '../storage/projectIO';
+import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -10,10 +11,12 @@ export function SettingsPage() {
   const [savedKey, setSavedKey] = useState<string | undefined>();
   const [check, setCheck] = useState<KeyCheck | null>(null);
   const [testing, setTesting] = useState(false);
+  const [ttsModel, setTtsModel] = useState('');
   const [storage, setStorage] = useState<{ used: number; quota: number; persisted: boolean } | null>(null);
 
   useEffect(() => {
     void getSetting<string>(API_KEY_SETTING).then(setSavedKey);
+    void getSetting<string>(TTS_MODEL_SETTING).then((m) => setTtsModel(m ?? ''));
     void loadStorage().then(setStorage);
   }, []);
 
@@ -96,6 +99,15 @@ export function SettingsPage() {
               </form>
             )}
             {check && <p className={check.ok ? 'ok small' : 'error small'}>{check.message}</p>}
+            <label className="field">
+              <span>Speech model</span>
+              <input
+                placeholder={DEFAULT_TTS_MODEL}
+                value={ttsModel}
+                onChange={(e) => setTtsModel(e.target.value)}
+                onBlur={() => void (ttsModel.trim() ? setSetting(TTS_MODEL_SETTING, ttsModel.trim()) : deleteSetting(TTS_MODEL_SETTING))}
+              />
+            </label>
           </section>
 
           <section className="panel">

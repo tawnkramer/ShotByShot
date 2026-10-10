@@ -660,6 +660,15 @@ AI tools only depend on M1.
   snapping, duplicate / delete, and an inspector for position, rotation, scale,
   size parameters, and shade. New objects are placed clear of existing ones.
   Slider drags are one undo step. Image → layout is part of the agent (M5).
+- **M3 (Characters) done:** add characters from script cues (most lines
+  first) or by hand; name, sex, height (cm and ft/in), build, age, notes,
+  color marker, and voice (OpenAI voice, speed, speaking style). Preview plays
+  the character's first line with OpenAI speech, or the browser's voice
+  without a key. Characters are jointed mannequins (pelvis → spine → neck →
+  head, shoulder → elbow, hip → knee) with eyes, a nose, and a colored floor
+  ring with a notch toward the front. Five pose presets: stand, sit, walk,
+  lean, lie. Card thumbnails come from one shared offscreen renderer.
+  Props are next.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
