@@ -36,3 +36,20 @@ describe('command bus', () => {
     expect(p.fps).toBe(30);
   });
 });
+
+describe('command merging', () => {
+  it('merges quick commands with the same key into one undo step', () => {
+    const p0 = createProject('A');
+    let [p, h] = runCommand(p0, emptyHistory(), { label: 'fps', mergeKey: 'k', apply: (d) => void (d.fps = 25) });
+    [p, h] = runCommand(p, h, { label: 'fps', mergeKey: 'k', apply: (d) => void (d.fps = 30) });
+    expect(h.past).toHaveLength(1);
+    const [back] = undo(p, h);
+    expect(back.fps).toBe(24);
+  });
+
+  it('keeps different keys separate', () => {
+    let [p, h] = runCommand(createProject('A'), emptyHistory(), { label: 'a', mergeKey: 'a', apply: (d) => void (d.fps = 25) });
+    [p, h] = runCommand(p, h, { label: 'b', mergeKey: 'b', apply: (d) => void (d.name = 'B') });
+    expect(h.past).toHaveLength(2);
+  });
+});

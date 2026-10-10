@@ -31,7 +31,10 @@ describe('IndexedDB storage', () => {
 describe('referencedBlobKeys', () => {
   it('finds blob references anywhere in the project', () => {
     const p = createProject('Assets');
-    p.stages.push({ objects: [{ source: { kind: 'asset', blob: 'model1' } }] });
+    p.stages.push({
+      id: 'st', name: 'Bar', sceneLineIds: [],
+      objects: [{ id: 'o', name: 'Model', transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, source: { kind: 'asset', blob: 'model1', format: 'glb' } }],
+    });
     p.shots.push({ id: 's1', number: '1', lineIds: ['l1'], thumbBlob: 'thumb1', dialogue: [{ audioBlob: 'clip1' }] });
     expect(referencedBlobKeys(p).sort()).toEqual(['clip1', 'model1', 'thumb1']);
   });

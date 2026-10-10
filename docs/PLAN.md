@@ -652,6 +652,14 @@ AI tools only depend on M1.
   relabel/delete, three breakdown modes, tap-between-lines cuts, scene-based
   shot numbers. The AI refine pass and AI "Mixed" breakdown arrive with the
   agent (M5); until then Mixed uses the rules below.
+- **M2 done:** Staging with a three.js viewport (grey materials, soft shadows,
+  grid), stage chips (one stage per script location, or blank), the built-in
+  set pieces (table, chair, door, window, bar, stool, bottle, mug, wall, room)
+  and shapes, OBJ / glTF / GLB import (stored in IndexedDB, normalized to the
+  floor, unit-guessed, greyed), tap to select, Move / Rotate / Scale gizmo with
+  snapping, duplicate / delete, and an inspector for position, rotation, scale,
+  size parameters, and shade. New objects are placed clear of existing ones.
+  Slider drags are one undo step. Image → layout is part of the agent (M5).
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

@@ -38,6 +38,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer',
       includeAssets: ['icon.svg'],
+      // Draco decoders load on demand when a compressed model is imported.
+      workbox: { globIgnores: ['**/draco_*'], maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 },
       manifest: {
         name: 'ShotByShot',
         short_name: 'ShotByShot',

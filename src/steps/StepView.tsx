@@ -2,6 +2,10 @@ import type { Step } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { ASPECT_RATIOS } from '../state/schema';
 import { StoryStep } from './story/StoryStep';
+import { lazy, Suspense } from 'react';
+
+// three.js is large; load it only when a 3D step opens.
+const StagingStep = lazy(() => import('./staging/StagingStep').then((m) => ({ default: m.StagingStep })));
 
 const COMING: Record<Step, { summary: string; milestone: string }> = {
   story: { summary: 'Import a text script, label each line, and break it into shots.', milestone: 'M1' },
@@ -15,6 +19,13 @@ const COMING: Record<Step, { summary: string; milestone: string }> = {
 
 export function StepView({ step }: { step: Step }) {
   if (step === 'story') return <StoryStep />;
+  if (step === 'staging') {
+    return (
+      <Suspense fallback={<div className="page muted">Loading 3D…</div>}>
+        <StagingStep />
+      </Suspense>
+    );
+  }
   return <ComingSoon step={step} />;
 }
 

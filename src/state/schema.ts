@@ -46,7 +46,39 @@ export const scriptLineSchema = z.object({
   sceneId: z.string().optional(),
 });
 
-// Later milestones fill in stages, characters and props. Until their schemas
+export const LIBRARY_ITEMS = ['table', 'chair', 'door', 'window', 'bar', 'stool', 'bottle', 'mug', 'wall', 'room'] as const;
+export const PRIMITIVE_SHAPES = ['box', 'cylinder', 'sphere', 'cone', 'plane'] as const;
+export type LibraryItem = (typeof LIBRARY_ITEMS)[number];
+export type PrimitiveShape = (typeof PRIMITIVE_SHAPES)[number];
+
+const params = z.record(z.string(), z.number()).optional();
+export const objectSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('library'), item: z.enum(LIBRARY_ITEMS), params }),
+  z.object({ kind: z.literal('primitive'), shape: z.enum(PRIMITIVE_SHAPES), params }),
+  z.object({ kind: z.literal('asset'), blob: z.string(), format: z.enum(['obj', 'gltf', 'glb']), fileName: z.string().optional() }),
+]);
+export type ObjectSource = z.infer<typeof objectSourceSchema>;
+
+export const stageObjectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  transform: transformSchema,
+  source: objectSourceSchema,
+  /** 0 (black) .. 1 (white). Overrides the item's own shades. */
+  grey: z.number().min(0).max(1).optional(),
+});
+export type StageObject = z.infer<typeof stageObjectSchema>;
+
+export const stageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  sceneLineIds: z.array(z.string()),
+  objects: z.array(stageObjectSchema),
+});
+export type Stage = z.infer<typeof stageSchema>;
+export type Transform = z.infer<typeof transformSchema>;
+
+// Later milestones fill in characters and props. Until their schemas
 // exist, they are kept as opaque records so files round-trip intact.
 const looseRecord = z.record(z.string(), z.unknown());
 
@@ -70,7 +102,7 @@ export const projectSchema = z.object({
   script: z.array(scriptLineSchema),
   breakdownMode: z.enum(BREAKDOWN_MODES).default('mixed'),
   shots: z.array(shotSchema),
-  stages: z.array(looseRecord),
+  stages: z.array(stageSchema),
   characters: z.array(looseRecord),
   props: z.array(looseRecord),
   createdAt: z.number(),

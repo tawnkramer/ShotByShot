@@ -332,3 +332,68 @@ textarea { font: inherit; color: inherit; background: var(--bg); border: 1px sol
 
 .check { flex: none; width: 22px; height: 22px; margin: 2px 19px 0 19px; border-radius: 50%; border: 2px solid var(--muted); }
 .check.on { background: var(--t-character); border-color: var(--t-character); box-shadow: inset 0 0 0 3px var(--bg); }
+
+/* Staging step: fixed viewport on top, scrolling panel below. */
+.split { height: 100%; display: flex; flex-direction: column; max-width: 960px; margin: 0 auto; }
+.stage-chips { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none; }
+.stage-chips::-webkit-scrollbar { display: none; }
+.stage-chip {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.stage-chip.on { background: var(--surface-2); border-color: var(--accent); font-weight: 600; }
+.stage-chip.add { min-width: 40px; font-size: 1.2rem; padding: 0; }
+.chip-caret { margin-left: 6px; color: var(--muted); }
+
+.viewport { flex: none; position: relative; height: min(56%, 70vw + 80px); min-height: 240px; background: #2b2b30; }
+.viewport-canvas { position: absolute !important; inset: 0; touch-action: none; }
+.viewport-toolbar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  flex-wrap: wrap;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.viewport-toolbar > * { pointer-events: auto; }
+.viewport-toolbar .btn { background: rgb(30 30 34 / 0.9); backdrop-filter: blur(6px); }
+.viewport-toolbar .btn.primary { background: var(--accent); }
+.viewport-toolbar .snap { margin-left: auto; color: var(--muted); }
+.viewport-toolbar .snap.on { color: var(--accent); border-color: var(--accent); }
+.segmented.compact { background: rgb(30 30 34 / 0.9); backdrop-filter: blur(6px); }
+.segmented.compact button { min-height: 34px; padding: 0 8px; font-size: 0.85rem; }
+.viewport-toolbar .btn.icon { min-width: 38px; }
+
+.split-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 24px; }
+.panel-head { margin: 0 -8px 4px; }
+.inspector { display: flex; flex-direction: column; gap: 14px; }
+.num-row { display: flex; gap: 8px; align-items: flex-end; }
+.num { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding-left: 10px; }
+.num span { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.num input { flex: 1; min-width: 0; width: 100%; border: 0 !important; background: none !important; padding: 0 8px 0 0 !important; min-height: 40px; }
+.slider { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; }
+input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.shade-range { background: linear-gradient(to right, #111, #eee); border-radius: 6px; height: 10px; min-height: 10px; appearance: none; -webkit-appearance: none; }
+.shade-range::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.shade-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.link-btn { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font-size: 0.85rem; }
+
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.tile { min-height: 56px; padding: 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
+.tile:active { border-color: var(--accent); }
+
+.object-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.object-list button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 12px 4px; cursor: pointer; }
+.plain { margin: 0; padding-left: 18px; }
