@@ -2,7 +2,7 @@ import { relayUrl } from '../comfy/client';
 import { accessToken } from './auth';
 
 /** A minimal MCP client (Streamable HTTP, JSON-RPC) for OpenArt's server, reached through the relay. */
-export interface McpTool { name: string; title?: string; description?: string; inputSchema?: unknown }
+export interface McpTool { name: string; title?: string; description?: string; inputSchema?: unknown; annotations?: { readOnlyHint?: boolean } }
 
 const PROTOCOL = '2025-06-18';
 
