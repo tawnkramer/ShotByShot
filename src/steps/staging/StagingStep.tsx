@@ -22,6 +22,13 @@ export function StagingStep() {
   const dispatch = useProjectStore((s) => s.dispatch);
   const { stageId, selectedId, mode, snap, setStage, select, setMode, toggleSnap } = useStagingUI();
   const [sheet, setSheet] = useState<'add' | 'new' | 'actions' | null>(null);
+  // A brief notice when snapping is toggled; the key restarts the fade on every tap.
+  const [flash, setFlash] = useState<{ text: string; key: number } | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 1300);
+    return () => clearTimeout(t);
+  }, [flash]);
   const locations = useUnstagedLocations(project);
 
   const stage = project.stages.find((s) => s.id === stageId) ?? project.stages[0];
@@ -83,6 +90,11 @@ export function StagingStep() {
       <StageChips stages={project.stages} current={stage.id} onPick={setStage} onLongPress={() => setSheet('actions')} onNew={() => setSheet('new')} />
       <div className="viewport">
         <StageViewport stage={stage} onTransformEnd={onTransformEnd} />
+        {flash && (
+          <div key={flash.key} className="viewport-flash" role="status">
+            {flash.text}
+          </div>
+        )}
         <div className="viewport-toolbar">
           <button className={`btn primary ${selected ? 'icon' : ''}`} aria-label="Add" onClick={() => setSheet('add')}>
             {selected ? '+' : '+ Add'}
@@ -122,12 +134,15 @@ export function StagingStep() {
             </>
           )}
           <button
-            className={`btn snap ${snap ? 'on' : ''}`}
+            className={`btn icon snap ${snap ? 'on' : ''}`}
             aria-pressed={snap}
-            title={snap ? 'Snapping to a 10 cm grid and 15° turns. Tap to move freely.' : 'Moving freely. Tap to snap to a 10 cm grid and 15° turns.'}
-            onClick={toggleSnap}
+            aria-label={snap ? 'Snap on' : 'Snap off'}
+            onClick={() => {
+              toggleSnap();
+              setFlash({ text: snap ? 'Snap off' : 'Snap on', key: Date.now() });
+            }}
           >
-            Snap {snap ? 'on' : 'off'}
+            #
           </button>
         </div>
       </div>

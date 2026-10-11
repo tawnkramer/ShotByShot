@@ -370,7 +370,25 @@ textarea { font: inherit; color: inherit; background: var(--bg); border: 1px sol
 .viewport-toolbar > * { pointer-events: auto; }
 .viewport-toolbar .btn { background: rgb(30 30 34 / 0.9); backdrop-filter: blur(6px); }
 .viewport-toolbar .btn.primary { background: var(--accent); }
-.viewport-toolbar .snap { margin-left: auto; color: var(--muted); min-height: 38px; padding: 0 10px; font-size: 0.8rem; }
+.viewport-toolbar .snap { margin-left: auto; color: var(--muted); }
+.viewport-flash {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  padding: 8px 16px;
+  border-radius: 18px;
+  background: rgb(20 20 22 / 0.85);
+  font-weight: 600;
+  pointer-events: none;
+  animation: flash-fade 1.3s ease-out forwards;
+}
+@keyframes flash-fade {
+  0% { opacity: 0; transform: translate(-50%, -40%); }
+  12% { opacity: 1; transform: translate(-50%, -50%); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
 .viewport-toolbar .snap.on { color: var(--accent); border-color: var(--accent); }
 .segmented.compact { background: rgb(30 30 34 / 0.9); backdrop-filter: blur(6px); }
 .segmented.compact button { min-height: 34px; padding: 0 8px; font-size: 0.85rem; }
