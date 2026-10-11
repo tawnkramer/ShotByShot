@@ -217,3 +217,15 @@ export function setShotImage(shotId: string, image: Shot['image']): Command {
     const shot = d.shots.find((s) => s.id === shotId); if (shot) { if (image) shot.image = image; else delete shot.image; }
   }};
 }
+
+export function setShotVideoPrompt(shotId: string, prompt: string): Command {
+  return {label:'Edit shot video prompt',mergeKey:`video-prompt:${shotId}`,apply:(d) => {
+    const shot = d.shots.find((s) => s.id === shotId); if (shot) shot.videoPrompt = prompt;
+  }};
+}
+
+export function setShotVideo(shotId: string, video: Shot['video']): Command {
+  return {label:'Save shot video',apply:(d) => {
+    const shot = d.shots.find((s) => s.id === shotId); if (shot) { if (video) shot.video = video; else delete shot.video; }
+  }};
+}

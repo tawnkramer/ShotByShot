@@ -6,6 +6,7 @@ import { requestPersistentStorage } from '../storage/projectIO';
 import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
 import { buildLabel } from '../version';
 import { CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS } from '../ai/chat';
+import { ComfySettings } from '../comfy/ComfySettings';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -128,6 +129,8 @@ export function SettingsPage() {
               />
             </label>
           </section>
+
+          <ComfySettings />
 
           <section className="panel">
             <h2>Storage</h2>

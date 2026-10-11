@@ -1,0 +1,10 @@
+{
+  // Relay that lets the ShotByShot web app reach Comfy Cloud, which doesn't send CORS headers.
+  "name": "shotbyshot-comfy-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    // Sites allowed to use this relay, comma separated. Add your own if you host the app elsewhere.
+    "ALLOWED_ORIGINS": "https://tawnkramer.github.io,http://localhost:5173"
+  }
+}

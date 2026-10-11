@@ -39,7 +39,7 @@ it('provides three tabs, captures the shot view, and retains direction after lea
   expect(host.querySelector('[data-testid="camera-pad"]')).toBeNull();
   expect(host.querySelector('[data-testid="canvas"]')?.getAttribute('data-view')).toBe('shot');
   expect(host.querySelector('.shot-image-panel textarea')).toBeNull();
-  expect([...host.querySelectorAll('.shot-image-panel button')].map(b=>b.textContent)).toEqual(['Generate Shot Image']);
+  expect([...host.querySelectorAll('.shot-image-panel button')].map(b=>b.textContent)).toEqual(['Generate Shot Image','Generate Shot Video']);
   await act(async()=>tabs[1].click());
   expect(host.querySelector('[data-testid="camera"]')).not.toBeNull();
   await act(async()=>tabs[2].click());

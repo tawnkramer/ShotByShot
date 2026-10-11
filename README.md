@@ -33,3 +33,61 @@ PNG; project `.sbs.zip` exports include saved images and prompts, and image
 replacement supports Undo. Only the currently saved image is retained in the
 project. Closing or canceling stops waiting for a request; OpenAI may still
 complete and bill an already-started generation. The API key is never exported.
+
+## ComfyUI Cloud and shot videos
+
+Comfy Cloud's API sends no CORS headers, so the browser reaches it through a
+small relay you deploy once to your own Cloudflare account (free plan is enough).
+Settings → **ComfyUI Cloud** → **Set up relay on Cloudflare** opens Cloudflare's
+deploy page for [`relay/`](relay/), a Worker that forwards `/api/...` to
+cloud.comfy.org and `/storage?url=...` to Comfy's signed storage URLs, adds CORS
+headers for the sites in `ALLOWED_ORIGINS` (in `relay/wrangler.jsonc`), and stores
+nothing. Paste the Worker's address (`https://shotbyshot-comfy-relay.<you>.workers.dev`)
+into the relay field. To deploy by hand instead: `cd relay && npm install && npx wrangler deploy`.
+The app's Content Security Policy allows relays on `*.workers.dev`.
+
+Settings → **ComfyUI Cloud** also stores a Comfy API key (from
+[your Comfy platform profile](https://platform.comfy.org/profile/home)) in
+this browser and imports workflows exported from ComfyUI with **Workflow → Export
+(API)**, in four categories: image generation, image editing, text to speech and
+image to video. Each import is analyzed for what the app can fill in: Load Image,
+Load Audio and Load Video nodes, the prompt input (changeable per workflow), seed,
+a duration primitive titled “duration”, and width/height. Workflows live in
+browser settings and are never exported with projects.
+
+In a shot's **Image** tab, **Generate Shot Video** opens a full-screen panel.
+**Seedance 2.5 reference to video** is built in and selected by default. It is a
+Comfy partner node billed in Comfy credits, and it takes lists of reference
+images (up to 30), videos (up to 10) and audio clips (up to 10). The panel
+pre-selects the shot image, character and stage images, the dialogue audio, and
+a previs clip rendered from the shot's camera and blocking (shots of at least
+1.8 s) as a camera-motion reference. Tick or untick them as needed; the app adds
+one loader node per file. Imported workflows with fixed Load Image, Load Audio or
+Load Video nodes, such as MiniMax H3, get a picker for each input instead.
+
+The generated prompt (hidden by default) names inputs the way the model expects:
+`Image 1`, `Video 1`, `Audio 1` for reference lists, or `<Picture 1>` for fixed
+inputs. Anything typed in **Additional prompt** is appended with the highest
+priority. Each run uses the shot's duration within the workflow's limits
+(Seedance: whole seconds, 4–30 s), a fresh seed, and optionally the closest
+supported aspect ratio or size for the project.
+
+Jobs run through the Comfy API v2 (`/api/v2/assets`, `/api/v2/jobs`). Canceling
+asks Comfy Cloud to stop the job. Seedance runs show an estimated price ported
+from ComfyUI's published rates. GPU workflows can't be priced in advance, because
+Comfy Cloud bills run time on your plan; the panel shows how long a run took.
+Imported image generation workflows appear under **ComfyUI Cloud** in the
+character image editor's Model menu; image editing workflows appear for stage,
+prop and shot images, receiving the greyscale 3D preview and references as their
+input images. The prompt goes to the text the workflow's encoder actually reads
+(followed back through switches, so prompt-rewriter system prompts are left
+alone). Speech workflows can be imported and checked but aren't used yet.
+
+To check a workflow against Comfy Cloud outside the browser:
+
+```sh
+COMFY_API_KEY=comfyui-… npx vitest run tests/comfy.live.test.ts
+```
+
+It runs `tests/fixtures/qwen_image_2_1_t2i.json` (or `COMFY_WORKFLOW=path`) with
+the app's own client and writes `comfy-live-output.png`. The run is billed.
