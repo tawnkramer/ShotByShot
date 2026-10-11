@@ -645,13 +645,13 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 
 /* Pin the image dialog to the visible viewport, including the iOS keyboard. */
 .character-image-dialog { inset: var(--image-editor-top, 0px) 0 auto; height: var(--image-editor-height, var(--app-height, 100dvh)); max-height: var(--image-editor-height, var(--app-height, 100dvh)); }
-.character-image-dialog.editing-prompt .image-editor-body { display: flex; overflow: hidden; }
+.character-image-dialog.editing-prompt .image-editor-body { display: flex; flex-direction: column; align-items: stretch; overflow: hidden; }
 .editing-prompt .image-editor-preview, .editing-prompt .image-editor-controls > :not(.image-prompt-field) { display: none; }
 .editing-prompt .image-editor-controls { flex: 1; min-height: 0; }
 .editing-prompt .image-prompt-field { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .editing-prompt .image-prompt-field > span { display: none; }
-.editing-prompt .image-prompt-field textarea { flex: 1; min-height: 0; height: 100%; resize: none; }
-.editing-prompt .image-editor-head { padding-top: 12px; }
+.editing-prompt .image-prompt-field textarea { flex: 1 1 0; min-height: 0; height: 0; resize: none; }
+.editing-prompt .image-editor-head { padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
 @media (max-width: 640px) {
   .character-image-dialog { margin: 0; }
   .editing-prompt .image-editor-body { padding: 8px 12px 12px; }
