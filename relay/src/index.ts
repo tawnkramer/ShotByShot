@@ -1,14 +1,22 @@
 /**
- * Cloudflare Worker that forwards the ShotByShot web app's requests to Comfy Cloud and adds the CORS
- * headers Comfy doesn't send. It keeps nothing: the Comfy API key arrives with each request and goes
- * only to cloud.comfy.org. Outputs are fetched from Comfy's signed storage URLs, which carry no key.
+ * Cloudflare Worker that forwards the ShotByShot web app's requests to Comfy Cloud and OpenArt and adds
+ * the CORS headers those services don't send. It keeps nothing: the Comfy API key or OpenArt token
+ * arrives with each request and goes only to that service. Outputs are fetched from signed storage URLs,
+ * which carry no credentials.
  *
- *   /api/...            → https://cloud.comfy.org/api/...
- *   /storage?url=<url>  → a signed https://storage.googleapis.com/... URL
+ *   /api/...                   → https://cloud.comfy.org/api/...
+ *   /storage?url=<url>         → a signed https://storage.googleapis.com/... URL
+ *   /openart/mcp               → https://mcp.openart.ai/mcp
+ *   /openart/oauth/<step>      → https://openart.ai/suite/api/auth/oauth/<step> (register, token, revoke)
  */
 export const COMFY_ORIGIN = 'https://cloud.comfy.org';
+export const OPENART_MCP = 'https://mcp.openart.ai/mcp';
+const OPENART_OAUTH = 'https://openart.ai/suite/api/auth/oauth/';
+const OAUTH_STEPS = ['register', 'token', 'revoke'];
 const STORAGE_HOSTS = ['storage.googleapis.com'];
-const FORWARDED = ['authorization', 'content-type', 'idempotency-key', 'x-api-key', 'accept', 'range'];
+const FORWARDED = ['authorization', 'content-type', 'idempotency-key', 'x-api-key', 'accept', 'range', 'mcp-session-id', 'mcp-protocol-version', 'last-event-id'];
+/** Hosts that may receive the Authorization header. */
+const CREDENTIAL_ORIGINS = [COMFY_ORIGIN, new URL(OPENART_MCP).origin, new URL(OPENART_OAUTH).origin];
 
 export interface Env { ALLOWED_ORIGINS?: string }
 
@@ -26,15 +34,19 @@ export default {
       if (target.protocol !== 'https:' || !STORAGE_HOSTS.includes(target.host) || request.method !== 'GET') return text('Not a Comfy storage URL.', 400, origin);
     } else if (url.pathname.startsWith('/api/')) {
       target = new URL(url.pathname + url.search, COMFY_ORIGIN);
+    } else if (url.pathname === '/openart/mcp') {
+      target = new URL(OPENART_MCP + url.search);
+    } else if (url.pathname.startsWith('/openart/oauth/') && OAUTH_STEPS.includes(url.pathname.slice('/openart/oauth/'.length)) && request.method === 'POST') {
+      target = new URL(url.pathname.slice('/openart/oauth/'.length), OPENART_OAUTH);
     } else {
-      return text('ShotByShot Comfy relay is running.', url.pathname === '/' ? 200 : 404, origin);
+      return text('ShotByShot relay is running.', url.pathname === '/' ? 200 : 404, origin);
     }
 
     const headers = new Headers();
     // Storage URLs are signed; never send the key there.
     for (const name of FORWARDED) {
       const value = request.headers.get(name);
-      if (value && !(target.origin !== COMFY_ORIGIN && name === 'authorization')) headers.set(name, value);
+      if (value && !(name === 'authorization' && !CREDENTIAL_ORIGINS.includes(target.origin))) headers.set(name, value);
     }
     const hasBody = !['GET', 'HEAD'].includes(request.method);
     const upstream = await fetchImpl(target.toString(), { method: request.method, headers, body: hasBody ? request.body : undefined, redirect: 'follow', ...(hasBody ? { duplex: 'half' } : {}) } as RequestInit);
@@ -47,7 +59,7 @@ export default {
 };
 
 function corsBase(origin: string): Record<string, string> {
-  return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin', 'Access-Control-Expose-Headers': 'Content-Type, Content-Length, Content-Disposition' };
+  return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin', 'Access-Control-Expose-Headers': 'Content-Type, Content-Length, Content-Disposition, Mcp-Session-Id, WWW-Authenticate' };
 }
 
 function cors(origin: string): Record<string, string> {
