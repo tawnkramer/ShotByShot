@@ -27,6 +27,15 @@ describe('shot video', () => {
     expect([...defaultReferences(groups, options, 1.2).values()]).toEqual([['shot-image', 'character:ana'], []]);
   });
 
+  it("offers the shot's current video as an opt-in reference video", () => {
+    const p = project();
+    p.shots[0].video = { blob: 'take-1', prompt: 'p', workflow: 'w', createdAt: 1 };
+    const options = mediaOptions(p, p.shots[0]);
+    expect(options.filter((o) => o.kind === 'video').map((o) => [o.id, o.blobKey])).toEqual([['previs-clip', undefined], ['shot-video', 'take-1']]);
+    const groups = [{ nodeId: '24', kind: 'video' as const, prefix: 'v', max: 9, title: 'Seedance' }];
+    expect([...defaultReferences(groups, options, 3).values()]).toEqual([['previs-clip']]);
+  });
+
   it('builds a prompt that names each reference, the subjects, camera and direction', () => {
     const p = project();
     const options = mediaOptions(p, p.shots[0]);
