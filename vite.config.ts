@@ -46,12 +46,12 @@ export default defineConfig({
     react(),
     cspMeta(),
     VitePWA({
-      // The app shows its own "new version" banner (shell/UpdateBanner.tsx).
+      // New workers take over at once; the app shows its own "new version" banner (shell/UpdateBanner.tsx).
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icon.svg'],
       // Draco decoders load on demand when a compressed model is imported.
-      workbox: { clientsClaim: true, globIgnores: ['**/draco_*'], maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 },
+      workbox: { skipWaiting: true, clientsClaim: true, globIgnores: ['**/draco_*'], maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 },
       manifest: {
         name: 'ShotByShot',
         short_name: 'ShotByShot',
