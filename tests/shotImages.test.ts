@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { SHOT_COMPOSITION_GUIDANCE, charactersInFrame, greyscalePixels, shotReferences, shotImagePrompt } from '../src/images/shotImages';
-import { generateShotImage } from '../src/images/generate';
+import { CHARACTER_IMAGE_PRESENTATION, characterImagePrompt, generateShotImage } from '../src/images/generate';
 import { createProject } from '../src/state/schema';
 import { newCharacter } from '../src/characters/commands';
 import { putBlob } from '../src/storage/db';
@@ -23,6 +23,20 @@ function fixture() {
 }
 
 describe('shot image references', () => {
+  it('omits character presentation instructions from saved and fallback shot descriptions', () => {
+    const p = fixture();
+    p.characters[0].image!.prompt = `Ben wears a red shirt.\n${CHARACTER_IMAGE_PRESENTATION}\nKeep his round glasses.`;
+    const capture = { blob: new Blob(), characterIds: ['ben'], progress: 0 };
+    const savedPrompt = shotImagePrompt(p, p.shots[0], capture, [], 'Ben sits and waves.');
+    expect(savedPrompt).not.toContain(CHARACTER_IMAGE_PRESENTATION);
+    expect(savedPrompt).toContain('Ben wears a red shirt.');
+    expect(savedPrompt).toContain('Keep his round glasses.');
+    expect(savedPrompt).toContain('Ben sits and waves.');
+    expect(p.characters[0].image!.prompt).toContain(CHARACTER_IMAGE_PRESENTATION);
+    delete p.characters[0].image;
+    expect(shotImagePrompt(p, p.shots[0], capture, [], '')).not.toContain(CHARACTER_IMAGE_PRESENTATION);
+    expect(characterImagePrompt(p.characters[0])).toContain(CHARACTER_IMAGE_PRESENTATION);
+  });
   it('selects partially framed actors and excludes offscreen and behind-camera actors', () => {
     const root = new THREE.Group();
     for (const [id,x,z] of [['center',0,-5],['edge',2.5,-5],['outside',100,-5],['behind',0,5]] as const) {

@@ -5,12 +5,14 @@ export const IMAGE_MODELS = ['gpt-image-1.5', 'gpt-image-1-mini', 'gpt-image-2.5
 export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS[0];
 export type ImageQuality = 'low' | 'medium' | 'high';
 
+export const CHARACTER_IMAGE_PRESENTATION = 'Show the entire character, including feet, in a relaxed standing pose against a simple neutral background. No labels or text. Soft illustrative style, clear face and clothing details.';
+
 export function characterImagePrompt(c: Character): string {
   return [
     `Create a full-body character concept illustration of ${c.name}.`,
     `Character details: ${c.sex}, ${c.heightCm} cm tall, ${c.build} build${c.ageBand ? `, age ${c.ageBand}` : ''}.`,
     c.attributes.length ? `Appearance and notes: ${c.attributes.join('; ')}.` : '',
-    'Show the entire character, including feet, in a relaxed standing pose against a simple neutral background. No labels or text. Soft illustrative style, clear face and clothing details.',
+    CHARACTER_IMAGE_PRESENTATION,
   ].filter(Boolean).join('\n');
 }
 

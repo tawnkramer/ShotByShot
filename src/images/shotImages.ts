@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Project, Shot, Character } from '../state/schema';
 import { effectiveShot, shotLines } from '../shots/setup';
 import { getBlob } from '../storage/db';
-import { characterImagePrompt } from './generate';
+import { CHARACTER_IMAGE_PRESENTATION, characterImagePrompt } from './generate';
 
 export interface ShotCapture { blob: Blob; characterIds: string[]; progress: number; framing?: {characterId:string;screenX:number;screenY:number}[] }
 export interface ShotReference { blob: string; name: string; kind: 'stage' | 'character'; characterId?: string; data: Blob }
@@ -79,7 +79,7 @@ export function shotImagePrompt(project: Project, shot: Shot, capture: ShotCaptu
     ...references.map((r, i) => `Image ${i + 2} is the ${r.kind} appearance reference for ${r.name}. Use it for ${r.kind === 'stage' ? 'set design, materials, colors, lighting, and atmosphere' : 'identity, face, hair, clothing, and proportions'}.`),
     stage?.image?.prompt ? `Stage description (${stage.name}): ${stage.image.prompt}` : stage ? `Location: ${stage.name}.` : '',
     ...(capture.framing ?? []).map((f) => `${characters.find((c) => c.id === f.characterId)?.name ?? f.characterId} is centered approximately ${Math.round(f.screenX * 100)}% from the left and ${Math.round(f.screenY * 100)}% from the top of Image 1.`),
-    ...characters.map((c) => `Character description (${c.name}): ${c.image?.prompt ?? characterImagePrompt(c)}`),
+    ...characters.map((c) => `Character description (${c.name}): ${(c.image?.prompt ?? characterImagePrompt(c)).replaceAll(CHARACTER_IMAGE_PRESENTATION, '').trim()}`),
     `Story context: ${shotLines(project, shot).map((l) => l.text).join('\n')}`,
     `Moment: ${(capture.progress * eff.durationSec).toFixed(2)} seconds into a ${eff.durationSec.toFixed(2)} second shot.`,
     additional.trim() ? `Additional direction (highest priority for modifications to pose and action): ${additional.trim()}` : '',
