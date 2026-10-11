@@ -1,5 +1,5 @@
 import { OPENAI_BASE } from '../ai/openai';
-import type { Character, Stage } from '../state/schema';
+import type { Character, Stage, Prop } from '../state/schema';
 
 export const IMAGE_MODELS = ['gpt-image-1.5', 'gpt-image-1-mini', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] as const;
 export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS[0];
@@ -15,8 +15,8 @@ export function characterImagePrompt(c: Character): string {
 }
 
 export async function generateCharacterImage(
-  { apiKey, prompt, model = DEFAULT_IMAGE_MODEL, quality = 'medium', signal, reference }: {
-    apiKey: string; prompt: string; model?: string; quality?: ImageQuality; signal?: AbortSignal; reference?: Blob;
+  { apiKey, prompt, model = DEFAULT_IMAGE_MODEL, quality = 'medium', signal, reference, size }: {
+    apiKey: string; prompt: string; model?: string; quality?: ImageQuality; signal?: AbortSignal; reference?: Blob; size?: '1024x1024' | '1536x1024' | '1024x1536';
   }, fetchImpl: typeof fetch = fetch,
 ): Promise<Blob> {
   if (!apiKey.trim()) throw new Error('Add your OpenAI API key in Settings first.');
@@ -26,14 +26,14 @@ export async function generateCharacterImage(
   const form = reference ? new FormData() : undefined;
   if (form && reference) {
     form.append('image[]', reference, 'stage-preview.png');
-    for (const [key, value] of Object.entries({ model, prompt, quality, size: '1536x1024', n: '1', output_format: 'png' })) form.append(key, value);
+    for (const [key, value] of Object.entries({ model, prompt, quality, size: size ?? '1536x1024', n: '1', output_format: 'png' })) form.append(key, value);
   }
   let res: Response;
   try {
     res = await fetchImpl(`${OPENAI_BASE}/images/${reference ? 'edits' : 'generations'}`, {
       method: 'POST', signal,
       headers: { Authorization: `Bearer ${apiKey}`, ...(reference ? {} : { 'Content-Type': 'application/json' }) },
-      body: form ?? JSON.stringify({ model, prompt, quality, size: '1024x1536', n: 1, output_format: 'png' }),
+      body: form ?? JSON.stringify({ model, prompt, quality, size: size ?? '1024x1536', n: 1, output_format: 'png' }),
     });
   } catch (e) {
     if (signal?.aborted) throw e;
@@ -66,4 +66,16 @@ export function stageImagePrompt(stage: Stage): string {
     'Use the supplied greyscale stage preview as spatial guidance. Preserve its camera angle, perspective, room shape, and placement and proportions of furniture and props. Add convincing materials, colors, lighting, and atmosphere. No labels, text, people, grid lines, or editing handles.',
     stage.objects.length ? `Stage objects: ${stage.objects.map((o) => o.name).join(', ')}.` : '',
   ].filter(Boolean).join('\n');
+}
+
+export function generatePropImage(options: Parameters<typeof generateStageImage>[0], fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  return generateStageImage({ ...options, size: '1024x1024' }, fetchImpl);
+}
+
+export function propImagePrompt(prop: Prop): string {
+  return [
+    `Create a detailed prop concept illustration of ${prop.name}.`,
+    'Use the supplied greyscale 3D preview as shape and perspective guidance. Preserve the silhouette, proportions, and visible details of the prop. Add convincing materials, colors, and soft lighting. Show the entire prop against a simple neutral background. No people, labels, text, or grid lines.',
+    `Placement scale: ×${prop.defaultScale}.`,
+  ].join('\n');
 }

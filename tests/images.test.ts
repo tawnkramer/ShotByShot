@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { characterImagePrompt, generateCharacterImage, generateStageImage, stageImagePrompt } from '../src/images/generate';
+import { characterImagePrompt, generateCharacterImage, generateStageImage, stageImagePrompt, generatePropImage, propImagePrompt } from '../src/images/generate';
+import { updateProp } from '../src/props/commands';
 import { setStageImage } from '../src/staging/commands';
 import { newCharacter, updateCharacter } from '../src/characters/commands';
 import { createProject, migrateProject } from '../src/state/schema';
@@ -79,5 +80,33 @@ describe('stage images', () => {
     expect(decoded.assets.size).toBe(2);
     expect(undo(next, history)[0].stages[0].image).toBeUndefined();
     expect(stageImagePrompt(p.stages[0])).toMatch(/Cafe.*\n.*camera angle/);
+  });
+});
+
+describe('prop images', () => {
+  it('uploads a 3D reference for a square image edit and requires a preview', async () => {
+    const reference = new Blob(['prop snapshot'], { type: 'image/png' });
+    const fake = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: 'AQID' }] })));
+    await generatePropImage({ apiKey: 'key', prompt: 'Blue mug', reference }, fake as typeof fetch);
+    const [url, options] = fake.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/images/edits');
+    const form = options.body as FormData;
+    expect(form.get('size')).toBe('1024x1024');
+    expect(form.get('prompt')).toBe('Blue mug');
+    expect((form.get('image[]') as File).size).toBe(reference.size);
+    await expect(generatePropImage({apiKey:'key',prompt:'Mug',reference: undefined as unknown as Blob}, fake as typeof fetch)).rejects.toThrow(/preview/);
+    expect(fake).toHaveBeenCalledOnce();
+  });
+  it('retains the saved prompt and both assets through export/import and undo', () => {
+    const p = createProject('Props');
+    p.props.push({id:'mug',name:'Mug',source:{kind:'library',item:'mug'},defaultScale:1});
+    const image = {blob:'art',guidanceBlob:'reference',prompt:'Blue mug',model:'gpt-image-1.5',createdAt:123};
+    const [next, history] = runCommand(p, emptyHistory(), updateProp('mug', {image}));
+    expect(referencedBlobKeys(next).sort()).toEqual(['art','reference']);
+    const decoded = decodeProjectFile(encodeProjectZip({project:next,assets:new Map([['art',new Uint8Array([1])],['reference',new Uint8Array([2])]])}));
+    expect(decoded.project.props[0].image).toEqual(image);
+    expect(decoded.assets.size).toBe(2);
+    expect(undo(next,history)[0].props[0].image).toBeUndefined();
+    expect(propImagePrompt(p.props[0])).toMatch(/Mug.*\n.*silhouette/);
   });
 });

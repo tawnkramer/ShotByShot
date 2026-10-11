@@ -15,7 +15,7 @@ export function addProp(source: ObjectSource, name?: string, id = newId()): Comm
   };
 }
 
-export type PropPatch = Partial<Pick<Prop, 'name' | 'defaultScale' | 'grey'>> & { params?: Record<string, number> };
+export type PropPatch = Partial<Pick<Prop, 'name' | 'defaultScale' | 'grey' | 'image'>> & { params?: Record<string, number> };
 
 export function updateProp(id: string, patch: PropPatch, mergeKey?: string): Command {
   return {
@@ -24,6 +24,7 @@ export function updateProp(id: string, patch: PropPatch, mergeKey?: string): Com
     apply: (d) => {
       const p = d.props.find((x) => x.id === id);
       if (!p) return;
+      if ('image' in patch) { if (patch.image) p.image = patch.image; else delete p.image; }
       if (patch.name !== undefined) p.name = patch.name;
       if (patch.defaultScale !== undefined) p.defaultScale = patch.defaultScale;
       if ('grey' in patch) {

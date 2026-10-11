@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
@@ -16,12 +16,34 @@ import { buildMannequin } from '../../three/mannequin';
 import { round } from '../../staging/commands';
 import { Slider } from '../staging/fields';
 
+import { ConceptImageEditor } from '../../images/ConceptImageEditor';
+import { PreviewCapture, type CaptureReady } from '../../images/PreviewCapture';
+import { propImagePrompt } from '../../images/generate';
+import { useBlobUrl } from '../../images/useBlobUrl';
+
 export function PropEditor({ prop: p, onBack }: { prop: Prop; onBack: () => void }) {
   const project = useProjectStore((s) => s.project)!;
   const dispatch = useProjectStore((s) => s.dispatch);
   const [person, setPerson] = useState(false);
   const [size, setSize] = useState<THREE.Vector3 | null>(null);
   const [placed, setPlaced] = useState<string | null>(null);
+  const capture = useRef<(() => Promise<Blob>) | null>(null);
+  const onCaptureReady = useCallback<CaptureReady>((fn) => { capture.current = fn; setReady(Boolean(fn)); }, []);
+  const [ready, setReady] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [reference, setReference] = useState<Blob>();
+  const [error, setError] = useState('');
+  const [showImage, setShowImage] = useState(true);
+  const artwork = useBlobUrl(p.image?.blob);
+  const showingImage = showImage && Boolean(artwork);
+  useEffect(() => { setShowImage(true); }, [p.id, p.image?.blob]);
+  const openImage = async () => {
+    if (!capture.current || capturing) return;
+    setCapturing(true); setError('');
+    try { setReference(await capture.current()); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setCapturing(false); }
+  };
   const update = (patch: PropPatch, mergeKey?: string) => dispatch(updateProp(p.id, patch, mergeKey));
   const def = paramDefFor(p.source);
   const params = def && isParamSource(p.source) ? resolveParams(def, p.source.params) : {};
@@ -31,9 +53,13 @@ export function PropEditor({ prop: p, onBack }: { prop: Prop; onBack: () => void
   return (
     <div className="split">
       <div className="viewport">
-        <PropView prop={p} person={person} onSize={setSize} />
+        <div className={`stage-render-layer${showingImage ? ' covered' : ''}`}>
+          <PropView prop={p} person={person} onSize={setSize} onCaptureReady={onCaptureReady} />
+        </div>
+        {showingImage && <img className="character-artwork" src={artwork} alt={`Concept artwork for ${p.name}`} />}
+        {artwork && <button className="btn character-view-toggle" onClick={() => setShowImage(!showingImage)}>{showingImage ? '3D prop' : 'Prop image'}</button>}
         {sizeText && <div className="viewport-badge">{sizeText}</div>}
-        <div className="viewport-toolbar">
+        <div className="viewport-toolbar" hidden={showingImage}>
           <button className={`btn ${person ? 'on' : ''}`} aria-pressed={person} onClick={() => setPerson((x) => !x)}>
             {person ? 'Hide person' : 'Person for scale'}
           </button>
@@ -46,6 +72,9 @@ export function PropEditor({ prop: p, onBack }: { prop: Prop; onBack: () => void
           </button>
         </div>
         <div className="inspector">
+          <button className="btn" disabled={!ready || capturing} onClick={() => void openImage()}>{capturing ? 'Capturing preview…' : p.image ? 'View / generate prop image' : 'Generate prop image'}</button>
+          <p className="small muted">Uses the current 3D view as guidance. Frame your prop before generating.</p>
+          {error && <p className="error small" role="alert">{error}</p>}
           <label className="field">
             <span>Name</span>
             <input
@@ -111,6 +140,7 @@ export function PropEditor({ prop: p, onBack }: { prop: Prop; onBack: () => void
           </button>
         </div>
       </div>
+      {reference && <ConceptImageEditor subject={p} kind="prop" defaultPrompt={propImagePrompt(p)} reference={reference} onClose={() => setReference(undefined)} />}
     </div>
   );
 }
@@ -119,9 +149,9 @@ function fmt(m: number): string {
   return m < 1 ? `${Math.round(m * 100)} cm` : `${m.toFixed(2)} m`;
 }
 
-function PropView({ prop, person, onSize }: { prop: Prop; person: boolean; onSize: (s: THREE.Vector3) => void }) {
+function PropView({ prop, person, onSize, onCaptureReady }: { prop: Prop; person: boolean; onSize: (s: THREE.Vector3) => void; onCaptureReady: CaptureReady }) {
   return (
-    <Canvas className="viewport-canvas" shadows="percentage" dpr={[1, 2]} frameloop="demand" camera={{ position: [1.2, 1, 1.6], fov: 35, near: 0.01 }}>
+    <Canvas gl={{ preserveDrawingBuffer: true, antialias: true }} className="viewport-canvas" shadows="percentage" dpr={[1, 2]} frameloop="demand" camera={{ position: [1.2, 1, 1.6], fov: 35, near: 0.01 }}>
       <color attach="background" args={['#2b2b30']} />
       <hemisphereLight args={['#ffffff', '#55555c', 1.1]} />
       <directionalLight position={[3, 6, 4]} intensity={1.6} castShadow shadow-mapSize={[1024, 1024]} />
@@ -131,8 +161,8 @@ function PropView({ prop, person, onSize }: { prop: Prop; person: boolean; onSiz
       </mesh>
       <Grid args={[10, 10]} cellSize={0.1} sectionSize={1} cellColor="#45454c" sectionColor="#5c5c66" fadeDistance={8} infiniteGrid position={[0, 0.0005, 0]} />
       <Suspense fallback={null}>
-        <PropModel prop={prop} person={person} onSize={onSize} />
-        {person && <Person />}
+        <PropModel prop={prop} person={person} onSize={onSize} onCaptureReady={onCaptureReady} />
+        {person && <group userData={{ excludeFromImage: true }}><Person /></group>}
       </Suspense>
       <OrbitControls makeDefault maxPolarAngle={Math.PI / 2 - 0.02} />
     </Canvas>
@@ -167,10 +197,11 @@ function useFrame3q(box: THREE.Box3 | null) {
   }, [box, camera, controls, invalidate]);
 }
 
-function PropModel({ prop, person, onSize }: { prop: Prop; person: boolean; onSize: (s: THREE.Vector3) => void }) {
+function PropModel({ prop, person, onSize, onCaptureReady }: { prop: Prop; person: boolean; onSize: (s: THREE.Vector3) => void; onCaptureReady: CaptureReady }) {
   const [model, setModel] = useState<THREE.Object3D | null>(null);
   const sourceKey = JSON.stringify(prop.source);
   useEffect(() => {
+    setModel(null);
     let cancelled = false;
     let built: THREE.Object3D | null = null;
     void buildSource(prop.source).then((o) => {
@@ -198,7 +229,7 @@ function PropModel({ prop, person, onSize }: { prop: Prop; person: boolean; onSi
   useFrame3q(frameBox);
   if (!model) return null;
   const s = prop.defaultScale;
-  return <primitive object={model} scale={[s, s, s]} />;
+  return <><primitive object={model} scale={[s, s, s]} /><PreviewCapture onReady={onCaptureReady} /></>;
 }
 
 /** A neutral 175 cm figure beside the prop. */

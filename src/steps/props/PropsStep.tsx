@@ -10,6 +10,8 @@ import { AddSheet } from '../staging/AddSheet';
 import { PropEditor } from './PropEditor';
 import { useChatUI } from '../../shell/chatUI';
 
+import { useBlobUrl } from '../../images/useBlobUrl';
+
 export function PropsStep() {
   const project = useProjectStore((s) => s.project)!;
   const dispatch = useProjectStore((s) => s.dispatch);
@@ -18,7 +20,7 @@ export function PropsStep() {
   const suggestions = useMemo(() => suggestProps(project), [project]);
 
   const current = project.props.find((p) => p.id === editing);
-  if (current) return <PropEditor prop={current} onBack={() => setEditing(null)} />;
+  if (current) return <PropEditor key={current.id} prop={current} onBack={() => setEditing(null)} />;
 
   const add = (source: ObjectSource) => {
     const id = newId();
@@ -88,6 +90,7 @@ export function propThumbKey(p: Prop): string {
 }
 
 function PropCard({ prop: p, onOpen }: { prop: Prop; onOpen: () => void }) {
+  const artwork = useBlobUrl(p.image?.blob);
   const thumb = useThumbnail(propThumbKey(p), async () => {
     const o = await buildSource(p.source);
     applyGrey(o, p.grey);
@@ -95,7 +98,7 @@ function PropCard({ prop: p, onOpen }: { prop: Prop; onOpen: () => void }) {
   }, { width: 220, height: 220, azimuth: 35, elevation: 25 });
   return (
     <button className="char-card" onClick={onOpen}>
-      <span className="char-thumb square">{thumb ? <img src={thumb} alt="" /> : null}</span>
+      <span className="char-thumb square">{artwork || thumb ? <img src={artwork || thumb || undefined} alt="" /> : null}</span>
       <span className="char-info">
         <strong>{p.name}</strong>
         <span className="muted small">{p.source.kind === 'asset' ? 'Imported model' : p.source.kind === 'composite' ? 'Custom' : 'Library'}{p.defaultScale !== 1 ? ` · ×${p.defaultScale}` : ''}</span>

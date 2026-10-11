@@ -5,6 +5,7 @@ import { Grid, OrbitControls, TransformControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { Stage, Transform } from '../../state/schema';
 import { useStagingUI } from '../../staging/uiStore';
+import { PreviewCapture } from '../../images/PreviewCapture';
 import { StageObjectView } from './StageObjectView';
 
 interface Props {
@@ -37,7 +38,7 @@ export function StageViewport({ stage, onTransformEnd, onCaptureReady }: Props) 
         shadow-camera-bottom={-12}
         shadow-bias={-0.0005}
       />
-      <Capture onReady={onCaptureReady} />
+      <PreviewCapture onReady={onCaptureReady} />
       <Ground />
       <Grid args={[40, 40]} cellSize={0.5} sectionSize={2} cellColor="#45454c" sectionColor="#5c5c66" fadeDistance={35} infiniteGrid position={[0, 0.001, 0]} />
       <Scene stage={stage} onTransformEnd={onTransformEnd} />
@@ -135,22 +136,5 @@ function SelectionBox({ object }: { object: THREE.Object3D }) {
       (helper.material as THREE.Material).dispose();
     };
   }, [object, scene]);
-  return null;
-}
-
-function Capture({ onReady }: { onReady?: Props['onCaptureReady'] }) {
-  const { gl, scene, camera, invalidate } = useThree();
-  useEffect(() => {
-    onReady?.(() => new Promise<Blob>((resolve, reject) => {
-      const hidden: THREE.Object3D[] = [];
-      scene.traverse((o) => { if (o.visible && o.userData.excludeFromImage) { hidden.push(o); o.visible = false; } });
-      try {
-        gl.render(scene, camera);
-        gl.domElement.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not capture the stage preview.')), 'image/png');
-      } catch { reject(new Error('Could not capture the stage preview. Try again after models finish loading.')); }
-      finally { hidden.forEach((o) => { o.visible = true; }); invalidate(); }
-    }));
-    return () => onReady?.(null);
-  }, [gl, scene, camera, invalidate, onReady]);
   return null;
 }

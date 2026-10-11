@@ -139,6 +139,7 @@ export type Character = z.infer<typeof characterSchema>;
 export type Voice = z.infer<typeof voiceSchema>;
 
 export const propSchema = z.object({
+  image: conceptImageSchema.optional(),
   id: z.string(),
   name: z.string(),
   source: objectSourceSchema,
