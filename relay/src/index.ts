@@ -8,12 +8,18 @@
  *   /storage?url=<url>         → a signed https://storage.googleapis.com/... URL
  *   /openart/mcp               → https://mcp.openart.ai/mcp
  *   /openart/oauth/<step>      → https://openart.ai/suite/api/auth/oauth/<step> (register, token, revoke)
+ *   /openart/media?url=<url>   → OpenArt's presigned upload URLs (PUT) and generated media (GET), on media hosts only
  */
 export const COMFY_ORIGIN = 'https://cloud.comfy.org';
 export const OPENART_MCP = 'https://mcp.openart.ai/mcp';
 const OPENART_OAUTH = 'https://openart.ai/suite/api/auth/oauth/';
 const OAUTH_STEPS = ['register', 'token', 'revoke'];
 const STORAGE_HOSTS = ['storage.googleapis.com'];
+/** Hosts OpenArt uploads to and serves results from: its own domains and the cloud storage behind presigned URLs. */
+const OPENART_MEDIA_SUFFIXES = ['.openart.ai', '.googleapis.com', '.amazonaws.com', '.r2.cloudflarestorage.com', '.cloudfront.net'];
+export function isOpenArtMediaHost(host: string): boolean {
+  return host === 'openart.ai' || OPENART_MEDIA_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
 const FORWARDED = ['authorization', 'content-type', 'idempotency-key', 'x-api-key', 'accept', 'range', 'mcp-session-id', 'mcp-protocol-version', 'last-event-id'];
 /** Hosts that may receive the Authorization header. */
 const CREDENTIAL_ORIGINS = [COMFY_ORIGIN, new URL(OPENART_MCP).origin, new URL(OPENART_OAUTH).origin];
@@ -32,6 +38,9 @@ export default {
     if (url.pathname === '/storage') {
       try { target = new URL(url.searchParams.get('url') ?? ''); } catch { return text('Missing storage URL.', 400, origin); }
       if (target.protocol !== 'https:' || !STORAGE_HOSTS.includes(target.host) || request.method !== 'GET') return text('Not a Comfy storage URL.', 400, origin);
+    } else if (url.pathname === '/openart/media') {
+      try { target = new URL(url.searchParams.get('url') ?? ''); } catch { return text('Missing media URL.', 400, origin); }
+      if (target.protocol !== 'https:' || !isOpenArtMediaHost(target.hostname) || !['GET', 'PUT'].includes(request.method)) return text(`Not an OpenArt media URL (${target.hostname}).`, 400, origin);
     } else if (url.pathname.startsWith('/api/')) {
       target = new URL(url.pathname + url.search, COMFY_ORIGIN);
     } else if (url.pathname === '/openart/mcp') {
@@ -43,10 +52,11 @@ export default {
     }
 
     const headers = new Headers();
-    // Storage URLs are signed; never send the key there.
+    // Storage and media URLs are presigned; never send the key or token there.
+    const sendsCredentials = !['/storage', '/openart/media'].includes(url.pathname) && CREDENTIAL_ORIGINS.includes(target.origin);
     for (const name of FORWARDED) {
       const value = request.headers.get(name);
-      if (value && !(name === 'authorization' && !CREDENTIAL_ORIGINS.includes(target.origin))) headers.set(name, value);
+      if (value && !(name === 'authorization' && !sendsCredentials)) headers.set(name, value);
     }
     const hasBody = !['GET', 'HEAD'].includes(request.method);
     // Buffer the body: a streamed one can't be replayed if the service answers with a redirect.

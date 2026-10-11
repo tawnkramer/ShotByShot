@@ -52,8 +52,12 @@ Settings → **OpenArt** → **Sign in with OpenArt** connects your OpenArt acco
 is kept in this browser, and calls to OpenArt's MCP server
 (`https://mcp.openart.ai/mcp`) and its token endpoint go through the same relay
 (`/openart/mcp`, `/openart/oauth/*`), since OpenArt sends no CORS headers either.
-**Show tools** lists what OpenArt offers. A relay deployed before this needs one
-redeploy.
+**Show tools** lists what OpenArt offers, and read-only tools can be run there.
+Once signed in, the shot **Video** panel offers Seedance 2.5, 2.0 Fast and 2.0 Mini
+on OpenArt, paid with your OpenArt credits and priced by OpenArt before you generate.
+It sends the same shot references as the Comfy Seedance workflow (element2video);
+uploads and results pass through the relay's `/openart/media` route. A relay deployed
+before this needs one redeploy.
 
 Settings → **ComfyUI Cloud** also stores a Comfy API key (from
 [your Comfy platform profile](https://platform.comfy.org/profile/home)) in
