@@ -104,6 +104,13 @@ const conceptImageSchema = z.object({
   additionalPrompt: z.string().optional(),
 });
 
+const shotVideoSchema = z.object({
+  blob: z.string(), prompt: z.string(), additionalPrompt: z.string().optional(),
+  /** Name of the ComfyUI workflow that produced it. */
+  workflow: z.string(), createdAt: z.number(),
+});
+export type ShotVideo = z.infer<typeof shotVideoSchema>;
+
 export const stageSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -229,6 +236,9 @@ export type Keyframed<T> = { mode: 'static' | 'moving'; start: T; end?: T; easin
 export const shotSchema = z.looseObject({
   image: conceptImageSchema.optional(),
   imagePrompt: z.string().max(32000).optional(),
+  /** Generated video for the shot, stored with the project's binary assets. */
+  video: shotVideoSchema.optional(),
+  videoPrompt: z.string().max(32000).optional(),
   id: z.string(),
   number: z.string(),
   lineIds: z.array(z.string()).min(1),

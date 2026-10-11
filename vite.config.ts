@@ -24,7 +24,8 @@ const CSP = [
   "media-src 'self' blob: data:",
   "font-src 'self'",
   "worker-src 'self' blob:",
-  "connect-src 'self' blob: data: https://api.openai.com",
+  // Comfy Cloud serves outputs from short-lived signed storage URLs.
+  "connect-src 'self' blob: data: https://api.openai.com https://cloud.comfy.org https://storage.googleapis.com",
   "object-src 'none'",
   "base-uri 'self'",
 ].join('; ');
