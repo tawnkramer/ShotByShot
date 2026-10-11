@@ -9,7 +9,8 @@ const PROTOCOL = '2025-06-18';
 export class OpenArtMcp {
   private session?: string;
   private nextId = 1;
-  constructor(private readonly fetchImpl: typeof fetch = fetch) {}
+  // The default calls the global fetch directly: as a method of this class it would throw "Illegal invocation".
+  constructor(private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init)) {}
 
   private async post(body: object, expectReply: boolean): Promise<unknown> {
     const relay = await relayUrl();
