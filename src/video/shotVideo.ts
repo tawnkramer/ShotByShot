@@ -22,8 +22,9 @@ export interface MediaOption {
 
 const MIME: Record<string, string> = { png: 'image/png', mp3: 'audio/mpeg', mp4: 'video/mp4' };
 export const PREVIS_CLIP = 'previs-clip';
+export const SHOT_VIDEO = 'shot-video';
 
-/** Images, dialogue and the previs clip that suit this shot, in the order they're suggested. */
+/** Images, dialogue, the previs clip and the shot's current video that suit this shot, in the order they're suggested. */
 export function mediaOptions(project: Project, shot: Shot, previsFrame?: { blob: Blob; characterIds: string[] }): MediaOption[] {
   const eff = effectiveShot(project, shot.id)!;
   const options: MediaOption[] = [];
@@ -40,6 +41,7 @@ export function mediaOptions(project: Project, shot: Shot, previsFrame?: { blob:
     if (c.audioBlob) options.push({ id: `line:${c.lineId}`, kind: 'audio', label: `${c.speaker ? `${c.speaker}: ` : ''}${clip(c.text, 40)}`, role: `the recorded dialogue${c.speaker ? ` spoken by ${c.speaker}` : ''} starting ${c.inSec.toFixed(1)} s into the shot: "${c.text}"`, fileName: 'dialogue.mp3', blobKey: c.audioBlob });
   }
   options.push({ id: PREVIS_CLIP, kind: 'video', label: 'Previs clip (camera and blocking)', role: 'a rough greyscale previs of the camera movement and blocking. Follow its camera motion, timing and positions, not its look', fileName: 'previs.mp4' });
+  if (shot.video) options.push({ id: SHOT_VIDEO, kind: 'video', label: 'Current shot video (previous take)', role: 'the previous take of this shot. Keep what works in it and change what the prompt asks for', fileName: 'shot-video.mp4', blobKey: shot.video.blob });
   return options;
 }
 
@@ -65,10 +67,10 @@ export async function optionData(option: MediaOption): Promise<Blob> {
 /** Reference videos must run at least this long for Seedance; shorter previs clips aren't suggested. */
 const MIN_REFERENCE_VIDEO_SEC = 1.8;
 
-/** Fills each reference group with every suitable suggestion, up to its limit. The greyscale frame is left for fixed inputs. */
+/** Fills each reference group with every suitable suggestion, up to its limit. The greyscale frame is left for fixed inputs; the previous take is opt-in. */
 export function defaultReferences(groups: ReferenceGroup[], options: MediaOption[], durationSec: number): Map<string, string[]> {
   return new Map(groups.map((g) => [groupKey(g), options
-    .filter((o) => o.kind === g.kind && o.id !== 'previs-frame' && (o.id !== PREVIS_CLIP || (durationSec >= MIN_REFERENCE_VIDEO_SEC && durationSec <= 15)))
+    .filter((o) => o.kind === g.kind && o.id !== 'previs-frame' && o.id !== SHOT_VIDEO && (o.id !== PREVIS_CLIP || (durationSec >= MIN_REFERENCE_VIDEO_SEC && durationSec <= 15)))
     .slice(0, g.max).map((o) => o.id)]));
 }
 

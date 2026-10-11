@@ -53,7 +53,6 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
   const [draft, setDraft] = useState<{ blob: Blob; prompt: string; workflow: string; seconds?: number; credits?: number }>();
   const draftUrl = useObjectUrl(draft?.blob);
   const [fullScreen, setFullScreen] = useState(false);
-  const savedUrl = useBlobUrl(shot.video?.blob);
 
   useEffect(() => {
     dialog.current?.showModal();
@@ -189,7 +188,6 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
 
-  const shown = draftUrl ?? savedUrl;
   return <Overlay>
     <dialog ref={dialog} className="character-image-dialog shot-video-dialog" aria-labelledby="shot-video-title" onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
       <header className="row gap image-editor-head">
@@ -197,9 +195,6 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
         <button className="btn ghost" disabled={saving} onClick={onClose} autoFocus>Close</button>
       </header>
       <div className="image-editor-body">
-        <div className="image-editor-preview">
-          {shown ? <video src={shown} style={{ aspectRatio: aspectOf(project) }} controls playsInline loop aria-label={`Video for shot ${shot.number}`} /> : <p className="muted">Your video will appear here.</p>}
-        </div>
         <div className="image-editor-controls">
           {workflows && !workflows.length && !openArt ? <>
             <p className="small">Import an image-to-video workflow (API format) under ComfyUI Cloud in Settings to generate shot videos.</p>
@@ -248,12 +243,12 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
           <div className="row gap">
             {draft && <button className="btn primary grow" disabled={busy || saving} onClick={() => void save()}>Use video</button>}
             {(draft || shot.video) && <button className="btn grow" disabled={busy} onClick={() => void download()}>Download</button>}
-            {shown && <button className="btn grow" onClick={() => setFullScreen(true)}>Full screen</button>}
+            {draftUrl && <button className="btn grow" onClick={() => setFullScreen(true)}>Play preview</button>}
           </div>
         </div>
       </div>
     </dialog>
-    {fullScreen && shown && <VideoPreview src={shown} label={`Shot ${shot.number} video`} fileName={`Shot ${shot.number}`} onClose={() => setFullScreen(false)} />}
+    {fullScreen && draftUrl && <VideoPreview src={draftUrl} label={`Shot ${shot.number} video`} fileName={`Shot ${shot.number}`} onClose={() => setFullScreen(false)} />}
   </Overlay>;
 }
 
