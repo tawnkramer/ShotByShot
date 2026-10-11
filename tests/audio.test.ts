@@ -76,6 +76,20 @@ describe('audio-driven timing', () => {
     expect(shotCaptions(shotLines(p, shot), 4, validClips(p))[0].audioBlob).toBeUndefined();
   });
 
+  it('plays the voiced lines of a partly voiced shot', () => {
+    const p = project();
+    const shot = p.shots.find((s) => shotLines(p, s).some((l) => l.text === "We're closed."))!;
+    const first = linesNeedingAudio(p).find((s) => s.line.text === "We're closed.")!;
+    const voiced = run(p, setDialogueAudio([{ lineId: first.line.id, sig: first.sig, blob: 'b-one', durationSec: 2 }]));
+    const lines = shotLines(voiced, shot);
+    const clips = validClips(voiced);
+    const caps = shotCaptions(lines, autoDuration(lines, clips), clips);
+    expect(caps.length).toBe(2);
+    expect(caps[0]).toMatchObject({ inSec: 0.3, outSec: 2.3, audioBlob: 'b-one' });
+    expect(caps[1].audioBlob).toBeUndefined();
+    expect(caps[1].outSec).toBeGreaterThan(caps[1].inSec);
+  });
+
   it('changes the film length when audio arrives', () => {
     const p = project();
     expect(buildSequence(voiceAll(p, 3)).total).toBeGreaterThan(buildSequence(p).total);

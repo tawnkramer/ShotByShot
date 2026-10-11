@@ -4,9 +4,54 @@ let ctx: AudioContext | null = null;
 
 /** The shared audio context. Call from a tap so iOS lets it start. */
 export function audioContext(): AudioContext {
+  playThroughSilentSwitch();
   ctx ??= new AudioContext();
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') void ctx.resume();
   return ctx;
+}
+
+let silence: HTMLAudioElement | null = null;
+
+/**
+ * On iPhone, Web Audio follows the ring/silent switch, so dialogue is muted when
+ * the phone is on silent. Declaring a playback session (Safari 17+) fixes that;
+ * older Safari switches to playback while an HTML audio element is playing, so
+ * a looping silent clip is started from the same tap.
+ */
+function playThroughSilentSwitch(): void {
+  const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+  if (session) {
+    if (session.type !== 'playback') session.type = 'playback';
+    return;
+  }
+  if (!/iPad|iPhone|iPod/.test(navigator.userAgent) && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return;
+  if (!silence) {
+    silence = document.createElement('audio');
+    silence.setAttribute('x-webkit-airplay', 'deny');
+    silence.loop = true;
+    silence.src = silentWav();
+  }
+  void silence.play().catch(() => {});
+}
+
+function silentWav(): string {
+  const samples = 4410;
+  const view = new DataView(new ArrayBuffer(44 + samples));
+  const text = (o: number, t: string) => [...t].forEach((c, i) => view.setUint8(o + i, c.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 44100, true);
+  view.setUint32(28, 44100, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  text(36, 'data');
+  view.setUint32(40, samples, true);
+  for (let i = 0; i < samples; i++) view.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([view.buffer], { type: 'audio/wav' }));
 }
 
 const buffers = new Map<string, Promise<AudioBuffer | null>>();
@@ -51,7 +96,7 @@ export class DialoguePlayer {
   private token = 0;
 
   async start(cues: Cue[], from: number): Promise<void> {
-    this.stop();
+    this.clear();
     const token = ++this.token;
     const ac = audioContext();
     const t0 = performance.now();
@@ -73,6 +118,11 @@ export class DialoguePlayer {
   }
 
   stop(): void {
+    this.clear();
+    silence?.pause();
+  }
+
+  private clear(): void {
     this.token++;
     for (const s of this.sources) {
       try {

@@ -152,7 +152,7 @@ function clipsOf(project: Project) {
   return c;
 }
 
-/** Captions for a shot, timed to its audio when every line has been voiced. */
+/** Captions for a shot, timed to its audio when its lines have been voiced. */
 export function captionsOf(project: Project, shot: Shot, durationSec: number): Caption[] {
   return shotCaptions(shotLines(project, shot), durationSec, clipsOf(project));
 }

@@ -35,21 +35,27 @@ export type ClipMap = Map<string, { blob: string; durationSec: number }>;
 const CLIP_GAP = 0.25;
 const TAIL = 0.4;
 
-/** True when every spoken line in the shot has audio, so timing can follow it. */
+/** True when any spoken line in the shot has audio, so timing follows the clips. */
 function voiced(lines: ScriptLine[], clips?: ClipMap): boolean {
-  const spoken = lines.filter((l) => l.type === 'dialogue' && !isParenthetical(l.text));
-  return !!clips && spoken.length > 0 && spoken.every((l) => clips.has(l.id));
+  return !!clips && lines.some((l) => l.type === 'dialogue' && !isParenthetical(l.text) && clips.has(l.id));
+}
+
+/** How long a spoken line takes: its clip, or an estimate when it hasn't been voiced. */
+function lineSec(l: ScriptLine, clips: ClipMap): number {
+  const clip = clips.get(l.id);
+  return clip ? clip.durationSec : words(l.text) / WORDS_PER_SEC + LINE_PAD - CLIP_GAP;
 }
 
 /**
- * Seconds a shot needs. With audio for every line, dialogue takes as long as
- * the clips (plus small gaps); otherwise it's estimated from word count.
+ * Seconds a shot needs. With audio, dialogue takes as long as the clips (plus
+ * small gaps, and an estimate for any line not voiced yet); otherwise it's
+ * estimated from word count.
  */
 export function autoDuration(lines: ScriptLine[], clips?: ClipMap): number {
   if (!voiced(lines, clips)) return estimateDuration(lines);
   let sec = LEAD_IN + TAIL;
   for (const l of lines) {
-    if (l.type === 'dialogue' && !isParenthetical(l.text)) sec += clips!.get(l.id)!.durationSec + CLIP_GAP;
+    if (l.type === 'dialogue' && !isParenthetical(l.text)) sec += lineSec(l, clips!) + CLIP_GAP;
     else if (l.type === 'action') sec += Math.min(4, Math.max(ACTION_SEC, words(l.text) / 6));
   }
   return Math.max(MIN_SHOT_SEC, Math.round(sec * 10) / 10);
@@ -57,7 +63,8 @@ export function autoDuration(lines: ScriptLine[], clips?: ClipMap): number {
 
 /**
  * Caption timing. With audio, each caption lasts exactly as long as its clip,
- * one after another; otherwise lines share the shot by word count.
+ * one after another (unvoiced lines get an estimate and stay silent);
+ * otherwise lines share the shot by word count.
  */
 export function shotCaptions(lines: ScriptLine[], durationSec: number, clips?: ClipMap): Caption[] {
   if (!voiced(lines, clips)) return captionsFor(lines, durationSec);
@@ -66,10 +73,10 @@ export function shotCaptions(lines: ScriptLine[], durationSec: number, clips?: C
   let t = Math.min(LEAD_IN, durationSec * 0.1);
   for (const l of lines) {
     if (l.type !== 'dialogue' || isParenthetical(l.text)) continue;
-    const clip = clips!.get(l.id)!;
+    const sec = lineSec(l, clips!);
     const name = speakers.get(l.id);
-    out.push({ lineId: l.id, speaker: name ? titleCase(name) : undefined, text: l.text, inSec: t, outSec: t + clip.durationSec, audioBlob: clip.blob });
-    t += clip.durationSec + CLIP_GAP;
+    out.push({ lineId: l.id, speaker: name ? titleCase(name) : undefined, text: l.text, inSec: t, outSec: t + sec, audioBlob: clips!.get(l.id)?.blob });
+    t += sec + CLIP_GAP;
   }
   return out;
 }
