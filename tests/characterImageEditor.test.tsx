@@ -40,6 +40,15 @@ it.each(['character', 'stage', 'prop', 'shot'] as const)('opens an accessible %s
   const selects = dialog.querySelectorAll('select');
   expect(selects[1].value).toBe('high');
   expect(dialog.textContent).toContain('Estimated');
+  const generated = dialog.querySelector('details');
+  if (kind === 'shot') {
+    expect(generated?.open).toBe(false);
+    expect(generated?.querySelector('summary')?.textContent).toBe('Generated prompt');
+    expect(generated?.querySelector('pre')?.textContent).toBe('Shot composition. ');
+    expect(generated?.nextElementSibling?.textContent).toContain('Additional prompt');
+    await act(async () => { generated!.open = true; generated!.dispatchEvent(new Event('toggle')); });
+    expect(generated?.open).toBe(true);
+  } else expect(generated).toBeNull();
   if (kind !== 'character') expect(dialog.textContent).toContain('billed additionally');
   await act(async () => { selects[0].value='gpt-image-1-mini'; selects[0].dispatchEvent(new Event('change',{bubbles:true})); });
   expect(await getSetting(IMAGE_PREFERENCES_SETTING)).toEqual({model:'gpt-image-1-mini',quality:'high'});

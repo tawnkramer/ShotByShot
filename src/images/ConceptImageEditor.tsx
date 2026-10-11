@@ -148,6 +148,10 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
         <div className="image-editor-controls">
           {referenceUrl && <figure className="stage-image-guidance"><ZoomableImage src={referenceUrl} alt={`Greyscale ${kind} preview used as guidance`} /><figcaption className="small muted">Current 3D view · sent with your prompt</figcaption></figure>}
           {references.map((r) => <ReferenceThumbnail key={r.blob + (r.characterId ?? '')} reference={r} />)}
+          {kind === 'shot' && buildPrompt && <details className="generated-image-prompt">
+            <summary>Generated prompt</summary>
+            <pre>{buildPrompt('')}</pre>
+          </details>}
           <label className="field image-prompt-field"><span>{kind === 'shot' ? 'Additional prompt' : 'Image prompt'}</span><textarea ref={promptInput} onFocus={() => setEditingPrompt(true)} rows={7} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => { setPrompt(e.target.value); onPromptChange?.(e.target.value); }} /></label>
           <button className="btn ghost" disabled={busy} onClick={() => { setPrompt(defaultPrompt); onPromptChange?.(defaultPrompt); }}>Reset from {kind} details</button>
           <div className="row gap">
