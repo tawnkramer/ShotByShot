@@ -21,6 +21,8 @@ it('opens an accessible editor, previews a generated image, and saves only on Us
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', ''); } });
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() });
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({data:[{b64_json:'AQID'}]}))));
+  const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
+  vi.stubGlobal('visualViewport', viewport);
   await setSetting(API_KEY_SETTING, 'test-key');
   const p = createProject('Image UI'); p.characters.push(newCharacter('Ben', [], 'ben'));
   useProjectStore.getState().open(p);
@@ -31,6 +33,18 @@ it('opens an accessible editor, previews a generated image, and saves only on Us
   expect(dialog.open).toBe(true);
   expect(dialog.getAttribute('aria-labelledby')).toBe('character-image-title');
   const button=(text:string)=>[...dialog.querySelectorAll('button')].find(b=>b.textContent===text)!;
+  const input = dialog.querySelector('textarea')!;
+  const originalPrompt = input.value;
+  await act(async () => input.focus());
+  expect(dialog.classList.contains('editing-prompt')).toBe(true);
+  viewport.height = 420; viewport.offsetTop = 32;
+  await act(async () => viewport.dispatchEvent(new Event('resize')));
+  expect(dialog.style.getPropertyValue('--image-editor-height')).toBe('420px');
+  expect(dialog.style.getPropertyValue('--image-editor-top')).toBe('32px');
+  await act(async () => button('Done').click());
+  expect(dialog.classList.contains('editing-prompt')).toBe(false);
+  expect(input.value).toBe(originalPrompt);
+  expect(document.activeElement).not.toBe(input);
   await act(async () => button('Generate image').click());
   expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:test');
   expect(useProjectStore.getState().project!.characters[0].image).toBeUndefined();
