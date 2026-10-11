@@ -23,7 +23,9 @@ export function CharacterEditor({ character: c, onBack }: { character: Character
   const dispatch = useProjectStore((s) => s.dispatch);
   const project = useProjectStore((s) => s.project)!;
   const [imageEditor, setImageEditor] = useState(false);
-  const [showImage, setShowImage] = useState(false);
+  const [showImage, setShowImage] = useState(true);
+  // Opening a character or saving new artwork returns to its concept image.
+  useEffect(() => setShowImage(true), [c.id, c.image?.blob]);
   const imageUrl = useBlobUrl(c.image?.blob);
   const [pose, setPose] = useState<PoseId>('standing');
   const update = (patch: CharacterPatch, mergeKey?: string) => dispatch(updateCharacter(c.id, patch, mergeKey));
