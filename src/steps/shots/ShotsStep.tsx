@@ -106,17 +106,20 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
   const names = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId)?.name).filter(Boolean);
   const lines = shotLines(project, shot);
   const moving = eff.camera.mode === 'moving';
+  const aspect = aspectOf(project);
+  // Tall frames (9:16) sit beside the script instead of filling the screen above it.
+  const portrait = aspect < 1;
 
   return (
-    <button ref={ref} className="shot-card" {...press}>
-      <span className="shot-thumb" style={{ aspectRatio: String(aspectOf(project)) }}>
+    <button ref={ref} className={`shot-card ${portrait ? 'portrait' : ''}`} {...press}>
+      <span className="shot-thumb" style={{ aspectRatio: String(aspect) }}>
         {thumb ? <img src={thumb} alt="" draggable={false} /> : <span className="muted small">{stage ? '' : 'No stage yet'}</span>}
         <span className="shot-number">{shot.number}</span>
         <span className="shot-duration">{eff.durationSec.toFixed(1)} s</span>
       </span>
       <span className="shot-info">
-        <span className="row gap small">
-          <strong className="grow">{stage?.name ?? 'No stage'}</strong>
+        <span className="shot-meta small">
+          <strong>{stage?.name ?? 'No stage'}</strong>
           <span className="muted">{moving ? 'Moving camera' : 'Fixed camera'}</span>
         </span>
         {names.length > 0 && <span className="muted small">{names.join(', ')}</span>}
