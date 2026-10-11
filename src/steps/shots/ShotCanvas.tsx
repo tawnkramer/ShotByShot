@@ -5,7 +5,7 @@ import { Grid, OrbitControls, TransformControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { CameraState, Project } from '../../state/schema';
 import { ShotRig, type RigId } from '../../three/shotRig';
-import { charactersInFrame, greyscaleSnapshot, type ShotCapture } from '../../images/shotImages';
+import { charactersInFrame, stageObjectsInFrame, greyscaleSnapshot, type ShotCapture } from '../../images/shotImages';
 import { applyCamera, cameraPosition } from '../../three/camera';
 
 export interface ShotCanvasProps {
@@ -147,13 +147,14 @@ function RigScene({ onCaptureReady, project, shotId, rig, aspect, timeRef, timeV
       scene.updateMatrixWorld(true);
       camera.updateMatrixWorld(true);
       const characterIds = charactersInFrame(rig.root, camera);
+      const stageObjectIds = stageObjectsInFrame(rig.root, camera);
       const framing = characterIds.map((characterId) => {
         const center = new THREE.Box3().setFromObject(rig.object(`actor:${characterId}`)!).getCenter(new THREE.Vector3()).project(camera);
         return {characterId,screenX:(center.x + 1) / 2,screenY:(1 - center.y) / 2};
       });
       gl.render(scene, camera);
       const blob = await greyscaleSnapshot(gl.domElement);
-      return { blob, characterIds, progress, framing };
+      return { blob, characterIds, stageObjectIds, progress, framing };
     });
     return () => onCaptureReady?.(null);
   }, [onCaptureReady, rig, camera, scene, gl, aspect, view, liveCamera, timeRef]);

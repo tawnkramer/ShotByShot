@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { SHOT_COMPOSITION_GUIDANCE, charactersInFrame, greyscalePixels, shotReferences, shotImagePrompt } from '../src/images/shotImages';
+import { SHOT_COMPOSITION_GUIDANCE, charactersInFrame, stageObjectsInFrame, greyscalePixels, shotReferences, shotImagePrompt } from '../src/images/shotImages';
 import { CHARACTER_IMAGE_PRESENTATION, characterImagePrompt, generateShotImage } from '../src/images/generate';
 import { createProject } from '../src/state/schema';
 import { newCharacter } from '../src/characters/commands';
@@ -23,6 +23,26 @@ function fixture() {
 }
 
 describe('shot image references', () => {
+  it('finds visible stage objects and large room surfaces without including occluded or offscreen objects', () => {
+    const root = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(100, 100)); wall.position.z = -3; wall.userData.rigId = 'stage:room'; root.add(wall);
+    for (const [id, x, z] of [['table', 0, -2], ['hidden', 0, -5], ['offscreen', 100, -2], ['behind', 0, 5]] as const) {
+      const object = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5)); object.position.set(x, 0, z); object.userData.rigId = `stage:${id}`; root.add(object);
+    }
+    expect(stageObjectsInFrame(root, new THREE.PerspectiveCamera(60, 1, 0.1, 100))).toEqual(['room', 'table']);
+  });
+  it('replaces saved stage inventory with only the captured visible objects', () => {
+    const p = fixture();
+    p.stages[0].image!.prompt = 'Warm cafe interior.\nStage objects: Left Window, Table Lamp.\nGolden lighting.';
+    p.stages[0].objects = ['Left Window', 'Table Lamp'].map((name, i) => ({id: String(i), name, source: {kind:'library' as const,item:'mug'}, transform:{position:[0,0,0],rotation:[0,0,0,1],scale:[1,1,1]}}));
+    const capture = {blob:new Blob(),characterIds:[],progress:0,stageObjectIds:['1']};
+    const prompt = shotImagePrompt(p, p.shots[0], capture, [], '');
+    expect(prompt).toContain('Stage objects visible in this frame: Table Lamp.');
+    expect(prompt).not.toContain('Left Window');
+    expect(prompt).toContain('Golden lighting.');
+    expect(p.stages[0].image!.prompt).toContain('Left Window');
+    expect(shotImagePrompt(p, p.shots[0], {...capture,stageObjectIds:[]}, [], '')).not.toContain('Table Lamp');
+  });
   it('omits character presentation instructions from saved and fallback shot descriptions', () => {
     const p = fixture();
     p.characters[0].image!.prompt = `Ben wears a red shirt.\n${CHARACTER_IMAGE_PRESENTATION}\nKeep his round glasses.`;
