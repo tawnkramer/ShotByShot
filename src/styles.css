@@ -678,3 +678,6 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .image-preview-tools { display: flex; justify-content: center; align-items: center; gap: 12px; flex: none; padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px); }
 .shot-image-panel > .image-preview-trigger img { max-height: 36dvh; }
 .shot-image-panel textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); }
+
+.frame > .character-artwork { position: absolute; inset: 0; }
+.shot-thumb.artwork img { object-fit: contain; }

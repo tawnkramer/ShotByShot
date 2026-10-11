@@ -1,3 +1,4 @@
+import { useBlobUrl } from '../../images/useBlobUrl';
 import { Overlay } from '../../shell/Overlay';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -90,17 +91,18 @@ function useVisible<T extends Element>(): [React.RefObject<T | null>, boolean] {
 function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: Shot; onOpen: () => void; onMenu: () => void }) {
   const eff = effectiveShots(project).get(shot.id)!;
   const [ref, visible] = useVisible<HTMLButtonElement>();
+  const artwork = useBlobUrl(shot.image?.blob);
   const [thumb, setThumb] = useState<string | null>(null);
   const press = useLongPress(onMenu, onOpen);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || artwork) return;
     let cancelled = false;
     void renderShotThumbnail(project, shot.id).then((u) => !cancelled && u && setThumb(u));
     return () => {
       cancelled = true;
     };
-  }, [visible, project, shot.id]);
+  }, [visible, project, shot.id, artwork]);
 
   const stage = project.stages.find((s) => s.id === eff.stageId);
   const names = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId)?.name).filter(Boolean);
@@ -112,8 +114,8 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
 
   return (
     <button ref={ref} className={`shot-card ${portrait ? 'portrait' : ''}`} {...press}>
-      <span className="shot-thumb" style={{ aspectRatio: String(aspect) }}>
-        {thumb ? <img src={thumb} alt="" draggable={false} /> : <span className="muted small">{stage ? '' : 'No stage yet'}</span>}
+      <span className={`shot-thumb${artwork ? ' artwork' : ''}`} style={{ aspectRatio: String(aspect) }}>
+        {artwork || thumb ? <img src={artwork || thumb || undefined} alt="" draggable={false} /> : <span className="muted small">{stage ? '' : 'No stage yet'}</span>}
         <span className="shot-number">{shot.number}</span>
         <span className="shot-duration">{eff.durationSec.toFixed(1)} s</span>
       </span>
