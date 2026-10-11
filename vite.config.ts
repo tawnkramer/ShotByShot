@@ -2,6 +2,16 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+
+// Shown in Settings so you can tell which build is running.
+function commit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 // GitHub Pages can't set response headers, so the Content Security Policy is a
 // <meta> tag. It is only added to production builds because the dev server
@@ -31,6 +41,7 @@ function cspMeta(): Plugin {
 
 export default defineConfig({
   base: '/ShotByShot/',
+  define: { __APP_BUILD__: JSON.stringify({ commit: commit(), time: new Date().toISOString() }) },
   plugins: [
     react(),
     cspMeta(),

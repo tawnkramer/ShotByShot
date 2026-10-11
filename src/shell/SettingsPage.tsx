@@ -4,6 +4,7 @@ import { API_KEY_SETTING, testOpenAIKey, type KeyCheck } from '../ai/openai';
 import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { requestPersistentStorage } from '../storage/projectIO';
 import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
+import { buildLabel } from '../version';
 import { CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS } from '../ai/chat';
 
 export function SettingsPage() {
@@ -153,6 +154,7 @@ export function SettingsPage() {
               </p>
             )}
           </section>
+          <VersionSection />
         </div>
       </main>
     </div>
@@ -175,4 +177,31 @@ function formatBytes(n: number): string {
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(0)} KB`;
   if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
   return `${(n / 1024 ** 3).toFixed(1)} GB`;
+}
+
+function VersionSection() {
+  const [status, setStatus] = useState<string | null>(null);
+  const check = async () => {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (!reg) return setStatus("Updates aren't available in this browser.");
+    setStatus('Checking…');
+    try {
+      await reg.update();
+    } catch {
+      return setStatus("Couldn't check. Are you offline?");
+    }
+    setStatus(reg.installing || reg.waiting ? 'A new version is ready. Tap Update in the banner at the top.' : "You're on the latest version.");
+  };
+  return (
+    <section className="panel">
+      <h2>Version</h2>
+      <p>
+        Build <code>{buildLabel()}</code>
+      </p>
+      <button className="btn" onClick={() => void check()}>
+        Check for updates
+      </button>
+      {status && <p className="muted small">{status}</p>}
+    </section>
+  );
 }
