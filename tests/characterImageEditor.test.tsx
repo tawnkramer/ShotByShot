@@ -6,8 +6,9 @@ import { CharacterImageEditor, ConceptImageEditor } from '../src/steps/character
 import { createProject } from '../src/state/schema';
 import { newCharacter } from '../src/characters/commands';
 import { useProjectStore } from '../src/state/store';
+import { IMAGE_PREFERENCES_SETTING } from '../src/images/ConceptImageEditor';
 import { API_KEY_SETTING } from '../src/ai/openai';
-import { getBlob, setSetting } from '../src/storage/db';
+import { getBlob, getSetting, setSetting } from '../src/storage/db';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -24,6 +25,7 @@ it.each(['character', 'stage', 'prop', 'shot'] as const)('opens an accessible %s
   const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
   vi.stubGlobal('visualViewport', viewport);
   await setSetting(API_KEY_SETTING, 'test-key');
+  await setSetting(IMAGE_PREFERENCES_SETTING, {model:'gpt-image-2.5-sunburst',quality:'high'});
   const p = createProject('Image UI'); p.characters.push(newCharacter('Ben', [], 'ben'));
   p.stages.push({id: 'stage', name: 'Cafe', sceneLineIds: [], objects: []});
   p.props.push({id: 'prop', name: 'Mug', source: {kind:'library', item:'mug'}, defaultScale:1});
@@ -33,7 +35,14 @@ it.each(['character', 'stage', 'prop', 'shot'] as const)('opens an accessible %s
   host=document.createElement('div'); document.body.append(host); root=createRoot(host);
   const onClose=vi.fn();
   await act(async () => root.render(<MemoryRouter>{kind === 'character' ? <CharacterImageEditor character={p.characters[0]} onClose={onClose} /> : <ConceptImageEditor subject={kind === 'shot' ? {id:'shot',name:'Shot 1.1'} : kind === 'prop' ? p.props[0] : p.stages[0]} kind={kind} defaultPrompt={kind === 'shot' ? '' : kind === 'prop' ? 'Blue mug' : 'Warm cafe'} buildPrompt={kind === 'shot' ? (extra) => `Shot composition. ${extra}` : undefined} imageContext={kind === 'shot' ? {frameProgress:0.5,aspect:9/16} : undefined} reference={reference} onClose={onClose} />}</MemoryRouter>));
+  await vi.waitFor(async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); expect(document.querySelector('select')?.value).toBe('gpt-image-2.5-sunburst'); });
   const dialog=document.querySelector('dialog')!;
+  const selects = dialog.querySelectorAll('select');
+  expect(selects[1].value).toBe('high');
+  expect(dialog.textContent).toContain('Estimated');
+  if (kind !== 'character') expect(dialog.textContent).toContain('billed additionally');
+  await act(async () => { selects[0].value='gpt-image-1-mini'; selects[0].dispatchEvent(new Event('change',{bubbles:true})); });
+  expect(await getSetting(IMAGE_PREFERENCES_SETTING)).toEqual({model:'gpt-image-1-mini',quality:'high'});
   expect(dialog.open).toBe(true);
   expect(dialog.getAttribute('aria-labelledby')).toBe('character-image-title');
   const button=(text:string)=>[...dialog.querySelectorAll('button')].find(b=>b.textContent===text)!;
@@ -69,5 +78,6 @@ it.each(['character', 'stage', 'prop', 'shot'] as const)('opens an accessible %s
     const saved = useProjectStore.getState().project!.props[0];
     await act(async () => root.render(<MemoryRouter><ConceptImageEditor key="reopened" subject={saved} kind="prop" defaultPrompt="A different default" reference={reference} onClose={onClose} /></MemoryRouter>));
     expect(document.querySelector('textarea')!.value).toBe('Blue mug');
+    await vi.waitFor(async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); expect(document.querySelector('select')?.value).toBe('gpt-image-1-mini'); });
   }
 });

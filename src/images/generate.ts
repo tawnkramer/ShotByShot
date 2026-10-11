@@ -84,8 +84,12 @@ export function propImagePrompt(prop: Prop): string {
 
 export function generateShotImage(options: Parameters<typeof generateStageImage>[0] & { aspect: number }, fetchImpl: typeof fetch = fetch): Promise<Blob> {
   const { aspect, model = DEFAULT_IMAGE_MODEL } = options;
+  const size = shotImageSize(aspect, model);
+  return generateStageImage({ ...options, model, size }, fetchImpl);
+}
+
+export function shotImageSize(aspect: number, model: string): string {
   // Newer models allow the project's exact ratio; 1.5/mini use supported portrait/landscape sizes.
   const flexible = /^gpt-image-(2|2\.5)/.test(model);
-  const size = flexible ? (aspect >= 1 ? `1536x${Math.round(1536 / aspect / 16) * 16}` : `${Math.round(1536 * aspect / 16) * 16}x1536`) : aspect > 1.1 ? '1536x1024' : aspect < 0.9 ? '1024x1536' : '1024x1024';
-  return generateStageImage({ ...options, model, size }, fetchImpl);
+  return flexible ? (aspect >= 1 ? `1536x${Math.round(1536 / aspect / 16) * 16}` : `${Math.round(1536 * aspect / 16) * 16}x1536`) : aspect > 1.1 ? '1536x1024' : aspect < 0.9 ? '1024x1536' : '1024x1024';
 }
