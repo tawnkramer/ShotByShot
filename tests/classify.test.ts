@@ -23,6 +23,11 @@ describe('classifyScript', () => {
     ]);
   });
 
+  it('recognizes a camera direction followed by description', () => {
+    expect(types('Ben sits.\n\nCLOSE ON the envelope. A house key inside.')[1]).toBe('camera:CLOSE ON the envelope. A house key inside.');
+    expect(types('Ben sits.\n\nClose on the envelope.')[1]).toBe('action:Close on the envelope.');
+  });
+
   it('splits inline "NAME: line" dialogue', () => {
     expect(types('SAM: Get down!\nAlex ducks.')).toEqual(['character:SAM', 'dialogue:Get down!', 'action:Alex ducks.']);
     expect(types('Sam (V.O.): I remember.')).toEqual(['character:SAM (V.O.)', 'dialogue:I remember.']);

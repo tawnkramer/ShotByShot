@@ -119,7 +119,8 @@ export function classifyScript(text: string): ClassifiedLine[] {
       seenBody = true;
       continue;
     }
-    if (CAMERA_RE.test(line) && (isAllCaps(line.split(/[.,;-]/)[0]) || line.length < 40)) {
+    // The keyword must be in capitals ("CLOSE ON the envelope"), which ordinary action rarely starts with.
+    if (CAMERA_RE.test(line)) {
       push('camera', 0.8);
       seenBody = true;
       continue;
