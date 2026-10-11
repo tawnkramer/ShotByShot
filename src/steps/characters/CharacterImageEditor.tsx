@@ -13,6 +13,8 @@ import { safeFileName } from '../../storage/projectFile';
 
 export function CharacterImageEditor({ character: c, onClose }: { character: Character; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const promptInput = useRef<HTMLTextAreaElement>(null);
+  const [editingPrompt, setEditingPrompt] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const pending = useRef(false);
   const projectId = useRef(useProjectStore.getState().project?.id).current;
@@ -28,8 +30,22 @@ export function CharacterImageEditor({ character: c, onClose }: { character: Cha
   const [hasKey, setHasKey] = useState<boolean>();
   useEffect(() => {
     dialog.current?.showModal();
+    const vv = window.visualViewport;
+    const fitScreen = () => {
+      dialog.current?.style.setProperty('--image-editor-height', `${vv?.height ?? window.innerHeight}px`);
+      dialog.current?.style.setProperty('--image-editor-top', `${vv?.offsetTop ?? 0}px`);
+    };
+    fitScreen();
+    vv?.addEventListener('resize', fitScreen);
+    vv?.addEventListener('scroll', fitScreen);
+    window.addEventListener('resize', fitScreen);
     void getSetting<string>(API_KEY_SETTING).then((key) => setHasKey(Boolean(key))).catch(() => setHasKey(false));
-    return () => { controller.current?.abort(); };
+    return () => {
+      controller.current?.abort();
+      vv?.removeEventListener('resize', fitScreen);
+      vv?.removeEventListener('scroll', fitScreen);
+      window.removeEventListener('resize', fitScreen);
+    };
   }, []);
   useEffect(() => {
     if (!draft) return;
@@ -78,17 +94,17 @@ export function CharacterImageEditor({ character: c, onClose }: { character: Cha
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
   return <Overlay>
-    <dialog ref={dialog} className="character-image-dialog" aria-labelledby="character-image-title" onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
+    <dialog ref={dialog} className={`character-image-dialog${editingPrompt ? ' editing-prompt' : ''}`} aria-labelledby="character-image-title" onCancel={(e) => { e.preventDefault(); if (editingPrompt) { promptInput.current?.blur(); setEditingPrompt(false); } else if (!saving) onClose(); }}>
       <header className="row gap image-editor-head">
-        <div className="grow"><h2 id="character-image-title">{c.name} · Character image</h2><span className="small muted">Concept artwork</span></div>
-        <button className="btn ghost" disabled={saving} onClick={onClose} autoFocus>Close</button>
+        <div className="grow"><h2 id="character-image-title">{editingPrompt ? 'Edit image prompt' : `${c.name} · Character image`}</h2>{!editingPrompt && <span className="small muted">Concept artwork</span>}</div>
+        {editingPrompt ? <button className="btn primary" onClick={() => { promptInput.current?.blur(); setEditingPrompt(false); }}>Done</button> : <button className="btn ghost" disabled={saving} onClick={onClose} autoFocus>Close</button>}
       </header>
       <div className="image-editor-body">
         <div className="image-editor-preview">
           {draftUrl || savedUrl ? <img src={draftUrl || savedUrl} alt={`Concept artwork for ${c.name}`} /> : <p className="muted">Your character image will appear here.</p>}
         </div>
         <div className="image-editor-controls">
-          <label className="field"><span>Image prompt</span><textarea rows={7} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => setPrompt(e.target.value)} /></label>
+          <label className="field image-prompt-field"><span>Image prompt</span><textarea ref={promptInput} onFocus={() => setEditingPrompt(true)} rows={7} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => setPrompt(e.target.value)} /></label>
           <button className="btn ghost" disabled={busy} onClick={() => setPrompt(characterImagePrompt(c))}>Reset from character details</button>
           <div className="row gap">
             <label className="field grow"><span>Model</span><select value={model} disabled={busy} onChange={(e) => setModel(e.target.value)}>{[...new Set([...IMAGE_MODELS, model])].map((m) => <option key={m}>{m}</option>)}</select></label>
