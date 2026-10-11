@@ -518,3 +518,10 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .previs-list button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 6px; background: none; border: 0; border-bottom: 1px solid var(--border); text-align: left; cursor: pointer; }
 .previs-list li.on button { background: var(--surface); }
 .previs-list-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+
+/* Audio */
+.audio-panel { display: flex; flex-direction: column; gap: 6px; }
+.audio-panel.compact { padding: 6px 0 10px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.audio-panel p { margin: 0; }
+.progress { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }

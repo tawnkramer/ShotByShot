@@ -3,7 +3,8 @@ import { freeSpotFor, type Rect } from '../staging/placement';
 import { ASPECT_RATIOS } from '../state/schema';
 import { cueName, speakerOf } from '../story/classify';
 import { frameSubjects, type ShotSize, type Subject } from '../three/camera';
-import { estimateDuration } from './timing';
+import { autoDuration, shotCaptions, type Caption } from './timing';
+import { validClips } from '../audio/clips';
 
 export function aspectOf(project: Project): number {
   return ASPECT_RATIOS.find((a) => a.id === project.aspect)!.ratio;
@@ -143,6 +144,18 @@ export interface EffectiveShot {
 }
 
 const cache = new WeakMap<Project, Map<string, EffectiveShot>>();
+const clipCache = new WeakMap<Project, ReturnType<typeof validClips>>();
+
+function clipsOf(project: Project) {
+  let c = clipCache.get(project);
+  if (!c) clipCache.set(project, (c = validClips(project)));
+  return c;
+}
+
+/** Captions for a shot, timed to its audio when every line has been voiced. */
+export function captionsOf(project: Project, shot: Shot, durationSec: number): Caption[] {
+  return shotCaptions(shotLines(project, shot), durationSec, clipsOf(project));
+}
 
 /**
  * Every shot's setup, camera and duration: what's saved, or a default that
@@ -164,7 +177,7 @@ export function effectiveShots(project: Project): Map<string, EffectiveShot> {
     }
     if (stageId) lastOnStage.set(stageId, setup);
     const camera: ShotCamera = shot.camera ?? { mode: 'static', start: autoCamera(project, shot, setup), easing: 'easeInOut' };
-    const durationSec = shot.durationLocked && shot.durationSec ? shot.durationSec : estimateDuration(shotLines(project, shot));
+    const durationSec = shot.durationLocked && shot.durationSec ? shot.durationSec : autoDuration(shotLines(project, shot), clipsOf(project));
     map.set(shot.id, { stageId, setup, camera, durationSec });
   }
   cache.set(project, map);

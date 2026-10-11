@@ -707,8 +707,20 @@ AI tools only depend on M1.
   previous/next shot, play/pause (tap the frame, or Space on desktop), loop,
   running time. Paused: the shot's number, stage, cast and script lines, and
   **Edit shot**, whose Done returns to Previs at the same moment. A list of
-  all shots below jumps to any of them and follows playback. Dialogue audio
-  joins in M6.
+  all shots below jumps to any of them and follows playback.
+- **M6 (Audio) done:** dialogue voiced with OpenAI speech, one request per
+  line in the speaker's voice; parentheticals become delivery notes
+  ("Deliver this quietly."). Clips are stored as blobs (so they travel in
+  project files) and recorded per line with a signature of voice, speed,
+  style and text: changing any of those marks just the affected lines as
+  needing new audio. A shared job voices lines three at a time with
+  progress and cancel, saving as it goes; it keeps running across steps.
+  Once every line in a shot is voiced, the shot's length and captions follow
+  the real clips (lead-in, clip, short gap, tail); otherwise word-count
+  timing is used and the shot stays silent. Playback in the shot editor and
+  Previs schedules clips on the Web Audio clock, unlocked on the Play tap
+  for iOS, and restarts with a loop. Status panels on Shots, the shot
+  editor and Previs.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

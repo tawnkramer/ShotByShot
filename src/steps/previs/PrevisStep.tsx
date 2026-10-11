@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProjectStore } from '../../state/store';
 import { buildSequence, locate } from '../../shots/sequence';
-import { aspectOf, effectiveShots, shotLines, summaryLine } from '../../shots/setup';
-import { captionAt, captionsFor } from '../../shots/timing';
+import { aspectOf, captionsOf, effectiveShots, shotLines, summaryLine } from '../../shots/setup';
+import { captionAt } from '../../shots/timing';
 import { formatTime } from '../shots/ShotsStep';
 import { PrevisCanvas } from './PrevisCanvas';
+import { AudioPanel } from '../common/AudioPanel';
+import { audioContext, DialoguePlayer, loadBuffer, type Cue } from '../../audio/player';
 
 export function PrevisStep() {
   const project = useProjectStore((s) => s.project)!;
@@ -33,7 +35,36 @@ export function PrevisStep() {
   const shot = item && project.shots.find((s) => s.id === item.shotId);
   const eff = shot && effectiveShots(project).get(shot.id);
   const lines = useMemo(() => (shot ? shotLines(project, shot) : []), [project, shot]);
-  const caption = eff ? captionAt(captionsFor(lines, eff.durationSec), u * eff.durationSec) : undefined;
+  const caption = eff && shot ? captionAt(captionsOf(project, shot, eff.durationSec), u * eff.durationSec) : undefined;
+
+  // Dialogue for the whole film, on the film's timeline.
+  const cues = useMemo(() => {
+    const out: Cue[] = [];
+    const eff = effectiveShots(project);
+    for (const it of seq.items) {
+      const s = project.shots.find((x) => x.id === it.shotId);
+      const e = eff.get(it.shotId);
+      if (!s || !e) continue;
+      for (const c of captionsOf(project, s, e.durationSec)) if (c.audioBlob && c.inSec < e.durationSec) out.push({ blob: c.audioBlob, at: it.start + c.inSec });
+    }
+    return out;
+  }, [project, seq]);
+  const player = useMemo(() => new DialoguePlayer(), []);
+  useEffect(() => {
+    for (const c of cues.slice(0, 12)) void loadBuffer(c.blob);
+  }, [cues]);
+  useEffect(() => {
+    if (playing) void player.start(cues, timeRef.current);
+    else player.stop();
+  }, [playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => player.stop(), [player]);
+  const lastT = useRef(initial);
+  const onTick = (next: number) => {
+    // Looping back to the start: restart the dialogue too.
+    if (playing && next < lastT.current - 0.5) void player.start(cues, next);
+    lastT.current = next;
+    setT(next);
+  };
 
   // Space toggles play on desktop.
   useEffect(() => {
@@ -65,6 +96,7 @@ export function PrevisStep() {
 
   const play = () => {
     if (playing) return setPlaying(false);
+    audioContext(); // unlock audio during the tap (iOS)
     if (timeRef.current >= seq.total) seek(0);
     setPlaying(true);
   };
@@ -89,7 +121,7 @@ export function PrevisStep() {
             timeVersion={timeVersion}
             playing={playing}
             loop={loop}
-            onTick={setT}
+            onTick={onTick}
             onEnded={() => {
               setPlaying(false);
               setT(seq.total);
@@ -132,6 +164,7 @@ export function PrevisStep() {
       </div>
 
       <div className="split-panel" ref={panelRef}>
+        <AudioPanel project={project} compact />
         {!playing && shot && (
           <section className="panel shot-info-panel">
             <div className="row gap">

@@ -234,6 +234,8 @@ export const projectSchema = z.object({
   stages: z.array(stageSchema),
   characters: z.array(characterSchema),
   props: z.array(propSchema),
+  /** Spoken dialogue, by script line id. Valid while `sig` matches the line's current voice and text. */
+  audio: z.record(z.string(), z.object({ sig: z.string(), blob: z.string(), durationSec: z.number().positive() })).default({}),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -269,6 +271,7 @@ export function createProject(name: string): Project {
     stages: [],
     characters: [],
     props: [],
+    audio: {},
     createdAt: now,
     updatedAt: now,
   };

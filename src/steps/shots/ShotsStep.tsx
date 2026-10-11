@@ -7,6 +7,7 @@ import { renderShotThumbnail } from '../../shots/thumbnail';
 import { dialogueSplitPoints, mergeWithNext, splitShot } from '../../shots/commands';
 import { useLongPress } from '../../shell/useLongPress';
 import { aspectOf } from '../../shots/setup';
+import { AudioPanel } from '../common/AudioPanel';
 
 export function ShotsStep() {
   const project = useProjectStore((s) => s.project)!;
@@ -39,6 +40,7 @@ export function ShotsStep() {
       <p className="muted small">
         {project.shots.length} shots · {formatTime(totalSec)} · Tap a shot to edit it. Press and hold to merge or split.
       </p>
+      <AudioPanel project={project} />
       <ol className="shot-list">
         {project.shots.map((shot) => (
           <li key={shot.id} id={`shot-${shot.id}`}>

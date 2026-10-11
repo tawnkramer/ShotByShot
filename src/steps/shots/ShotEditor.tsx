@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useProjectStore } from '../../state/store';
 import type { CameraState, Transform } from '../../state/schema';
-import { aspectOf, effectiveShot, shotLines } from '../../shots/setup';
-import { captionAt, captionsFor, keyOf } from '../../shots/timing';
+import { aspectOf, captionsOf, effectiveShot } from '../../shots/setup';
+import { captionAt, keyOf } from '../../shots/timing';
 import { setActorKey, setCamera, setDuration, setShotPropKey, setStageOverride } from '../../shots/commands';
 import { ShotRig, type RigId } from '../../three/shotRig';
 import { ShotCanvas } from './ShotCanvas';
@@ -11,6 +11,8 @@ import { CameraPad } from './CameraPad';
 import { Timeline } from './Timeline';
 import { BlockingPanel } from './BlockingPanel';
 import { CameraPanel } from './CameraPanel';
+import { AudioPanel } from '../common/AudioPanel';
+import { audioContext, DialoguePlayer, loadBuffer } from '../../audio/player';
 
 type Mode = 'blocking' | 'camera';
 
@@ -50,9 +52,20 @@ export function ShotEditor({ shotId }: { shotId: string }) {
   const keyCamera = keyOf(eff.camera, camKey);
   const shownCamera = liveCamera ?? keyCamera;
 
-  const lines = useMemo(() => shotLines(project, shot), [project, shot]);
-  const captions = useMemo(() => captionsFor(lines, eff.durationSec), [lines, eff.durationSec]);
+  const captions = useMemo(() => captionsOf(project, shot, eff.durationSec), [project, shot, eff.durationSec]);
   const caption = captionAt(captions, u * eff.durationSec);
+
+  // Dialogue audio follows play/pause; clips are decoded ahead so playback starts promptly.
+  const player = useMemo(() => new DialoguePlayer(), []);
+  const cues = useMemo(() => captions.flatMap((c) => (c.audioBlob ? [{ blob: c.audioBlob, at: c.inSec }] : [])), [captions]);
+  useEffect(() => {
+    for (const c of cues) void loadBuffer(c.blob);
+  }, [cues]);
+  useEffect(() => {
+    if (playing) void player.start(cues, timeRef.current * eff.durationSec);
+    else player.stop();
+  }, [playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => player.stop(), [player]);
 
   const onGizmoEnd = (id: RigId, obj: THREE.Object3D) => {
     // Edits apply to the keyframe being edited; show that moment.
@@ -145,6 +158,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
         showKeys={blocking || camMoving}
         onPlay={() => {
           if (playing) return setPlaying(false);
+          audioContext(); // unlock audio during the tap (iOS)
           if (timeRef.current >= 1) seek(0);
           setPlaying(true);
         }}
@@ -175,6 +189,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
       </div>
 
       <div className="split-panel">
+        <AudioPanel project={project} lineIds={shot.lineIds} compact />
         {blocking ? (
           <BlockingPanel project={project} shot={shot} eff={eff} editKey={editKey} selected={selected} onSelect={setSelected} />
         ) : (
