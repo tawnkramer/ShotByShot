@@ -11,7 +11,7 @@ import { AddSheet } from './AddSheet';
 import { NewStageSheet, StageActionsSheet, useUnstagedLocations } from './StageSheets';
 import { createStagesForScenes } from '../../staging/commands';
 
-import { ConceptImageEditor } from '../characters/CharacterImageEditor';
+import { ConceptImageEditor } from '../../images/ConceptImageEditor';
 import { stageImagePrompt } from '../../images/generate';
 import { useBlobUrl } from '../../images/useBlobUrl';
 
