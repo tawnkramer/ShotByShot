@@ -198,7 +198,7 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
       </header>
       <div className="image-editor-body">
         <div className="image-editor-preview">
-          {shown ? <video src={shown} controls playsInline loop aria-label={`Video for shot ${shot.number}`} /> : <p className="muted">Your video will appear here.</p>}
+          {shown ? <video src={shown} style={{ aspectRatio: aspectOf(project) }} controls playsInline loop aria-label={`Video for shot ${shot.number}`} /> : <p className="muted">Your video will appear here.</p>}
         </div>
         <div className="image-editor-controls">
           {workflows && !workflows.length && !openArt ? <>
