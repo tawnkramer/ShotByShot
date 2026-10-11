@@ -10,6 +10,8 @@ import { OPENAI_VOICES } from '../../audio/voices';
 import { DEFAULT_TTS_MODEL, playBlob, speakWithBrowser, stopPlayback, synthesizeSpeech, TTS_MODEL_SETTING } from '../../audio/tts';
 import { getSetting } from '../../storage/db';
 import { API_KEY_SETTING } from '../../ai/openai';
+import { CharacterImageEditor } from './CharacterImageEditor';
+import { useBlobUrl } from '../../images/useBlobUrl';
 import { Slider } from '../staging/fields';
 
 const LABELS: Record<string, string> = {
@@ -20,15 +22,19 @@ const LABELS: Record<string, string> = {
 export function CharacterEditor({ character: c, onBack }: { character: Character; onBack: () => void }) {
   const dispatch = useProjectStore((s) => s.dispatch);
   const project = useProjectStore((s) => s.project)!;
+  const [imageEditor, setImageEditor] = useState(false);
+  const [showImage, setShowImage] = useState(false);
+  const imageUrl = useBlobUrl(c.image?.blob);
   const [pose, setPose] = useState<PoseId>('standing');
   const update = (patch: CharacterPatch, mergeKey?: string) => dispatch(updateCharacter(c.id, patch, mergeKey));
 
   return (
     <div className="split">
       <div className="viewport">
-        <MannequinView character={c} pose={pose} />
+        {showImage && imageUrl ? <img className="character-artwork" src={imageUrl} alt={`Concept artwork for ${c.name}`} /> : <MannequinView character={c} pose={pose} />}
+        {imageUrl && <button className="btn character-view-toggle" onClick={() => setShowImage(!showImage)}>{showImage ? '3D mannequin' : 'Character image'}</button>}
         <div className="viewport-badge">{heightLabel(c.heightCm)}</div>
-        <div className="viewport-toolbar">
+        <div className="viewport-toolbar" hidden={showImage && Boolean(imageUrl)}>
           <div className="segmented compact">
             {POSES.map((p) => (
               <button key={p} className={pose === p ? 'on' : ''} aria-pressed={pose === p} onClick={() => setPose(p)}>
@@ -45,6 +51,7 @@ export function CharacterEditor({ character: c, onBack }: { character: Character
           </button>
         </div>
         <div className="inspector">
+          <button className="btn" onClick={() => setImageEditor(true)}>{c.image ? 'View / generate character image' : 'Generate character image'}</button>
           <label className="field">
             <span>Name</span>
             <input
@@ -99,6 +106,7 @@ export function CharacterEditor({ character: c, onBack }: { character: Character
           </button>
         </div>
       </div>
+      {imageEditor && <CharacterImageEditor character={c} onClose={() => setImageEditor(false)} />}
     </div>
   );
 }
