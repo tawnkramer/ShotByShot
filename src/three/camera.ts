@@ -44,6 +44,19 @@ export function panCamera(s: CameraState, dx: number, dy: number, aspect: number
   return { ...s, target: [t.x, Math.max(0, t.y), t.z] };
 }
 
+/**
+ * Moves the whole camera (position and aim together) relative to where it
+ * faces: `right` trucks sideways, `forward` dollies along the ground, `up`
+ * cranes. In metres.
+ */
+export function moveCamera(s: CameraState, move: { right?: number; forward?: number; up?: number }): CameraState {
+  const az = THREE.MathUtils.degToRad(s.azimuth);
+  const r = move.right ?? 0, f = move.forward ?? 0, u = move.up ?? 0;
+  const x = s.target[0] + Math.cos(az) * r - Math.sin(az) * f;
+  const z = s.target[2] - Math.sin(az) * r - Math.cos(az) * f;
+  return { ...s, target: [x, Math.max(0, s.target[1] + u), z] };
+}
+
 export const SHOT_SIZES = {
   EWS: { label: 'Extreme wide', center: 0.5, extent: 3.2 },
   WS: { label: 'Wide', center: 0.5, extent: 1.25 },

@@ -1,6 +1,6 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { CameraState } from '../../state/schema';
-import { panCamera } from '../../three/camera';
+import { moveCamera, panCamera } from '../../three/camera';
 
 interface Props {
   base: CameraState;
@@ -12,12 +12,24 @@ interface Props {
 const ORBIT_DEG_PER_PX = 0.3;
 const TILT_DEG_PER_PX = 0.2;
 
+/** What a one-finger drag does. Pan, dolly and crane move the camera without turning it. */
+export type PadMove = 'orbit' | 'pan' | 'dolly' | 'crane';
+
+const MOVES: { id: PadMove; label: string; hint: string }[] = [
+  { id: 'orbit', label: 'Orbit', hint: 'Drag to orbit · pinch to zoom · two fingers to pan' },
+  { id: 'pan', label: 'Pan', hint: 'Drag left or right to move the camera sideways' },
+  { id: 'dolly', label: 'Dolly', hint: 'Drag up to move in, down to move out' },
+  { id: 'crane', label: 'Crane', hint: 'Drag up or down to raise or lower the camera' },
+];
+
 /**
- * The camera gizmo: the whole frame is a touch pad. One finger orbits
- * (left/right) and raises or lowers the camera (up/down); pinch dollies in
- * and out; two fingers pan. Scroll wheel zooms on desktop.
+ * The camera gizmo: the whole frame is a touch pad. In Orbit, one finger
+ * orbits (left/right) and raises or lowers the view (up/down); Pan, Dolly and
+ * Crane slide the camera left/right, in/out and up/down instead. Pinch zooms
+ * and two fingers pan in every mode. Scroll wheel zooms on desktop.
  */
 export function CameraPad({ base, aspect, onLive, onCommit }: Props) {
+  const [move, setMove] = useState<PadMove>('orbit');
   const el = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ start: CameraState; p0: Map<number, { x: number; y: number }> } | null>(null);
@@ -38,11 +50,18 @@ export function CameraPad({ base, aspect, onLive, onCommit }: Props) {
       const [id, p] = now[0];
       const s = g.p0.get(id);
       if (!s) return;
-      next = {
-        ...g.start,
-        azimuth: g.start.azimuth - (p.x - s.x) * ORBIT_DEG_PER_PX,
-        elevation: Math.max(-80, Math.min(85, g.start.elevation + (p.y - s.y) * TILT_DEG_PER_PX)),
-      };
+      const dx = p.x - s.x, dy = p.y - s.y;
+      // Slides scale with how far away the subject is, so a drag across the frame is a sensible move at any size.
+      const m = Math.max(1, g.start.distance) / Math.max(box.width, box.height);
+      if (move === 'pan') next = moveCamera(g.start, { right: dx * m });
+      else if (move === 'dolly') next = moveCamera(g.start, { forward: -dy * m });
+      else if (move === 'crane') next = moveCamera(g.start, { up: -dy * m * 0.8 });
+      else
+        next = {
+          ...g.start,
+          azimuth: g.start.azimuth - dx * ORBIT_DEG_PER_PX,
+          elevation: Math.max(-80, Math.min(85, g.start.elevation + dy * TILT_DEG_PER_PX)),
+        };
     } else if (now.length >= 2) {
       const [[ia, a], [ib, b]] = now;
       const sa = g.p0.get(ia), sb = g.p0.get(ib);
@@ -98,10 +117,18 @@ export function CameraPad({ base, aspect, onLive, onCommit }: Props) {
       }}
     >
       <svg className="camera-pad-ring" viewBox="0 0 100 100" aria-hidden>
-        <circle cx="50" cy="50" r="30" />
-        <path d="M14 50 l6 -4 v8 z M86 50 l-6 -4 v8 z M50 14 l-4 6 h8 z M50 86 l-4 -6 h8 z" />
+        {move === 'orbit' && <circle cx="50" cy="50" r="30" />}
+        {move !== 'orbit' && <path className="axis" d={move === 'pan' ? 'M18 50 H82' : 'M50 18 V82'} />}
+        <path d={move === 'pan' ? 'M14 50 l6 -4 v8 z M86 50 l-6 -4 v8 z' : move === 'orbit' ? 'M14 50 l6 -4 v8 z M86 50 l-6 -4 v8 z M50 14 l-4 6 h8 z M50 86 l-4 -6 h8 z' : 'M50 14 l-4 6 h8 z M50 86 l-4 -6 h8 z'} />
       </svg>
-      <span className="camera-pad-hint">Drag to orbit · pinch to zoom · two fingers to pan</span>
+      <span className="camera-pad-hint">{MOVES.find((m) => m.id === move)!.hint}</span>
+      <div className="segmented compact camera-moves" role="radiogroup" aria-label="Camera move" onPointerDown={(e) => e.stopPropagation()}>
+        {MOVES.map((m) => (
+          <button key={m.id} role="radio" aria-checked={move === m.id} className={move === m.id ? 'on' : ''} onClick={() => setMove(m.id)}>
+            {m.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

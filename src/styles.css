@@ -618,3 +618,5 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .crash h1 { font-size: 1.3rem; margin: 0; }
 .crash .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .crash pre { white-space: pre-wrap; word-break: break-word; }
+.camera-pad-ring .axis { fill: none; stroke: rgb(242 184 75 / 0.45); stroke-dasharray: 3 3; }
+.camera-moves { position: absolute; right: 6px; bottom: 6px; cursor: default; }

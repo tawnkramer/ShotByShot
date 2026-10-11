@@ -10,7 +10,7 @@ import { worldRect } from '../src/staging/placement';
 import { captionAt, captionsFor, estimateDuration, lerpAngle, lerpCamera, sample, sampleActor } from '../src/shots/timing';
 import { charactersInShot, effectiveShots, sceneLineOf, shotLines, speakersInShot, stageIdFor } from '../src/shots/setup';
 import { dialogueSplitPoints, mergeWithNext, setActorKey, setCamera, setCameraFixed, setDuration, splitShot } from '../src/shots/commands';
-import { applyCamera, cameraPosition, frameSubjects, lensToVFov, panCamera } from '../src/three/camera';
+import { applyCamera, cameraPosition, frameSubjects, lensToVFov, moveCamera, panCamera } from '../src/three/camera';
 
 function project(): Project {
   let [p, h] = runCommand(createProject('T'), emptyHistory(), importScript(SAMPLE_SCRIPT));
@@ -201,5 +201,34 @@ describe('camera math', () => {
     const moved = panCamera(s, 0.1, 0, 16 / 9);
     expect(Math.abs(moved.target[0])).toBeGreaterThan(0.1);
     expect(moved.target[2]).toBeCloseTo(0);
+  });
+});
+
+describe('camera moves', () => {
+  const s = { target: [0, 1.5, 0] as [number, number, number], azimuth: 30, elevation: 10, distance: 4, lens: 35, roll: 0 };
+  const view = (c: typeof s) => {
+    const cam = new THREE.PerspectiveCamera();
+    applyCamera(cam, c, 16 / 9);
+    return cam;
+  };
+
+  it('pans, dollies and cranes without turning the camera', () => {
+    const before = view(s);
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(before.quaternion).setY(0).normalize();
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(before.quaternion);
+    const cases: [Parameters<typeof moveCamera>[1], THREE.Vector3][] = [
+      [{ right: 1 }, right],
+      [{ forward: 1 }, fwd],
+      [{ up: 0.5 }, new THREE.Vector3(0, 0.5, 0)],
+    ];
+    for (const [move, expected] of cases) {
+      const after = view(moveCamera(s, move));
+      expect(after.position.clone().sub(before.position).distanceTo(expected)).toBeLessThan(1e-6);
+      expect(after.quaternion.angleTo(before.quaternion)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('keeps the aim above the floor when craning down', () => {
+    expect(moveCamera(s, { up: -5 }).target[1]).toBe(0);
   });
 });
