@@ -7,6 +7,7 @@ import { captionAt } from '../../shots/timing';
 import { formatTime } from '../shots/ShotsStep';
 import { PrevisCanvas } from './PrevisCanvas';
 import { AudioPanel } from '../common/AudioPanel';
+import { ScriptExcerpt } from '../common/ScriptExcerpt';
 import { audioContext, DialoguePlayer, loadBuffer, type Cue } from '../../audio/player';
 
 export function PrevisStep() {
@@ -175,11 +176,7 @@ export function PrevisStep() {
             </div>
             {cast.length > 0 && <span className="muted small">{cast.join(', ')}</span>}
             <div className="info-lines">
-              {lines.map((l) => (
-                <p key={l.id} className={`info-line line-${l.type}`}>
-                  {l.text}
-                </p>
-              ))}
+              <ScriptExcerpt lines={lines} />
             </div>
             <button className="btn primary" onClick={() => navigate(`/p/${project.id}/shots/${shot.id}?from=previs&t=${t.toFixed(2)}`)}>
               Edit shot {shot.number}

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjectStore } from '../../state/store';
 import type { Project, Shot } from '../../state/schema';
-import { effectiveShots, shotLines, summaryLine } from '../../shots/setup';
+import { effectiveShots, shotLines } from '../../shots/setup';
+import { ScriptExcerpt } from '../common/ScriptExcerpt';
 import { renderShotThumbnail } from '../../shots/thumbnail';
 import { dialogueSplitPoints, mergeWithNext, splitShot } from '../../shots/commands';
 import { useLongPress } from '../../shell/useLongPress';
@@ -103,7 +104,7 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
 
   const stage = project.stages.find((s) => s.id === eff.stageId);
   const names = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId)?.name).filter(Boolean);
-  const firstLine = summaryLine(project, shot);
+  const lines = shotLines(project, shot);
   const moving = eff.camera.mode === 'moving';
 
   return (
@@ -119,7 +120,7 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
           <span className="muted">{moving ? 'Moving camera' : 'Fixed camera'}</span>
         </span>
         {names.length > 0 && <span className="muted small">{names.join(', ')}</span>}
-        {firstLine && <span className="shot-line">{firstLine}</span>}
+        <ScriptExcerpt lines={lines} />
       </span>
     </button>
   );
