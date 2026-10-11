@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    # The default branch. Add main here if the repo gets one.
+    # Both carry the same commits; whichever the github-pages environment allows deploys.
     branches: [main, claude/shot-breakdown-previs-app-ccpmdl]
   workflow_dispatch:
 
@@ -11,9 +11,10 @@ permissions:
   pages: write
   id-token: write
 
+# Queue rather than cancel, so a run that can't deploy never cancels one that can.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
