@@ -1,0 +1,116 @@
+{
+  "12": {
+    "inputs": {
+      "image": "medusa_poster.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "16": {
+    "inputs": {
+      "filename_prefix": "video/Seedance2.5_r2v",
+      "format": "auto",
+      "format.codec": "auto",
+      "codec": "auto",
+      "video": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "24": {
+    "inputs": {
+      "model": "Seedance 2.5",
+      "model.prompt": "A placeholder prompt exported with the workflow.",
+      "model.resolution": "720p",
+      "model.ratio": "adaptive",
+      "model.duration": 5,
+      "model.generate_audio": true,
+      "model.task_type": "reference",
+      "model.output_format": "mp4",
+      "model.auto_downscale": true,
+      "model.auto_upscale": false,
+      "seed": 1998221051,
+      "watermark": false,
+      "model.reference_images.image_1": [
+        "12",
+        0
+      ],
+      "model.reference_images.image_2": [
+        "1910581294304698",
+        0
+      ],
+      "model.reference_images.image_3": [
+        "2349925732512186",
+        0
+      ],
+      "model.reference_videos.video_1": [
+        "1787498335737822",
+        0
+      ],
+      "model.reference_audios.audio_1": [
+        "3698026308920578",
+        0
+      ],
+      "model.reference_audios.audio_2": [
+        "823549616093337",
+        0
+      ]
+    },
+    "class_type": "ByteDance2ReferenceNodeV2",
+    "_meta": {
+      "title": "ByteDance Seedance 2.5 Reference to Video"
+    }
+  },
+  "1787498335737822": {
+    "inputs": {
+      "file": null
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "Load Video"
+    }
+  },
+  "3698026308920578": {
+    "inputs": {
+      "audio": null
+    },
+    "class_type": "LoadAudio",
+    "_meta": {
+      "title": "Load Audio"
+    }
+  },
+  "1910581294304698": {
+    "inputs": {
+      "image": "d38b0a3b7c3d9557750103e8e857afeca65117707fbfca0acf7675d357ecd247.JPG"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "823549616093337": {
+    "inputs": {
+      "audio": null
+    },
+    "class_type": "LoadAudio",
+    "_meta": {
+      "title": "Load Audio"
+    }
+  },
+  "2349925732512186": {
+    "inputs": {
+      "image": "d38b0a3b7c3d9557750103e8e857afeca65117707fbfca0acf7675d357ecd247.JPG"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  }
+}

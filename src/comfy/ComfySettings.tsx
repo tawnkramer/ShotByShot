@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { pickFile } from '../shell/download';
 import { COMFY_KEY_SETTING, testComfyKey, type KeyCheck } from './client';
-import { importWorkflow, listWorkflows, saveWorkflows, type ComfyWorkflow } from './settings';
+import { BUILTIN_WORKFLOWS, importWorkflow, listWorkflows, saveWorkflows, type ComfyWorkflow } from './settings';
 import { analyzeWorkflow, CATEGORY_LABELS, CATEGORY_OUTPUT, defaultPromptTarget, describeAnalysis, slotKey, WORKFLOW_CATEGORIES, type WorkflowCategory } from './workflow';
 
 export function ComfySettings() {
@@ -62,10 +62,11 @@ export function ComfySettings() {
     <p className="muted small">Create a key at <a href="https://platform.comfy.org/login" target="_blank" rel="noreferrer">platform.comfy.org</a>. Import workflows exported from ComfyUI with Workflow → Export (API).</p>
     {WORKFLOW_CATEGORIES.map((category) => <div key={category} className="comfy-category">
       <div className="row gap"><h3 className="grow">{CATEGORY_LABELS[category]}</h3><button className="btn" onClick={() => void add(category)}>Import JSON</button></div>
+      {BUILTIN_WORKFLOWS.filter((w) => w.category === category).map((w) => <WorkflowRow key={w.id} workflow={w} onChange={() => {}} onRemove={() => {}} />)}
       {workflows.filter((w) => w.category === category).map((w) => <WorkflowRow key={w.id} workflow={w}
         onChange={(next) => void update(workflows.map((x) => x.id === w.id ? next : x))}
         onRemove={() => void update(workflows.filter((x) => x.id !== w.id))} />)}
-      {!workflows.some((w) => w.category === category) && <p className="muted small">No workflows imported.</p>}
+      {![...BUILTIN_WORKFLOWS, ...workflows].some((w) => w.category === category) && <p className="muted small">No workflows imported.</p>}
     </div>)}
     {error && <p className="error small" role="alert">{error}</p>}
   </section>;
@@ -76,13 +77,14 @@ function WorkflowRow({ workflow: w, onChange, onRemove }: { workflow: ComfyWorkf
   const target = w.promptTarget ?? defaultPromptTarget(analysis);
   const expected = CATEGORY_OUTPUT[w.category];
   return <div className="comfy-workflow">
-    <div className="row gap">
+    {w.builtin ? <strong>{w.name} <span className="muted small">· built in</span></strong> : <div className="row gap">
       <input className="grow" aria-label="Workflow name" defaultValue={w.name} onBlur={(e) => { const name = e.target.value.trim(); if (name && name !== w.name) onChange({ ...w, name }); }} />
       <button className="btn danger" onClick={onRemove}>Remove</button>
-    </div>
+    </div>}
+    {w.builtin && <p className="small muted">A Comfy partner node: runs bill Comfy credits at the price shown before you generate.</p>}
     <p className="small muted">{describeAnalysis(analysis)}</p>
     {!analysis.outputs.includes(expected) && <p className="error small">No {expected} output node found. Add a Save {expected === 'audio' ? 'Audio' : expected === 'video' ? 'Video' : 'Image'} node and export again.</p>}
-    {analysis.prompts.length > 0 ? <label className="field"><span>Prompt input</span>
+    {w.builtin ? null : analysis.prompts.length > 0 ? <label className="field"><span>Prompt input</span>
       <select value={target ? slotKey(target) : ''} onChange={(e) => onChange({ ...w, promptTarget: analysis.prompts.find((p) => slotKey(p) === e.target.value) })}>
         {analysis.prompts.map((p) => <option key={slotKey(p)} value={slotKey(p)}>{p.title} › {p.input} (#{p.nodeId})</option>)}
       </select>

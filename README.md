@@ -45,18 +45,25 @@ a duration primitive titled “duration”, and width/height. Workflows live in
 browser settings and are never exported with projects.
 
 In a shot's **Image** tab, **Generate Shot Video** opens a full-screen panel.
-Each media input of the chosen video workflow is filled from the shot: the shot
-image, a greyscale previs frame, character and stage images, generated dialogue
-audio, or a previs clip rendered from the shot's camera and blocking. The
-generated prompt (hidden by default) refers to inputs as `<Picture 1>`,
-`<Audio 1>`, `<Video 1>` in order; anything typed in **Additional prompt** is
-appended with the highest priority. The run uses the shot's duration, a fresh
-seed and, optionally, the project aspect ratio at the workflow's pixel budget.
+**Seedance 2.5 reference to video** is built in and selected by default. It is a
+Comfy partner node billed in Comfy credits, and it takes lists of reference
+images (up to 30), videos (up to 10) and audio clips (up to 10). The panel
+pre-selects the shot image, character and stage images, the dialogue audio, and
+a previs clip rendered from the shot's camera and blocking (shots of at least
+1.8 s) as a camera-motion reference. Tick or untick them as needed; the app adds
+one loader node per file. Imported workflows with fixed Load Image, Load Audio or
+Load Video nodes, such as MiniMax H3, get a picker for each input instead.
+
+The generated prompt (hidden by default) names inputs the way the model expects:
+`Image 1`, `Video 1`, `Audio 1` for reference lists, or `<Picture 1>` for fixed
+inputs. Anything typed in **Additional prompt** is appended with the highest
+priority. Each run uses the shot's duration within the workflow's limits
+(Seedance: whole seconds, 4–30 s), a fresh seed, and optionally the closest
+supported aspect ratio or size for the project.
 
 Jobs run through the Comfy API v2 (`/api/v2/assets`, `/api/v2/jobs`). Canceling
-asks Comfy Cloud to stop the job. Costs can't be estimated in advance: Comfy Cloud
-bills GPU run time on your plan, and partner nodes bill credits. To send more
-references (for example MiniMax H3's reference mode), add more loader nodes wired
-to the model's inputs in ComfyUI and export again. The image, editing and speech
-workflows can be imported and checked here, but aren't yet selectable in the
-image and voice editors.
+asks Comfy Cloud to stop the job. Seedance runs show an estimated price ported
+from ComfyUI's published rates. GPU workflows can't be priced in advance, because
+Comfy Cloud bills run time on your plan; the panel shows how long a run took.
+Image generation, editing and speech workflows can be imported and checked here,
+but aren't yet selectable in the image and voice editors.

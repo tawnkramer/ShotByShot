@@ -19,13 +19,23 @@ export interface InputRef { nodeId: string; input: string }
 export interface MediaSlot extends InputRef { kind: MediaKind; title: string }
 export interface PromptTarget extends InputRef { title: string; length: number }
 export interface SizeTarget { nodeId: string; pixels: number; multiple: number }
+export interface DurationTarget extends InputRef { min?: number; max?: number; integer: boolean }
+/**
+ * A growable list of references on one node, e.g. Seedance's
+ * `model.reference_images.image_1…image_30`. The app replaces whatever is
+ * connected with its own loader nodes, one per chosen file.
+ */
+export interface ReferenceGroup { nodeId: string; kind: MediaKind; prefix: string; max: number; title: string }
 
 export interface WorkflowAnalysis {
   slots: MediaSlot[];
+  groups: ReferenceGroup[];
   prompts: PromptTarget[];
-  durations: InputRef[];
+  durations: DurationTarget[];
   seeds: InputRef[];
   sizes: SizeTarget[];
+  /** Aspect-ratio choices such as "16:9", set to the closest match for the project. */
+  ratios: InputRef[];
   outputs: MediaKind[];
 }
 
@@ -65,32 +75,61 @@ function outputKind(classType: string): MediaKind | undefined {
 
 const PROMPT_INPUT = /^(prompt|text|positive|positive_prompt|text_g|caption|lyrics|transcript)$|prompt$/i;
 
+const GROUP_INPUT = /^(.*\.)?reference_(image|video|audio)s\.(image|video|audio)_(\d+)$/;
+const GROUP_KINDS: [MediaKind, string][] = [['image', 'images'], ['video', 'videos'], ['audio', 'audios']];
+/** Partner nodes whose reference lists exist even when nothing is connected yet. Limits from ComfyUI's comfy_api_nodes. */
+function knownGroups(node: ApiNode): { prefix: string; max: Record<MediaKind, number> } | undefined {
+  if (!/^ByteDance2Reference/.test(node.class_type)) return undefined;
+  const v25 = /2\.5/.test(String(node.inputs.model));
+  return { prefix: 'model.reference_', max: v25 ? { image: 30, video: 10, audio: 10 } : { image: 9, video: 3, audio: 3 } };
+}
+const DURATION_LIMITS = (node: ApiNode): { min?: number; max?: number } =>
+  /^ByteDance2/.test(node.class_type) ? { min: 4, max: /2\.5/.test(String(node.inputs.model)) ? 30 : 15 } : {};
+export const RATIOS = ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'];
+const leaf = (key: string) => key.split('.').pop()!;
+
 export function analyzeWorkflow(graph: WorkflowGraph): WorkflowAnalysis {
   const ids = Object.keys(graph).sort(byId);
   // Text encoders feeding a sampler's negative input hold the negative prompt.
   const negative = new Set<string>();
-  for (const id of ids) for (const [k, v] of Object.entries(graph[id].inputs)) if (/negative/i.test(k) && isLink(v)) negative.add(v[0]);
-  const analysis: WorkflowAnalysis = { slots: [], prompts: [], durations: [], seeds: [], sizes: [], outputs: [] };
+  // Loaders wired only into a reference group belong to that group, not to a fixed input.
+  const consumers = new Map<string, string[]>();
+  for (const id of ids) for (const [k, v] of Object.entries(graph[id].inputs)) {
+    if (!isLink(v)) continue;
+    if (/negative/i.test(k)) negative.add(v[0]);
+    consumers.set(v[0], [...consumers.get(v[0]) ?? [], k]);
+  }
+  const analysis: WorkflowAnalysis = { slots: [], groups: [], prompts: [], durations: [], seeds: [], sizes: [], ratios: [], outputs: [] };
   for (const id of ids) {
     const node = graph[id];
     const name = title(graph, id);
     const media = loaderKind(node.class_type);
     if (media) {
-      const input = MEDIA_FIELDS.find((f) => typeof node.inputs[f] === 'string');
-      if (input) analysis.slots.push({ nodeId: id, input, kind: media, title: name });
+      // An empty loader in an export has a null file.
+      const input = MEDIA_FIELDS.find((f) => typeof node.inputs[f] === 'string' || node.inputs[f] === null);
+      const uses = consumers.get(id) ?? [];
+      if (input && !(uses.length && uses.every((k) => GROUP_INPUT.test(k)))) analysis.slots.push({ nodeId: id, input, kind: media, title: name });
       continue;
     }
     const out = outputKind(node.class_type);
     if (out && !analysis.outputs.includes(out)) analysis.outputs.push(out);
+    const known = knownGroups(node);
+    if (known) for (const [kind, plural] of GROUP_KINDS) analysis.groups.push({ nodeId: id, kind, prefix: `${known.prefix}${plural}.${kind}_`, max: known.max[kind], title: name });
     for (const [k, v] of Object.entries(node.inputs)) {
+      const key = leaf(k);
+      const group = GROUP_INPUT.exec(k);
+      if (group && !analysis.groups.some((g) => g.nodeId === id && g.kind === group[3])) {
+        analysis.groups.push({ nodeId: id, kind: group[3] as MediaKind, prefix: `${group[1] ?? ''}reference_${group[2]}s.${group[3]}_`, max: 9, title: name });
+      }
       if (typeof v === 'string' && !negative.has(id) && !/negative/i.test(name) && !/negative/i.test(k)
-        && (PROMPT_INPUT.test(k) || (k === 'value' && /PrimitiveString/i.test(node.class_type) && /prompt/i.test(name)))) {
+        && (PROMPT_INPUT.test(key) || (k === 'value' && /PrimitiveString/i.test(node.class_type) && /prompt/i.test(name)))) {
         analysis.prompts.push({ nodeId: id, input: k, title: name, length: v.length });
       }
-      if (typeof v === 'number' && /^(noise_)?seed$/i.test(k)) analysis.seeds.push({ nodeId: id, input: k });
-      if (typeof v === 'number' && (/^(duration|seconds|duration_seconds)$/i.test(k) || (k === 'value' && /Primitive(Float|Int)/i.test(node.class_type) && /duration|seconds/i.test(name)))) {
-        analysis.durations.push({ nodeId: id, input: k });
+      if (typeof v === 'number' && /^(noise_)?seed$/i.test(key)) analysis.seeds.push({ nodeId: id, input: k });
+      if (typeof v === 'number' && (/^(duration|seconds|duration_seconds)$/i.test(key) || (k === 'value' && /Primitive(Float|Int)/i.test(node.class_type) && /duration|seconds/i.test(name)))) {
+        analysis.durations.push({ nodeId: id, input: k, integer: /Int/i.test(node.class_type) || /^ByteDance/.test(node.class_type), ...DURATION_LIMITS(node) });
       }
+      if (typeof v === 'string' && /^(aspect_)?ratio$/i.test(key) && (RATIOS.includes(v) || v === 'adaptive')) analysis.ratios.push({ nodeId: id, input: k });
     }
     const { width, height } = node.inputs;
     if (width !== undefined && height !== undefined && (isLink(width) || typeof width === 'number') && (isLink(height) || typeof height === 'number')) {
@@ -126,12 +165,28 @@ export interface Binding {
   prompt?: string;
   promptTarget?: InputRef;
   media?: Map<string, AssetReference | string>;
+  /** Files for each reference group, in order, keyed by `groupKey`. */
+  references?: Map<string, (AssetReference | string)[]>;
   durationSec?: number;
   seed?: number;
   aspect?: number;
 }
 
 export const slotKey = (s: InputRef) => `${s.nodeId}.${s.input}`;
+export const groupKey = (g: ReferenceGroup) => `${g.nodeId}.${g.prefix}`;
+
+/** The duration a workflow will actually run for a shot, after its limits. */
+export function boundDuration(target: DurationTarget, seconds: number): number {
+  const value = target.integer ? Math.max(1, Math.ceil(seconds - 0.05)) : Math.round(seconds * 100) / 100;
+  return Math.min(target.max ?? Infinity, Math.max(target.min ?? 0, value));
+}
+
+export function closestRatio(aspect: number): string {
+  const value = (r: string) => { const [w, h] = r.split(':').map(Number); return w / h; };
+  return RATIOS.reduce((best, r) => Math.abs(Math.log(value(r) / aspect)) < Math.abs(Math.log(value(best) / aspect)) ? r : best);
+}
+
+const LOADER: Record<MediaKind, [string, string]> = { image: ['LoadImage', 'image'], audio: ['LoadAudio', 'audio'], video: ['LoadVideo', 'file'] };
 
 export function bindWorkflow(graph: WorkflowGraph, analysis: WorkflowAnalysis, binding: Binding): WorkflowGraph {
   const out = structuredClone(graph);
@@ -141,21 +196,39 @@ export function bindWorkflow(graph: WorkflowGraph, analysis: WorkflowAnalysis, b
     if (value === undefined) throw new Error(`Choose media for ${slot.title}.`);
     set(slot, value);
   }
+  let nextId = Math.max(0, ...Object.keys(out).map((id) => parseInt(id, 10)).filter(Number.isFinite)) + 1;
+  for (const group of analysis.groups) {
+    const files = binding.references?.get(groupKey(group));
+    if (!files) continue;
+    if (files.length > group.max) throw new Error(`${group.title} accepts at most ${group.max} ${group.kind} references.`);
+    const node = out[group.nodeId];
+    for (const [k, v] of Object.entries(node.inputs)) {
+      if (!k.startsWith(group.prefix)) continue;
+      delete node.inputs[k];
+      // Drop the loader that fed it when nothing else uses it.
+      if (isLink(v) && !Object.values(out).some((n) => Object.values(n.inputs).some((x) => isLink(x) && x[0] === v[0]))) delete out[v[0]];
+    }
+    const [classType, input] = LOADER[group.kind];
+    files.forEach((file, i) => {
+      const id = String(nextId++);
+      out[id] = { class_type: classType, inputs: { [input]: file }, _meta: { title: `ShotByShot ${group.kind} ${i + 1}` } };
+      node.inputs[`${group.prefix}${i + 1}`] = [id, 0];
+    });
+  }
   if (binding.prompt !== undefined) {
     const chosen = binding.promptTarget && analysis.prompts.find((p) => slotKey(p) === slotKey(binding.promptTarget!));
     const target = chosen ?? defaultPromptTarget(analysis);
     if (!target) throw new Error('This workflow has no prompt input.');
     set(target, binding.prompt);
   }
-  if (binding.durationSec !== undefined) {
-    for (const d of analysis.durations) set(d, /Int/i.test(graph[d.nodeId].class_type) ? Math.max(1, Math.round(binding.durationSec)) : Math.round(binding.durationSec * 100) / 100);
-  }
+  if (binding.durationSec !== undefined) for (const d of analysis.durations) set(d, boundDuration(d, binding.durationSec));
   if (binding.seed !== undefined) for (const s of analysis.seeds) set(s, binding.seed);
   if (binding.aspect) {
     for (const s of analysis.sizes) {
       const { width, height } = sizeForAspect(binding.aspect, s.pixels, s.multiple);
       set({ nodeId: s.nodeId, input: 'width' }, width); set({ nodeId: s.nodeId, input: 'height' }, height);
     }
+    for (const r of analysis.ratios) set(r, closestRatio(binding.aspect));
   }
   return out;
 }
@@ -165,10 +238,12 @@ export function describeAnalysis(a: WorkflowAnalysis): string {
     const n = a.slots.filter((s) => s.kind === kind).length;
     return n ? `${n} ${label}${n === 1 ? '' : 's'}` : '';
   };
-  const inputs = [count('image', 'image'), count('audio', 'audio clip'), count('video', 'video clip')].filter(Boolean).join(', ') || 'no media';
-  return `Inputs: ${inputs}. Outputs: ${a.outputs.join(', ') || 'none found'}.`;
+  const inputs = [count('image', 'image'), count('audio', 'audio clip'), count('video', 'video clip')].filter(Boolean).join(', ');
+  const refs = a.groups.map((g) => `${g.max} ${g.kind === 'audio' ? 'audio clips' : `${g.kind}s`}`).join(', ');
+  return `Inputs: ${[inputs, refs && `references up to ${refs}`].filter(Boolean).join('; ') || 'no media'}. Outputs: ${a.outputs.join(', ') || 'none found'}.`;
 }
 
 export function randomSeed(): number {
-  return Math.floor(Math.random() * 2 ** 48);
+  // Partner nodes such as Seedance cap seeds at 2^31 - 1.
+  return Math.floor(Math.random() * 2_147_483_647);
 }

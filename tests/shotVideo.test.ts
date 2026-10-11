@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '../src/state/schema';
-import { cameraDescription, defaultAssignments, mediaOptions, mediaTags, videoPrompt } from '../src/video/shotVideo';
+import { cameraDescription, defaultAssignments, defaultReferences, mediaOptions, referenceTags, videoPrompt } from '../src/video/shotVideo';
 import type { MediaSlot } from '../src/comfy/workflow';
 
 function project() {
@@ -20,7 +20,11 @@ describe('shot video', () => {
     expect(options.map((o) => o.id)).toEqual(['shot-image', 'previs-frame', 'character:ana', 'previs-clip']);
     const slots = [slot('1', 'image'), slot('2', 'image'), slot('3', 'video')];
     expect([...defaultAssignments(slots, options).values()]).toEqual(['shot-image', 'previs-frame', 'previs-clip']);
-    expect([...mediaTags([...slots, slot('4', 'image')]).values()]).toEqual(['<Picture 1>', '<Picture 2>', '<Video 1>', '<Picture 3>']);
+    expect(referenceTags(['image', 'image', 'video', 'image'], 'picture')).toEqual(['<Picture 1>', '<Picture 2>', '<Video 1>', '<Picture 3>']);
+    expect(referenceTags(['image', 'audio', 'image'], 'reference')).toEqual(['Image 1', 'Audio 1', 'Image 2']);
+    const groups = (['image', 'video'] as const).map((kind) => ({ nodeId: '24', kind, prefix: `model.reference_${kind}s.${kind}_`, max: 9, title: 'Seedance' }));
+    expect([...defaultReferences(groups, options, 3).values()]).toEqual([['shot-image', 'character:ana'], ['previs-clip']]);
+    expect([...defaultReferences(groups, options, 1.2).values()]).toEqual([['shot-image', 'character:ana'], []]);
   });
 
   it('builds a prompt that names each reference, the subjects, camera and direction', () => {

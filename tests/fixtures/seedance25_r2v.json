@@ -1,0 +1,51 @@
+{
+  "12": {
+    "inputs": {
+      "image": "medusa_poster.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "16": {
+    "inputs": {
+      "filename_prefix": "video/Seedance2.5_r2v",
+      "format": "auto",
+      "format.codec": "auto",
+      "codec": "auto",
+      "video": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "24": {
+    "inputs": {
+      "model": "Seedance 2.5",
+      "model.prompt": "A placeholder prompt exported with the workflow.",
+      "model.resolution": "720p",
+      "model.ratio": "adaptive",
+      "model.duration": 5,
+      "model.generate_audio": true,
+      "model.task_type": "reference",
+      "model.output_format": "mp4",
+      "model.auto_downscale": true,
+      "model.auto_upscale": false,
+      "seed": 1998221051,
+      "watermark": false,
+      "model.reference_images.image_1": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "ByteDance2ReferenceNodeV2",
+    "_meta": {
+      "title": "ByteDance Seedance 2.5 Reference to Video"
+    }
+  }
+}

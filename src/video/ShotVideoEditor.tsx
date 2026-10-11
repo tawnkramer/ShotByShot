@@ -11,8 +11,9 @@ import { setShotVideo, setShotVideoPrompt } from '../shots/commands';
 import { useBlobUrl } from '../images/useBlobUrl';
 import { COMFY_KEY_SETTING, downloadOutput, runSeconds, submitJob, uploadAsset, waitForJob, type ComfyJob } from '../comfy/client';
 import { listWorkflows, type ComfyWorkflow } from '../comfy/settings';
-import { analyzeWorkflow, bindWorkflow, randomSeed, slotKey, type AssetReference, type MediaSlot } from '../comfy/workflow';
-import { defaultAssignments, mediaOptions, mediaTags, optionData, PREVIS_CLIP, renderPrevisClip, videoPrompt, type MediaOption } from './shotVideo';
+import { analyzeWorkflow, bindWorkflow, boundDuration, groupKey, randomSeed, slotKey, type AssetReference, type MediaKind, type MediaSlot, type ReferenceGroup } from '../comfy/workflow';
+import { estimateWorkflowCost, formatCost } from '../comfy/cost';
+import { defaultAssignments, defaultReferences, mediaOptions, referenceTags, optionData, PREVIS_CLIP, renderPrevisClip, videoPrompt, type MediaOption } from './shotVideo';
 
 export const VIDEO_WORKFLOW_SETTING = 'comfy.videoWorkflow';
 
@@ -26,6 +27,7 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
   const [prompt, setPrompt] = useState(shot.videoPrompt ?? '');
   const [matchAspect, setMatchAspect] = useState(true);
   const [assigned, setAssigned] = useState<Map<string, string>>(new Map());
+  const [references, setReferences] = useState<Map<string, string[]>>(new Map());
   const [previsClip, setPrevisClip] = useState<Blob>();
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,7 +40,7 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
   useEffect(() => {
     dialog.current?.showModal();
     void getSetting<string>(COMFY_KEY_SETTING).then((k) => setHasKey(Boolean(k))).catch(() => setHasKey(false));
-    void Promise.all([listWorkflows('video'), getSetting<string>(VIDEO_WORKFLOW_SETTING)]).then(([list, last]) => {
+    void Promise.all([listWorkflows('video', true), getSetting<string>(VIDEO_WORKFLOW_SETTING)]).then(([list, last]) => {
       setWorkflows(list);
       setWorkflowId(list.find((w) => w.id === last)?.id ?? list[0]?.id ?? '');
     }).catch(() => setWorkflows([]));
@@ -51,16 +53,40 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
     const list = mediaOptions(project, shot, previsFrame);
     return list.map((o) => o.id === PREVIS_CLIP && previsClip ? { ...o, data: previsClip } : o);
   }, [project, shot, previsFrame, previsClip]);
-  useEffect(() => { if (analysis) setAssigned(defaultAssignments(analysis.slots, options)); }, [analysis]); // eslint-disable-line react-hooks/exhaustive-deps
-  const tags = useMemo(() => mediaTags(analysis?.slots ?? []), [analysis]);
-  const inputs = (analysis?.slots ?? []).flatMap((slot) => {
-    const option = options.find((o) => o.id === assigned.get(slotKey(slot)));
-    return option ? [{ slot, option, tag: tags.get(slotKey(slot))! }] : [];
+  const eff = effectiveShot(project, shot.id)!;
+  useEffect(() => {
+    if (!analysis) return;
+    setAssigned(defaultAssignments(analysis.slots, options));
+    setReferences(defaultReferences(analysis.groups, options, eff.durationSec));
+  }, [analysis]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fixed inputs first, then each reference list, in the order they're submitted.
+  const placements: { kind: MediaKind; optionId?: string; slot?: MediaSlot; group?: ReferenceGroup }[] = [
+    ...(analysis?.slots ?? []).map((slot) => ({ kind: slot.kind, optionId: assigned.get(slotKey(slot)), slot })),
+    ...(analysis?.groups ?? []).flatMap((group) => (references.get(groupKey(group)) ?? []).map((optionId) => ({ kind: group.kind, optionId, group }))),
+  ];
+  const tagList = referenceTags(placements.map((p) => p.kind), analysis?.groups.length ? 'reference' : 'picture');
+  const inputs = placements.flatMap((p, i) => {
+    const option = options.find((o) => o.id === p.optionId);
+    return option ? [{ ...p, option, tag: tagList[i] }] : [];
   });
+  const slotTag = (slot: MediaSlot) => tagList[placements.findIndex((p) => p.slot === slot)];
   const generated = videoPrompt(project, shot, inputs, '');
   const full = videoPrompt(project, shot, inputs, prompt);
-  const eff = effectiveShot(project, shot.id)!;
+  const durationTarget = analysis?.durations[0];
+  const runSecondsFor = durationTarget ? boundDuration(durationTarget, eff.durationSec) : undefined;
+  const estimate = useMemo(() => {
+    if (!workflow || !analysis) return undefined;
+    try {
+      return estimateWorkflowCost(bindWorkflow(workflow.graph, analysis, {
+        media: new Map(analysis.slots.map((s) => [slotKey(s), 'estimate'])),
+        references: new Map(analysis.groups.map((g) => [groupKey(g), references.get(groupKey(g)) ?? []])),
+        durationSec: eff.durationSec, aspect: matchAspect ? aspectOf(project) : undefined,
+      }));
+    } catch { return undefined; }
+  }, [workflow, analysis, references, eff.durationSec, matchAspect, project]);
   const missing = analysis?.slots.filter((s) => !assigned.has(slotKey(s))) ?? [];
+  // Seedance needs at least one visual reference.
+  const needsReference = Boolean(analysis?.groups.length && !analysis.slots.length && !inputs.some((i) => i.group && i.kind !== 'audio'));
 
   const chooseWorkflow = (id: string) => {
     setWorkflowId(id);
@@ -77,9 +103,11 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
       const key = await getSetting<string>(COMFY_KEY_SETTING);
       if (!key) { setHasKey(false); throw new Error('Add your Comfy Cloud API key in Settings first.'); }
       if (missing.length) throw new Error(`Choose media for ${missing.map((s) => s.title).join(', ')}.`);
+      if (needsReference) throw new Error('Choose at least one reference image or video.');
       const media = new Map<string, AssetReference>();
+      const refs = new Map<string, AssetReference[]>(analysis.groups.map((g) => [groupKey(g), []]));
       let clip = previsClip;
-      for (const { slot, option } of inputs) {
+      for (const [i, { slot, group, option }] of inputs.entries()) {
         if (option.id === PREVIS_CLIP && !clip) {
           setStatus('Rendering previs clip…');
           clip = await renderPrevisClip(project, shot.id, abort.signal);
@@ -87,10 +115,12 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
         }
         const data = option.id === PREVIS_CLIP ? clip! : await optionData(option);
         setStatus(`Uploading ${option.label}…`);
-        media.set(slotKey(slot), await uploadAsset(key, data, uniqueName(option, slot), abort.signal));
+        const ref = await uploadAsset(key, data, uniqueName(option, i), abort.signal);
+        if (slot) media.set(slotKey(slot), ref);
+        else if (group) refs.get(groupKey(group))!.push(ref);
       }
       const graph = bindWorkflow(workflow.graph, analysis, {
-        media, prompt: full, promptTarget: workflow.promptTarget, durationSec: eff.durationSec, seed: randomSeed(),
+        media, references: refs, prompt: full, promptTarget: workflow.promptTarget, durationSec: eff.durationSec, seed: randomSeed(),
         aspect: matchAspect ? aspectOf(project) : undefined,
       });
       setStatus('Submitting…');
@@ -152,20 +182,28 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
             <select value={workflowId} disabled={busy} onChange={(e) => chooseWorkflow(e.target.value)}>{workflows?.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
           </label>}
           {analysis && <>
-            {analysis.slots.length === 0 && <p className="small muted">This workflow has no Load Image, Load Audio or Load Video nodes, so it only receives the prompt.</p>}
-            {analysis.slots.map((slot) => <SlotPicker key={slotKey(slot)} slot={slot} tag={tags.get(slotKey(slot))!} options={options.filter((o) => o.kind === slot.kind)} value={assigned.get(slotKey(slot)) ?? ''} disabled={busy}
+            {analysis.slots.length === 0 && analysis.groups.length === 0 && <p className="small muted">This workflow has no Load Image, Load Audio or Load Video nodes, so it only receives the prompt.</p>}
+            {analysis.slots.map((slot) => <SlotPicker key={slotKey(slot)} slot={slot} tag={slotTag(slot)} options={options.filter((o) => o.kind === slot.kind)} value={assigned.get(slotKey(slot)) ?? ''} disabled={busy}
               onChange={(id) => setAssigned((prev) => { const next = new Map(prev); if (id) next.set(slotKey(slot), id); else next.delete(slotKey(slot)); return next; })} />)}
-            {!analysis.slots.some((s) => s.kind === 'video') && <p className="small muted">To send the previs clip as a camera-motion reference, add a Load Video node to the workflow and import it again.</p>}
-            {analysis.sizes.length > 0 && <label className="row gap small"><input type="checkbox" checked={matchAspect} disabled={busy} onChange={(e) => setMatchAspect(e.target.checked)} /> Match the project's {project.aspect} aspect ratio</label>}
-            <p className="small muted">Duration: {eff.durationSec.toFixed(1)} s (shot length){analysis.durations.length ? '' : ' · this workflow sets its own length'}.</p>
+            {analysis.groups.map((group) => <ReferencePicker key={groupKey(group)} group={group} options={options.filter((o) => o.kind === group.kind)} chosen={references.get(groupKey(group)) ?? []} disabled={busy}
+              onChange={(ids) => setReferences((prev) => new Map(prev).set(groupKey(group), ids))} />)}
+            {needsReference && <p className="small error">Choose at least one reference image or video.</p>}
+            {![...analysis.slots, ...analysis.groups].some((s) => s.kind === 'video') && <p className="small muted">To send the previs clip as a camera-motion reference, add a Load Video node to the workflow and import it again.</p>}
+            {analysis.sizes.length + analysis.ratios.length > 0 && <label className="row gap small"><input type="checkbox" checked={matchAspect} disabled={busy} onChange={(e) => setMatchAspect(e.target.checked)} /> Match the project's {project.aspect} aspect ratio</label>}
+            <p className="small muted">{!durationTarget ? `Shot length ${eff.durationSec.toFixed(1)} s · this workflow sets its own length.`
+              : Math.abs((runSecondsFor ?? 0) - eff.durationSec) < 0.05 ? `Duration: ${eff.durationSec.toFixed(1)} s (shot length).`
+              : `Duration: ${runSecondsFor} s. The shot is ${eff.durationSec.toFixed(1)} s; this workflow takes ${durationTarget.integer ? 'whole seconds' : 'its own range'}${durationTarget.min !== undefined ? `, ${durationTarget.min}–${durationTarget.max} s` : ''}. Trim in your editor.`}</p>
             <details className="generated-image-prompt"><summary>Generated prompt</summary><pre>{generated}</pre></details>
             <label className="field image-prompt-field"><span>Additional prompt</span><textarea rows={5} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => changePrompt(e.target.value)} /></label>
-            <p className="small muted">Cost estimate unavailable. Comfy Cloud bills by GPU run time on your plan{draft?.seconds ? `; this run took ${Math.round(draft.seconds)} s` : ''}. Partner nodes bill credits separately.</p>
+            <div className="small" aria-live="polite">
+              <strong>{estimate ? `Estimated cost: ${formatCost(estimate)}` : 'Cost estimate unavailable'}</strong>
+              <p className="muted">{estimate ? 'Partner-node price in Comfy credits, from ComfyUI\'s published rates. Approximate, not a guaranteed charge.' : 'Comfy Cloud bills GPU run time on your plan.'}{draft?.seconds ? ` This run took ${Math.round(draft.seconds)} s.` : ''}</p>
+            </div>
           </>}
           {hasKey === false && <Link className="btn" to="/settings" onClick={onClose}>Add Comfy key in Settings</Link>}
           {error && <p className="error small" role="alert">{error}</p>}
           <p className="small muted" role="status">{busy ? status || 'Working…' : draft ? 'Preview ready. Use video to save it to this shot.' : status}</p>
-          <button className="btn primary" disabled={busy || !analysis || hasKey === false || missing.length > 0} onClick={() => void generate()}>{busy ? 'Working…' : draft || shot.video ? 'Generate another video' : 'Generate video'}</button>
+          <button className="btn primary" disabled={busy || !analysis || hasKey === false || missing.length > 0 || needsReference} onClick={() => void generate()}>{busy ? 'Working…' : draft || shot.video ? 'Generate another video' : 'Generate video'}</button>
           {busy && <button className="btn" onClick={cancel}>Cancel job</button>}
           <div className="row gap">
             {draft && <button className="btn primary grow" disabled={busy || saving} onClick={() => void save()}>Use video</button>}
@@ -212,9 +250,26 @@ function useObjectUrl(blob?: Blob): string | undefined {
   return url;
 }
 
-function uniqueName(option: MediaOption, slot: MediaSlot): string {
+function uniqueName(option: MediaOption, index: number): string {
   const [base, ext] = option.fileName.split('.');
-  return `${base}-${slot.nodeId.replace(/\W/g, '_')}.${ext}`;
+  return `${base}-${index + 1}.${ext}`;
+}
+
+function ReferencePicker({ group, options, chosen, disabled, onChange }: { group: ReferenceGroup; options: MediaOption[]; chosen: string[]; disabled: boolean; onChange: (ids: string[]) => void }) {
+  const noun = group.kind === 'audio' ? 'audio' : `${group.kind}s`;
+  return <fieldset className="video-group">
+    <legend className="small">Reference {noun} · {chosen.length} of up to {group.max}</legend>
+    {options.map((o) => {
+      const on = chosen.includes(o.id);
+      return <label key={o.id} className="video-group-item">
+        <input type="checkbox" checked={on} disabled={disabled || (!on && chosen.length >= group.max)}
+          onChange={() => onChange(on ? chosen.filter((id) => id !== o.id) : options.map((x) => x.id).filter((id) => id === o.id || chosen.includes(id)))} />
+        <span className="grow">{o.label}</span>
+        {on && <MediaPreview option={o} />}
+      </label>;
+    })}
+    {!options.length && <p className="small muted">No {noun} in this shot yet{group.kind === 'audio' ? '. Generate dialogue voices first' : ''}.</p>}
+  </fieldset>;
 }
 
 function describeJob(job: ComfyJob): string {

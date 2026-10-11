@@ -3,8 +3,8 @@ import type { Character, Project, Shot } from '../state/schema';
 import { aspectOf, captionsOf, effectiveShot, shotLines } from '../shots/setup';
 import { getBlob } from '../storage/db';
 import { CHARACTER_IMAGE_PRESENTATION, characterImagePrompt } from '../images/generate';
-import type { MediaKind, MediaSlot } from '../comfy/workflow';
-import { FilmRenderer, frameSize } from '../export/render';
+import { groupKey, sizeForAspect, type MediaKind, type MediaSlot, type ReferenceGroup } from '../comfy/workflow';
+import { FilmRenderer } from '../export/render';
 import { probe } from '../export/exportVideo';
 
 /** Something from the project that can fill a workflow's media input. */
@@ -62,12 +62,28 @@ export async function optionData(option: MediaOption): Promise<Blob> {
   return new Blob([data], { type: MIME[option.fileName.split('.').pop()!] ?? data.type });
 }
 
-const TAG: Record<MediaKind, string> = { image: 'Picture', audio: 'Audio', video: 'Video' };
+/** Reference videos must run at least this long for Seedance; shorter previs clips aren't suggested. */
+const MIN_REFERENCE_VIDEO_SEC = 1.8;
 
-/** Labels each assigned input the way the prompt refers to it, e.g. "<Picture 1>". */
-export function mediaTags(slots: MediaSlot[]): Map<string, string> {
+/** Fills each reference group with every suitable suggestion, up to its limit. The greyscale frame is left for fixed inputs. */
+export function defaultReferences(groups: ReferenceGroup[], options: MediaOption[], durationSec: number): Map<string, string[]> {
+  return new Map(groups.map((g) => [groupKey(g), options
+    .filter((o) => o.kind === g.kind && o.id !== 'previs-frame' && (o.id !== PREVIS_CLIP || (durationSec >= MIN_REFERENCE_VIDEO_SEC && durationSec <= 15)))
+    .slice(0, g.max).map((o) => o.id)]));
+}
+
+/**
+ * How the prompt names each input, numbered per kind in submission order.
+ * Reference-list models (Seedance) number their inputs "Image 1", "Video 1";
+ * single-input workflows use the MiniMax-style "<Picture 1>".
+ */
+export function referenceTags(kinds: MediaKind[], style: 'reference' | 'picture'): string[] {
   const counts: Record<MediaKind, number> = { image: 0, audio: 0, video: 0 };
-  return new Map(slots.map((s) => [`${s.nodeId}.${s.input}`, `<${TAG[s.kind]} ${++counts[s.kind]}>`]));
+  const names: Record<MediaKind, string> = style === 'reference' ? { image: 'Image', audio: 'Audio', video: 'Video' } : { image: 'Picture', audio: 'Audio', video: 'Video' };
+  return kinds.map((k) => {
+    const label = `${names[k]} ${++counts[k]}`;
+    return style === 'reference' ? label : `<${label}>`;
+  });
 }
 
 export function videoPrompt(project: Project, shot: Shot, inputs: { tag: string; option: MediaOption }[], additional: string): string {
@@ -113,7 +129,8 @@ function clip(text: string, n: number) { return text.length > n ? `${text.slice(
 export async function renderPrevisClip(project: Project, shotId: string, signal?: AbortSignal): Promise<Blob> {
   const eff = effectiveShot(project, shotId);
   if (!eff) throw new Error('This shot no longer exists.');
-  const { width, height } = frameSize(aspectOf(project), '720');
+  // About 0.64 MP keeps the clip inside Seedance's 409,600–927,408 pixel range for reference videos at any aspect ratio.
+  const { width, height } = sizeForAspect(aspectOf(project), 640_000, 16);
   const fps = project.fps;
   const caps = await probe(width, height, fps);
   if (!caps.video) throw new Error("This browser can't encode video, so the previs clip can't be sent.");

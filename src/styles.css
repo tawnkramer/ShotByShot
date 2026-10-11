@@ -694,3 +694,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .video-slot-media { max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; align-self: flex-start; }
 .video-slot audio { width: 100%; }
 .shot-video-inline { width: 100%; max-height: 30dvh; border-radius: 8px; background: #000; }
+.video-group { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.video-group-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.video-group-item .video-slot-media { max-height: 72px; }
+.video-group-item audio { flex-basis: 100%; }
