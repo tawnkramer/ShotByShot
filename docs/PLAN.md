@@ -721,6 +721,19 @@ AI tools only depend on M1.
   Previs schedules clips on the Web Audio clock, unlocked on the Play tap
   for iOS, and restarts with a loop. Status panels on Shots, the shot
   editor and Previs.
+- **M8 (Export) done:** with Mediabunny (the successor to mp4-muxer) on top
+  of WebCodecs. `FilmRenderer` draws any moment of the film offscreen
+  (frame-exact, not real time) and burns in captions and optional shot
+  numbers; frames go through `CanvasSource`. Dialogue is mixed with an
+  `OfflineAudioContext` into one stereo track. Codecs: H.264 + AAC where
+  available, falling back to HEVC/VP9/AV1 and Opus, with a note when the
+  result may not open in QuickTime; no encoder means a clear message.
+  720p/1080p on the long side (even dimensions), 24/25/30 fps, progress,
+  cancel, an in-page preview, and Save (share sheet on phones). Stills:
+  the first frame of every shot, plus the last frame of shots that move, as
+  PNGs in a zip (S01A_start.png). The project file can be saved here too.
+  Known limits: the audio mix is held in memory (fine for a previs of a
+  few minutes, heavy for very long films); no MediaRecorder fallback yet.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

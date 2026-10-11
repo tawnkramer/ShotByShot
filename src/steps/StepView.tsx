@@ -10,6 +10,7 @@ const CharactersStep = lazy(() => import('./characters/CharactersStep').then((m)
 const PropsStep = lazy(() => import('./props/PropsStep').then((m) => ({ default: m.PropsStep })));
 const ShotsStep = lazy(() => import('./shots/ShotsStep').then((m) => ({ default: m.ShotsStep })));
 const PrevisStep = lazy(() => import('./previs/PrevisStep').then((m) => ({ default: m.PrevisStep })));
+const ExportStep = lazy(() => import('./export/ExportStep').then((m) => ({ default: m.ExportStep })));
 const ShotEditor = lazy(() => import('./shots/ShotEditor').then((m) => ({ default: m.ShotEditor })));
 
 export function ShotEditorView({ shotId }: { shotId: string }) {
@@ -20,7 +21,7 @@ export function ShotEditorView({ shotId }: { shotId: string }) {
   );
 }
 
-const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep, props: PropsStep, shots: ShotsStep, previs: PrevisStep };
+const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep, props: PropsStep, shots: ShotsStep, previs: PrevisStep, export: ExportStep };
 
 const COMING: Record<Step, { summary: string; milestone: string }> = {
   story: { summary: 'Import a text script, label each line, and break it into shots.', milestone: 'M1' },

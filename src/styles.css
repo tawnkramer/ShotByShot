@@ -525,3 +525,8 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .audio-panel p { margin: 0; }
 .progress { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+
+/* Export */
+.check-row { min-height: 36px; align-items: center; }
+.check-row input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.export-preview { width: 100%; border-radius: 8px; background: #000; }
