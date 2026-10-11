@@ -691,6 +691,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .comfy-step { margin: 6px 0 0; font-size: 1rem; }
 .comfy-workflow { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
 .comfy-workflow p, .comfy-workflow .field { margin: 0; }
+.comfy-workflow pre { margin: 0; max-height: 40dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .image-editor-preview video { width: 100%; max-height: 65dvh; background: #000; }
 .video-slot { display: flex; flex-direction: column; gap: 6px; }
 .video-slot-media { max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; align-self: flex-start; }

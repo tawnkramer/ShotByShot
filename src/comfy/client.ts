@@ -24,7 +24,7 @@ export function normalizeRelayUrl(input: string): string {
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
-async function relayUrl(): Promise<string | undefined> {
+export async function relayUrl(): Promise<string | undefined> {
   return (await getSetting<string>(COMFY_RELAY_SETTING).catch(() => undefined)) || undefined;
 }
 

@@ -47,6 +47,14 @@ into the relay field. Connecting the repo in the Cloudflare dashboard and pressi
 `npx wrangler deploy` from the repo root.
 The app's Content Security Policy allows relays on `*.workers.dev`.
 
+Settings → **OpenArt** → **Sign in with OpenArt** connects your OpenArt account
+(OAuth with PKCE; the app registers itself with OpenArt on first use). The sign-in
+is kept in this browser, and calls to OpenArt's MCP server
+(`https://mcp.openart.ai/mcp`) and its token endpoint go through the same relay
+(`/openart/mcp`, `/openart/oauth/*`), since OpenArt sends no CORS headers either.
+**Show tools** lists what OpenArt offers. A relay deployed before this needs one
+redeploy.
+
 Settings → **ComfyUI Cloud** also stores a Comfy API key (from
 [your Comfy platform profile](https://platform.comfy.org/profile/home)) in
 this browser and imports workflows exported from ComfyUI with **Workflow → Export
