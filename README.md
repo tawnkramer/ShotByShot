@@ -39,11 +39,12 @@ complete and bill an already-started generation. The API key is never exported.
 Comfy Cloud's API sends no CORS headers, so the browser reaches it through a
 small relay you deploy once to your own Cloudflare account (free plan is enough).
 Settings → **ComfyUI Cloud** → **Set up relay on Cloudflare** opens Cloudflare's
-deploy page for [`relay/`](relay/), a Worker that forwards `/api/...` to
+deploy page for this repo. Its root `wrangler.jsonc` deploys [`relay/`](relay/), a Worker that forwards `/api/...` to
 cloud.comfy.org and `/storage?url=...` to Comfy's signed storage URLs, adds CORS
-headers for the sites in `ALLOWED_ORIGINS` (in `relay/wrangler.jsonc`), and stores
-nothing. Paste the Worker's address (`https://shotbyshot-comfy-relay.<you>.workers.dev`)
-into the relay field. To deploy by hand instead: `cd relay && npm install && npx wrangler deploy`.
+headers for the sites in `ALLOWED_ORIGINS` (in `wrangler.jsonc`), and stores
+nothing. Paste the Worker's address (`https://shotbyshot.<you>.workers.dev`)
+into the relay field. Connecting the repo in the Cloudflare dashboard and pressing Deploy works too, as does
+`npx wrangler deploy` from the repo root.
 The app's Content Security Policy allows relays on `*.workers.dev`.
 
 Settings → **ComfyUI Cloud** also stores a Comfy API key (from
