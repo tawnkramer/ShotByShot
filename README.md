@@ -77,10 +77,13 @@ Jobs run through the Comfy API v2 (`/api/v2/assets`, `/api/v2/jobs`). Canceling
 asks Comfy Cloud to stop the job. Seedance runs show an estimated price ported
 from ComfyUI's published rates. GPU workflows can't be priced in advance, because
 Comfy Cloud bills run time on your plan; the panel shows how long a run took.
-Imported image generation workflows appear under **ComfyUI Cloud** in the
-character image editor's Model menu; image editing workflows appear for stage,
-prop and shot images, receiving the greyscale 3D preview and references as their
-input images. The prompt goes to the text the workflow's encoder actually reads
+**Qwen Image 2.1** text-to-image is built in once a Comfy key is saved, and its
+prompt is used as written (the workflow's prompt rewriter stays off). Image
+generation workflows appear under **ComfyUI Cloud** in every image editor's Model
+menu (marked "prompt only" for stage, prop and shot images); image editing
+workflows appear for stage, prop and shot images, receiving the greyscale 3D
+preview and references as their input images. In Settings, each imported
+workflow's prompt input is listed by the text it holds in the export. The prompt goes to the text the workflow's encoder actually reads
 (followed back through switches, so prompt-rewriter system prompts are left
 alone). Speech workflows can be imported and checked but aren't used yet.
 

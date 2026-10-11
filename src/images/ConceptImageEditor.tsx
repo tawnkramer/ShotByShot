@@ -74,6 +74,8 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   const savedUrl = useBlobUrl(c.image?.blob);
   const [keys, setKeys] = useState<{ openai?: boolean; comfy?: boolean }>({});
   const hasKey = model.startsWith(COMFY_PREFIX) ? keys.comfy : keys.openai;
+  // Built-in workflows are offered once a Comfy key is saved; imported ones always show.
+  const shownComfy = comfyWorkflows.filter((w) => !w.builtin || keys.comfy || COMFY_PREFIX + w.id === model);
   useEffect(() => {
     dialog.current?.showModal();
     const vv = window.visualViewport;
@@ -87,7 +89,9 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     window.addEventListener('resize', fitScreen);
     void Promise.all([getSetting<string>(API_KEY_SETTING), getSetting<string>(COMFY_KEY_SETTING)])
       .then(([openai, comfyKey]) => setKeys({ openai: Boolean(openai), comfy: Boolean(comfyKey) })).catch(() => setKeys({ openai: false, comfy: false }));
-    void listWorkflows(kind === 'character' ? 'image' : 'edit', true).then(setComfyWorkflows).catch(() => {});
+    // Characters have no input image; elsewhere editing workflows take the 3D preview, and text-to-image ones work from the prompt alone.
+    void (kind === 'character' ? listWorkflows('image', true) : Promise.all([listWorkflows('edit', true), listWorkflows('image', true)]).then((lists) => lists.flat()))
+      .then(setComfyWorkflows).catch(() => {});
     return () => {
       controller.current?.abort();
       vv?.removeEventListener('resize', fitScreen);
@@ -182,7 +186,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
           <div className="row gap">
             <label className="field grow"><span>Model</span><select value={model} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(e.target.value, quality)}>
               {[...new Set([...IMAGE_MODELS, ...(model.startsWith(COMFY_PREFIX) ? [] : [model])])].map((m) => <option key={m}>{m}</option>)}
-              {comfyWorkflows.length > 0 && <optgroup label="ComfyUI Cloud">{comfyWorkflows.map((w) => <option key={w.id} value={COMFY_PREFIX + w.id}>{w.name}</option>)}</optgroup>}
+              {shownComfy.length > 0 && <optgroup label="ComfyUI Cloud">{shownComfy.map((w) => <option key={w.id} value={COMFY_PREFIX + w.id}>{w.name}{kind !== 'character' && w.category === 'image' ? ' (prompt only)' : ''}</option>)}</optgroup>}
               {model.startsWith(COMFY_PREFIX) && !comfy && <option value={model}>Comfy workflow (not imported)</option>}
             </select></label>
             {!comfy && <label className="field"><span>Quality</span><select value={quality} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(model, e.target.value as ImageQuality)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>}

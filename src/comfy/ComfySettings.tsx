@@ -3,7 +3,7 @@ import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { pickFile } from '../shell/download';
 import { COMFY_KEY_SETTING, COMFY_RELAY_SETTING, normalizeRelayUrl, testComfyKey, type KeyCheck } from './client';
 import { BUILTIN_WORKFLOWS, importWorkflow, listWorkflows, saveWorkflows, type ComfyWorkflow } from './settings';
-import { analyzeWorkflow, CATEGORY_LABELS, CATEGORY_OUTPUT, defaultPromptTarget, describeAnalysis, slotKey, WORKFLOW_CATEGORIES, type WorkflowCategory } from './workflow';
+import { analyzeWorkflow, CATEGORY_LABELS, CATEGORY_OUTPUT, defaultPromptTarget, describeAnalysis, slotKey, WORKFLOW_CATEGORIES, type PromptTarget, type WorkflowCategory } from './workflow';
 
 export const COMFY_KEY_PAGE = 'https://platform.comfy.org/profile/home';
 /** Copies this repo into the user's own GitHub and Cloudflare accounts and deploys the relay Worker (wrangler.jsonc). */
@@ -115,13 +115,21 @@ function WorkflowRow({ workflow: w, onChange, onRemove }: { workflow: ComfyWorkf
       <input className="grow" aria-label="Workflow name" defaultValue={w.name} onBlur={(e) => { const name = e.target.value.trim(); if (name && name !== w.name) onChange({ ...w, name }); }} />
       <button className="btn danger" onClick={onRemove}>Remove</button>
     </div>}
-    {w.builtin && <p className="small muted">A Comfy partner node: runs bill Comfy credits at the price shown before you generate.</p>}
+    {w.note && <p className="small muted">{w.note}</p>}
     <p className="small muted">{describeAnalysis(analysis)}</p>
     {!analysis.outputs.includes(expected) && <p className="error small">No {expected} output node found. Add a Save {expected === 'audio' ? 'Audio' : expected === 'video' ? 'Video' : 'Image'} node and export again.</p>}
-    {w.builtin ? null : analysis.prompts.length > 0 ? <label className="field"><span>Prompt input</span>
+    {w.builtin ? null : analysis.prompts.length > 0 ? <label className="field"><span>Prompt goes into</span>
       <select value={target ? slotKey(target) : ''} onChange={(e) => onChange({ ...w, promptTarget: analysis.prompts.find((p) => slotKey(p) === e.target.value) })}>
-        {analysis.prompts.map((p) => <option key={slotKey(p)} value={slotKey(p)}>{p.title} › {p.input} (#{p.nodeId})</option>)}
+        {analysis.prompts.map((p) => <option key={slotKey(p)} value={slotKey(p)}>{promptLabel(w, p)}</option>)}
       </select>
+      <span className="small muted">The app's prompt replaces this text from the workflow. Pick the one the image model reads.</span>
     </label> : <p className="small muted">No prompt input found; prompts will not be sent.</p>}
   </div>;
+}
+
+/** Names a prompt input by the text it holds in the export, which tells similar inputs apart better than node ids. */
+function promptLabel(w: ComfyWorkflow, p: PromptTarget): string {
+  const text = String(w.graph[p.nodeId]?.inputs[p.input] ?? '').replace(/\s+/g, ' ').trim();
+  const snippet = text.length > 48 ? `${text.slice(0, 48)}…` : text;
+  return `${snippet ? `“${snippet}”` : '(empty)'} · ${p.title}`;
 }
