@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjectStore } from '../../state/store';
 import type { Project, Shot } from '../../state/schema';
-import { effectiveShots, shotLines } from '../../shots/setup';
+import { effectiveShots, shotLines, summaryLine } from '../../shots/setup';
 import { renderShotThumbnail } from '../../shots/thumbnail';
 import { dialogueSplitPoints, mergeWithNext, splitShot } from '../../shots/commands';
 import { useLongPress } from '../../shell/useLongPress';
@@ -98,10 +98,9 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
     };
   }, [visible, project, shot.id]);
 
-  const lines = shotLines(project, shot);
   const stage = project.stages.find((s) => s.id === eff.stageId);
   const names = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId)?.name).filter(Boolean);
-  const firstLine = lines.find((l) => l.type === 'dialogue' || l.type === 'action')?.text ?? lines[0]?.text;
+  const firstLine = summaryLine(project, shot);
   const moving = eff.camera.mode === 'moving';
 
   return (

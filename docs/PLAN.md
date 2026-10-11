@@ -701,6 +701,14 @@ AI tools only depend on M1.
     lower-third captions timed across the shot.
   - `ShotRig` builds and poses a shot at any moment; the editor, thumbnails,
     and later Previs and Export all use it.
+- **M7 (Previs) done, ahead of M6 (Audio):** the whole film in one player.
+  Shots are laid end to end (`shots/sequence.ts`); one rig re-syncs as
+  playback crosses each cut. Scrub bar with a band and label per shot,
+  previous/next shot, play/pause (tap the frame, or Space on desktop), loop,
+  running time. Paused: the shot's number, stage, cast and script lines, and
+  **Edit shot**, whose Done returns to Previs at the same moment. A list of
+  all shots below jumps to any of them and follows playback. Dialogue audio
+  joins in M6.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

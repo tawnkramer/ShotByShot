@@ -174,3 +174,10 @@ export function effectiveShots(project: Project): Map<string, EffectiveShot> {
 export function effectiveShot(project: Project, shotId: string): EffectiveShot | undefined {
   return effectiveShots(project).get(shotId);
 }
+
+/** The line that best describes a shot: its first spoken line or action, never a parenthetical. */
+export function summaryLine(project: Project, shot: Shot): string {
+  const lines = shotLines(project, shot);
+  const l = lines.find((x) => (x.type === 'dialogue' && !/^\(.*\)$/.test(x.text.trim())) || x.type === 'action') ?? lines[0];
+  return l?.text ?? '';
+}
