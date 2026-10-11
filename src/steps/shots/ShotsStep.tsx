@@ -1,3 +1,4 @@
+import { Overlay } from '../../shell/Overlay';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjectStore } from '../../state/store';
@@ -129,7 +130,7 @@ function ShotMenu({ project, shot, onClose, onEdit, onSplit }: { project: Projec
   const i = project.shots.findIndex((s) => s.id === shot.id);
   const next = project.shots[i + 1];
   return (
-    <>
+    <Overlay>
       <div className="scrim" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label={`Shot ${shot.number}`}>
         <div className="sheet-head">
@@ -155,7 +156,7 @@ function ShotMenu({ project, shot, onClose, onEdit, onSplit }: { project: Projec
           Split shot…
         </button>
       </div>
-    </>
+    </Overlay>
   );
 }
 
@@ -171,7 +172,7 @@ function SplitSheet({ project, shot, onClose }: { project: Project; shot: Shot; 
       return n;
     });
   return (
-    <>
+    <Overlay>
       <div className="scrim" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label="Split shot">
         <div className="sheet-head">
@@ -206,6 +207,6 @@ function SplitSheet({ project, shot, onClose }: { project: Project; shot: Shot; 
           {cuts.size ? `Split into ${cuts.size + 1} shots` : 'Choose where to cut'}
         </button>
       </div>
-    </>
+    </Overlay>
   );
 }

@@ -1,3 +1,4 @@
+import { Overlay } from './Overlay';
 import { ASPECT_RATIOS, type AspectRatioId } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { NUMBERING_INFO, SHOT_NUMBERINGS } from '../story/numbering';
@@ -10,7 +11,7 @@ export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
   const dispatch = useProjectStore((s) => s.dispatch);
 
   return (
-    <>
+    <Overlay>
       <div className="scrim" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label="Project settings">
         <div className="sheet-head">
@@ -79,7 +80,7 @@ export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
           </select>
         </label>
       </div>
-    </>
+    </Overlay>
   );
 }
 

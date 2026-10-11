@@ -1,3 +1,4 @@
+import { Overlay } from '../../shell/Overlay';
 import { useState } from 'react';
 import { PRIMITIVE_SHAPES, PROP_ITEMS, SET_ITEMS, type ObjectSource, type Prop } from '../../state/schema';
 import { LIBRARY, PRIMITIVES } from '../../three/library';
@@ -35,7 +36,7 @@ export function AddSheet({ title = 'Add to stage', onAdd, onClose, projectProps,
   };
 
   return (
-    <>
+    <Overlay>
       <div className="scrim" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label={title}>
         <div className="sheet-head">
@@ -97,6 +98,6 @@ export function AddSheet({ title = 'Add to stage', onAdd, onClose, projectProps,
           <p className="muted small">Models are turned grey, set on the floor, and scaled to meters if they look like centimeters.</p>
         </div>
       </div>
-    </>
+    </Overlay>
   );
 }

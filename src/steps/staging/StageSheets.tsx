@@ -1,3 +1,4 @@
+import { Overlay } from '../../shell/Overlay';
 import { useMemo } from 'react';
 import type { Project, Stage } from '../../state/schema';
 import { useProjectStore } from '../../state/store';
@@ -6,7 +7,7 @@ import { newId } from '../../state/schema';
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <>
+    <Overlay>
       <div className="scrim" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label={title}>
         <div className="sheet-head">
@@ -17,7 +18,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
         </div>
         {children}
       </div>
-    </>
+    </Overlay>
   );
 }
 

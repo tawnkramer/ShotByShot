@@ -1,3 +1,4 @@
+import { Overlay } from './Overlay';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STEPS, STEP_LABELS, type Step } from '../state/schema';
@@ -77,7 +78,7 @@ export function Header({ step, onStep, primary, onBack }: Props) {
         ) : null}
       </div>
       {menuOpen && (
-        <>
+        <Overlay>
           <div className="scrim" onClick={() => setMenuOpen(false)} />
           <div className="menu" role="menu">
             <div className="menu-caption muted small">
@@ -102,7 +103,7 @@ export function Header({ step, onStep, primary, onBack }: Props) {
               All projects
             </button>
           </div>
-        </>
+        </Overlay>
       )}
       {settingsOpen && <ProjectSettingsSheet onClose={() => setSettingsOpen(false)} />}
     </header>

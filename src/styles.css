@@ -65,7 +65,6 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9rem; padding: 
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 .page { max-width: 720px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-left)) 24px; display: flex; flex-direction: column; gap: 16px; }
@@ -130,8 +129,8 @@ input:not([type]), input[type='password'], input[type='text'], select {
 /* Overflow menu and sheets */
 .scrim { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); z-index: 30; }
 .menu {
-  position: absolute;
-  top: calc(100% + 4px);
+  position: fixed;
+  top: calc(var(--header-h) + env(safe-area-inset-top) + 4px);
   right: max(8px, env(safe-area-inset-right));
   z-index: 31;
   min-width: 220px;
@@ -154,7 +153,8 @@ input:not([type]), input[type='password'], input[type='text'], select {
   right: 0;
   bottom: 0;
   z-index: 31;
-  max-height: 85dvh;
+  /* The visible height (keyboard aware), not the layout height. */
+  max-height: calc(var(--app-height, 100dvh) * 0.88);
   overflow-y: auto;
   background: var(--surface);
   border-top-left-radius: 16px;
@@ -568,3 +568,6 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .numbering-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; }
 .numbering-option.selected { border-color: var(--accent); }
 .mono { font-family: ui-monospace, Menlo, monospace; }
+
+/* Sheets and menus render at the top level, above the chat bar. */
+.overlay-root { position: relative; z-index: 100; }

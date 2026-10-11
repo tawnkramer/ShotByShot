@@ -1,3 +1,4 @@
+import { Overlay } from '../../shell/Overlay';
 import { useState } from 'react';
 import { LINE_TYPES, type ScriptLine } from '../../state/schema';
 import { useProjectStore } from '../../state/store';
@@ -22,7 +23,7 @@ export function LineSheet({ line, startsShot, canCut, onClose }: Props) {
   };
 
   return (
-    <>
+    <Overlay>
       <div className="scrim" onClick={close} />
       <div className="sheet" role="dialog" aria-label="Edit line">
         <div className="sheet-head">
@@ -61,6 +62,6 @@ export function LineSheet({ line, startsShot, canCut, onClose }: Props) {
           </button>
         </div>
       </div>
-    </>
+    </Overlay>
   );
 }
