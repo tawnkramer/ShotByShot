@@ -72,11 +72,16 @@ it.each(['character', 'stage', 'prop', 'shot'] as const)('opens an accessible %s
   const preview = document.querySelector('.image-preview-dialog') as HTMLDialogElement;
   expect(preview.open).toBe(true);
   expect(preview.querySelector('img')?.getAttribute('src')).toBe('blob:test');
-  await act(async () => preview.querySelector<HTMLButtonElement>('[aria-label="Close image preview"]')!.click());
+  // A fresh render offers Discard and Use instead of Close.
+  expect([...preview.querySelectorAll('header button')].map((b) => b.textContent)).toEqual(['Download', 'Discard', 'Use']);
+  await act(async () => preview.querySelector<HTMLButtonElement>('[aria-label="Discard this image"]')!.click());
   expect(document.querySelector('.image-preview-dialog')).toBeNull();
   expect(dialog.open).toBe(true);
+  expect([...dialog.querySelectorAll('button')].some((b) => b.textContent === 'Use image')).toBe(false);
   expect(useProjectStore.getState().project![kind === 'shot' ? 'shots' : kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image).toBeUndefined();
-  await act(async () => { button('Use image').click(); await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce()); });
+  await act(async () => button('Generate image').click());
+  await act(async () => { document.querySelector<HTMLButtonElement>('.image-preview-dialog [aria-label="Use this image"]')!.click(); await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce()); });
+  expect(document.querySelector('.image-preview-dialog')).toBeNull();
   const image=useProjectStore.getState().project![kind === 'shot' ? 'shots' : kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image!;
   expect(image.prompt).toContain(kind === 'shot' ? 'Shot composition.' : kind === 'stage' ? 'Warm cafe' : kind === 'prop' ? 'Blue mug' : 'Ben');
   if (kind === 'shot') { expect(image.frameProgress).toBe(0.5); expect(image.aspect).toBe(9/16); expect(image.additionalPrompt).toBe(''); }

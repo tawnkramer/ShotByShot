@@ -68,5 +68,13 @@ it('downloads the previewed image and video under their names', async () => {
   await vi.waitFor(() => expect(saved).toEqual(['Mug_artwork.png', 'Shot_2.mp4']));
   await act(async () => button('Close').click());
   expect(onClose).toHaveBeenCalled();
+  // A fresh render swaps Close for Discard and Use.
+  const draft = { onUse: vi.fn(), onDiscard: vi.fn() };
+  await act(async () => root.render(<VideoPreview src="blob:clip" label="Shot 2 video" fileName="Shot 2" onClose={onClose} draft={draft} />));
+  expect(button('Close')).toBeUndefined();
+  await act(async () => button('Discard').click());
+  expect(draft.onDiscard).toHaveBeenCalledOnce();
+  await act(async () => button('Use').click());
+  expect(draft.onUse).toHaveBeenCalledOnce();
   vi.unstubAllGlobals();
 });

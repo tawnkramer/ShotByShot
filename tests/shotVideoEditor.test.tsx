@@ -74,14 +74,12 @@ it('fills the workflow from the shot, runs it on Comfy Cloud, and saves the vide
   expect(submitted.workflow['105:104'].inputs.width).toBeGreaterThan(submitted.workflow['105:104'].inputs.height);
   expect(fetchMock.mock.calls.find(([url]) => url.startsWith('https://storage.example'))![1]).toEqual({ signal: expect.any(AbortSignal) });
   expect(dialog.textContent).toContain('This run took 90 s.');
-  // The finished video opens full screen, with Download and Close.
+  // The finished video opens full screen, with Download, Discard and Use; Use saves it.
   const viewer = document.querySelector<HTMLDialogElement>('dialog.image-preview-dialog')!;
   expect(viewer.querySelector('video')?.getAttribute('src')).toBe('blob:test');
-  expect([...viewer.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Download', 'Close']);
-  await act(async () => [...viewer.querySelectorAll('button')].find((b) => b.textContent === 'Close')!.click());
+  expect([...viewer.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Download', 'Discard', 'Use']);
+  await act(async () => [...viewer.querySelectorAll('button')].find((b) => b.textContent === 'Use')!.click());
   expect(document.querySelector('dialog.image-preview-dialog')).toBeNull();
-
-  await act(async () => [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Use video')!.click());
   await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
   const video = useProjectStore.getState().project!.shots[0].video!;
   expect(video).toMatchObject({ workflow: 'MiniMax H3', additionalPrompt: 'Slow and tense.' });
