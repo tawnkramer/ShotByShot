@@ -129,6 +129,8 @@ export const characterSchema = z.object({
   /** Color that tells characters apart in the grey world, e.g. "#6aa6ff". */
   tint: z.string().optional(),
   voice: voiceSchema,
+  /** Generated concept artwork, stored with the project's binary assets. */
+  image: z.object({ blob: z.string(), prompt: z.string(), model: z.string(), createdAt: z.number() }).optional(),
 });
 export type Character = z.infer<typeof characterSchema>;
 export type Voice = z.infer<typeof voiceSchema>;

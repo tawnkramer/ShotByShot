@@ -4,6 +4,7 @@ import { newId, type Character } from '../../state/schema';
 import { addCharacters, heightLabel, namesFromScript } from '../../characters/commands';
 import { buildMannequin } from '../../three/mannequin';
 import { useThumbnail } from '../../three/thumbnails';
+import { useBlobUrl } from '../../images/useBlobUrl';
 import { CharacterEditor } from './CharacterEditor';
 
 const SEX_LABEL = { female: 'Female', male: 'Male', other: 'Other' } as const;
@@ -15,7 +16,7 @@ export function CharactersStep() {
   const fromScript = useMemo(() => namesFromScript(project), [project]);
 
   const current = project.characters.find((c) => c.id === editing);
-  if (current) return <CharacterEditor character={current} onBack={() => setEditing(null)} />;
+  if (current) return <CharacterEditor key={current.id} character={current} onBack={() => setEditing(null)} />;
 
   const addNew = () => {
     const name = window.prompt('Character name', '');
@@ -57,11 +58,12 @@ export function CharactersStep() {
 }
 
 function CharacterCard({ character: c, onOpen }: { character: Character; onOpen: () => void }) {
+  const imageUrl = useBlobUrl(c.image?.blob);
   const key = `char:${c.heightCm}:${c.sex}:${c.build}:${c.tint ?? ''}`;
   const thumb = useThumbnail(key, () => buildMannequin(c), { width: 200, height: 260, azimuth: 30 });
   return (
     <button className="char-card" onClick={onOpen}>
-      <span className="char-thumb">{thumb ? <img src={thumb} alt="" /> : null}</span>
+      <span className="char-thumb">{imageUrl || thumb ? <img src={imageUrl || thumb || undefined} alt="" /> : null}</span>
       <span className="char-info">
         <span className="row gap">
           {c.tint && <span className="tint-dot" style={{ background: c.tint }} />}

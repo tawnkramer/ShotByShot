@@ -620,3 +620,25 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .camera-pad-ring .axis { fill: none; stroke: rgb(242 184 75 / 0.45); stroke-dasharray: 3 3; }
 .camera-moves { position: absolute; right: 6px; bottom: 6px; max-width: calc(100% - 12px); overflow-x: auto; scrollbar-width: none; cursor: default; }
 .camera-moves button { flex: 0 0 auto; white-space: nowrap; }
+
+/* Character concept artwork opens above the chat bar, with room to edit on phones. */
+.character-artwork { width: 100%; height: 100%; object-fit: contain; }
+.character-view-toggle { position: absolute; top: 8px; right: 8px; }
+.viewport-toolbar[hidden] { display: none; }
+.character-image-dialog { position: fixed; inset: 0; margin: auto; width: min(960px, 100%); height: min(850px, var(--app-height, 100dvh)); max-width: 100%; max-height: var(--app-height, 100dvh); padding: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--bg); color: var(--text); }
+.character-image-dialog[open] { display: flex; flex-direction: column; }
+.character-image-dialog::backdrop { background: rgb(0 0 0 / 0.7); }
+.image-editor-head { flex: none; padding: max(12px, env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid var(--border); }
+.image-editor-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.image-editor-preview { min-height: 180px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); display: grid; place-items: center; overflow: hidden; }
+.image-editor-preview img { width: 100%; max-height: 65dvh; object-fit: contain; }
+.image-editor-preview p { padding: 24px; text-align: center; }
+.image-editor-controls { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.image-editor-controls .field, .image-editor-controls p { margin: 0; }
+.image-editor-controls textarea { width: 100%; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; resize: vertical; }
+.image-editor-controls select { width: 100%; min-width: 0; }
+@media (max-width: 640px) {
+  .character-image-dialog { border-radius: 0; border: 0; }
+  .image-editor-body { grid-template-columns: 1fr; }
+  .image-editor-preview img { max-height: 38dvh; }
+}
