@@ -4,6 +4,7 @@ import { API_KEY_SETTING, testOpenAIKey, type KeyCheck } from '../ai/openai';
 import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { requestPersistentStorage } from '../storage/projectIO';
 import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
+import { CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS } from '../ai/chat';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -12,11 +13,13 @@ export function SettingsPage() {
   const [check, setCheck] = useState<KeyCheck | null>(null);
   const [testing, setTesting] = useState(false);
   const [ttsModel, setTtsModel] = useState('');
+  const [chatModel, setChatModel] = useState('');
   const [storage, setStorage] = useState<{ used: number; quota: number; persisted: boolean } | null>(null);
 
   useEffect(() => {
     void getSetting<string>(API_KEY_SETTING).then(setSavedKey);
     void getSetting<string>(TTS_MODEL_SETTING).then((m) => setTtsModel(m ?? ''));
+    void getSetting<string>(CHAT_MODEL_SETTING).then((m) => setChatModel(m ?? ''));
     void loadStorage().then(setStorage);
   }, []);
 
@@ -99,6 +102,21 @@ export function SettingsPage() {
               </form>
             )}
             {check && <p className={check.ok ? 'ok small' : 'error small'}>{check.message}</p>}
+            <label className="field">
+              <span>Assistant model</span>
+              <input
+                list="chat-models"
+                placeholder="Automatic"
+                value={chatModel}
+                onChange={(e) => setChatModel(e.target.value)}
+                onBlur={() => void (chatModel.trim() ? setSetting(CHAT_MODEL_SETTING, chatModel.trim()) : deleteSetting(CHAT_MODEL_SETTING))}
+              />
+              <datalist id="chat-models">
+                {(check?.models?.length ? PREFERRED_CHAT_MODELS.filter((m) => check.models!.includes(m)) : PREFERRED_CHAT_MODELS).map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </label>
             <label className="field">
               <span>Speech model</span>
               <input

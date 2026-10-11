@@ -16,6 +16,8 @@ interface ProjectState {
   setStep: (step: Step) => void;
   undo: () => void;
   redo: () => void;
+  /** Undoes every most-recent entry carrying `tag`. Returns how many were undone. */
+  undoTag: (tag: string) => number;
   flush: () => Promise<void>;
 }
 
@@ -65,6 +67,15 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       const [next, h] = undo(project, history);
       set({ project: next, history: h });
       scheduleSave();
+    },
+
+    undoTag: (tag) => {
+      let n = 0;
+      while (get().history.past.at(-1)?.tag === tag) {
+        get().undo();
+        n++;
+      }
+      return n;
     },
 
     redo: () => {

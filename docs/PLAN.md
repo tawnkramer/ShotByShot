@@ -734,6 +734,23 @@ AI tools only depend on M1.
   PNGs in a zip (S01A_start.png). The project file can be saved here too.
   Known limits: the audio mix is held in memory (fine for a previs of a
   few minutes, heavy for very long films); no MediaRecorder fallback yet.
+- **M5 (Assistant) done:** OpenAI chat completions with tool calling,
+  streamed, from the browser with the user's key. The model is picked
+  automatically from the key's models (gpt-5-mini first) and can be set in
+  Settings. Each step offers its own tools: Story (relabel lines, set shot
+  breaks, breakdown modes, edit lines), Staging (create/select stages,
+  add/update/remove objects, snapshot), Characters (add/update with voices),
+  Props (add library props, **model_prop** from shapes), Shots (in the editor:
+  place characters with "face", props, frame_camera by shot size and angle,
+  set_camera, fixed/moving, duration, stage, snapshot; in the list: merge,
+  split, voice dialogue), plus go_to_step and open_shot everywhere. The
+  model sees a compact, name-based description of the current step that's
+  refreshed after its own changes; snapshots of the 3D view and attached
+  photos are sent as images. Arguments are validated with zod (schemas also
+  generate the tool JSON), and errors go back to the model to correct.
+  Everything it changes is tagged per reply: the chat lists the changes and
+  offers **Undo these changes**. Suggestions per step; "✨ Check" in Story and
+  "✨ Model with AI" in Props open the chat ready to go.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

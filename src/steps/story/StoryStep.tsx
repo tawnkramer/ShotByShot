@@ -7,6 +7,7 @@ import { ImportPanel } from './ImportPanel';
 import { LineSheet } from './LineSheet';
 import { ScriptLineRow } from './ScriptLineRow';
 import { LINE_TYPE_INFO, nextType } from './lineTypes';
+import { useChatUI } from '../../shell/chatUI';
 
 const MODE_LABELS: Record<BreakdownMode, string> = { line: 'Per line', pair: 'Per 2 lines', mixed: 'Mixed' };
 
@@ -117,6 +118,9 @@ export function StoryStep() {
                 {script.length} lines · {shots.length} shots
                 {reviewCount > 0 && <span className="review-count"> · {reviewCount} to check</span>}
               </span>
+              <button className="btn ghost small-btn" onClick={() => useChatUI.getState().open('Check my line labels and fix any mistakes.')}>
+                ✨ Check
+              </button>
               <button className="btn ghost small-btn" onClick={() => setSelected(new Set())}>
                 Select
               </button>

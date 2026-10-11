@@ -12,6 +12,8 @@ export interface Command {
    * become a single undo step.
    */
   mergeKey?: string;
+  /** Groups commands, e.g. everything the assistant did in one reply, so they can be undone together. */
+  tag?: string;
   apply: (draft: Draft<Project>) => void;
 }
 
@@ -24,6 +26,7 @@ export interface HistoryEntry {
   inverse: Patch[];
   mergeKey?: string;
   time?: number;
+  tag?: string;
 }
 
 export interface History {
@@ -50,7 +53,7 @@ export function runCommand(project: Project, history: History, cmd: Command): [P
     const merged: HistoryEntry = { ...last, patches: [...last.patches, ...patches], inverse: [...inverse, ...last.inverse], time: now };
     return [next, { past: [...history.past.slice(0, -1), merged], future: [] }];
   }
-  const entry: HistoryEntry = { label: cmd.label, source: cmd.source ?? 'user', patches, inverse, mergeKey: cmd.mergeKey, time: now };
+  const entry: HistoryEntry = { label: cmd.label, source: cmd.source ?? 'user', patches, inverse, mergeKey: cmd.mergeKey, time: now, tag: cmd.tag };
   return [next, { past: [...history.past, entry].slice(-MAX_HISTORY), future: [] }];
 }
 

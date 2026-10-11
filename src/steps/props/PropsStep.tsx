@@ -8,6 +8,7 @@ import { applyGrey } from '../../three/materials';
 import { useThumbnail } from '../../three/thumbnails';
 import { AddSheet } from '../staging/AddSheet';
 import { PropEditor } from './PropEditor';
+import { useChatUI } from '../../shell/chatUI';
 
 export function PropsStep() {
   const project = useProjectStore((s) => s.project)!;
@@ -71,11 +72,11 @@ export function PropsStep() {
         <button className="btn primary grow" onClick={() => setAdding(true)}>
           + Add prop
         </button>
-        <button className="btn grow" disabled title="Arrives with the assistant">
-          Model with AI
+        <button className="btn grow" onClick={() => useChatUI.getState().open('Model a ')}>
+          ✨ Model with AI
         </button>
       </div>
-      <p className="muted small">Soon you'll be able to describe a prop in the chat ("a vintage rotary phone") and the assistant will build it from simple shapes.</p>
+      <p className="muted small">Describe a prop ("a vintage rotary phone") and the assistant builds it from simple shapes.</p>
 
       {adding && <AddSheet title="Add prop" propsOnly onAdd={add} onClose={() => setAdding(false)} />}
     </div>

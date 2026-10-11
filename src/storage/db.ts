@@ -16,6 +16,13 @@ export interface ChatMessage {
   step: string;
   text: string;
   createdAt: number;
+  /** Labels of the changes the assistant made in this reply. */
+  actions?: string[];
+  /** Tag on those changes in the undo history, so they can be undone together. */
+  tag?: string;
+  undone?: boolean;
+  hasImage?: boolean;
+  error?: boolean;
 }
 
 interface SbsDB extends DBSchema {

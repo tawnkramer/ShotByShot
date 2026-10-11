@@ -60,7 +60,7 @@ export function ProjectLayout() {
       <main className="body" key={editingShot ?? current}>
         {editingShot ? <ShotEditorView shotId={editingShot} /> : <StepView step={current} />}
       </main>
-      <ChatBar step={current} projectId={projectId} />
+      <ChatBar step={current} projectId={projectId} shotId={editingShot ?? undefined} />
     </div>
   );
 }
