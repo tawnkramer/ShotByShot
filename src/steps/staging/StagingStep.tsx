@@ -121,8 +121,13 @@ export function StagingStep() {
               </button>
             </>
           )}
-          <button className={`btn icon snap ${snap ? 'on' : ''}`} aria-pressed={snap} aria-label="Snap" title="Snap to grid" onClick={toggleSnap}>
-            #
+          <button
+            className={`btn snap ${snap ? 'on' : ''}`}
+            aria-pressed={snap}
+            title={snap ? 'Snapping to a 10 cm grid and 15° turns. Tap to move freely.' : 'Moving freely. Tap to snap to a 10 cm grid and 15° turns.'}
+            onClick={toggleSnap}
+          >
+            Snap {snap ? 'on' : 'off'}
           </button>
         </div>
       </div>
