@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { newId, STEP_LABELS, type Step } from '../state/schema';
 import { useProjectStore } from '../state/store';
@@ -31,6 +31,20 @@ export function ChatBar({ step, projectId, shotId }: Props) {
   const controller = useRef<AbortController | null>(null);
   const historyEnd = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  // The history sheet reaches the bottom of the screen and keeps its content
+  // clear of the bar (and attachment preview) by their measured height, so
+  // nothing behind can show through between them.
+  const bar = useRef<HTMLFormElement>(null);
+  const attachment = useRef<HTMLDivElement>(null);
+  const [barH, setBarH] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => setBarH((bar.current?.offsetHeight ?? 0) + (attachment.current?.offsetHeight ?? 0));
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (bar.current) ro.observe(bar.current);
+    if (attachment.current) ro.observe(attachment.current);
+    return () => ro.disconnect();
+  });
 
   useEffect(() => {
     void listChat(projectId).then(setMessages);
@@ -137,7 +151,7 @@ export function ChatBar({ step, projectId, shotId }: Props) {
   return (
     <>
       {expanded && (
-        <div className="chat-sheet" role="dialog" aria-label="Assistant">
+        <div className="chat-sheet" role="dialog" aria-label="Assistant" style={barH ? { paddingBottom: barH } : undefined}>
           <div className="sheet-head">
             <strong>Assistant</strong>
             <button className="btn ghost" onClick={() => setExpanded(false)}>
@@ -188,12 +202,12 @@ export function ChatBar({ step, projectId, shotId }: Props) {
         </div>
       )}
       {toast && !expanded && (
-        <button className="chat-toast" onClick={() => setExpanded(true)}>
+        <button className="chat-toast" style={barH ? { bottom: barH + 8 } : undefined} onClick={() => setExpanded(true)}>
           {toast}
         </button>
       )}
       {image && (
-        <div className="chat-attachment">
+        <div className="chat-attachment" ref={attachment}>
           <img src={image} alt="Attached" />
           <button className="btn ghost small-btn" onClick={() => setImage(null)}>
             Remove
@@ -201,6 +215,7 @@ export function ChatBar({ step, projectId, shotId }: Props) {
         </div>
       )}
       <form
+        ref={bar}
         className="chatbar"
         onSubmit={(e) => {
           e.preventDefault();

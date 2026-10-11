@@ -209,13 +209,12 @@ input:not([type]), input[type='password'], input[type='text'], select {
 
 .chat-sheet {
   position: absolute;
-  inset: 0 0 auto 0;
-  bottom: calc(var(--chat-h) + env(safe-area-inset-bottom));
+  inset: 0;
   z-index: 22;
   background: var(--bg);
   display: flex;
   flex-direction: column;
-  padding: calc(12px + env(safe-area-inset-top)) 16px 0;
+  padding: calc(12px + env(safe-area-inset-top)) 16px calc(var(--chat-h) + env(safe-area-inset-bottom));
 }
 .chat-history { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; }
 .chat-history section { display: flex; flex-direction: column; gap: 8px; }
