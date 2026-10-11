@@ -2,10 +2,9 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    # Both branches carry the same commits. Only one may trigger: a second run
-    # replaces the pending one. Switch to main once the github-pages
-    # environment allows deploying from it.
-    branches: [claude/shot-breakdown-previs-app-ccpmdl]
+    # Only one branch may trigger: a second run replaces the pending one, and
+    # the github-pages environment only allows main.
+    branches: [main]
   workflow_dispatch:
 
 permissions:
