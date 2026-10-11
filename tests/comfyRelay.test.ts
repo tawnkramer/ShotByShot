@@ -69,3 +69,18 @@ describe('Comfy client with a relay', () => {
     expect((await testComfyKey('k', async () => { throw new TypeError('cors'); })).message).toMatch(/relay/);
   });
 });
+
+it('buffers the body and answers a failed upstream fetch with CORS headers', async () => {
+  const seen: RequestInit[] = [];
+  const failing = vi.fn(async (_url: string, init: RequestInit) => { seen.push(init); throw new Error('boom'); });
+  const res = await relay.fetch(new Request(`${RELAY}/openart/mcp`, { method: 'POST', body: '{"a":1}', headers: { Origin: APP, Authorization: 'Bearer t', 'Content-Type': 'application/json' } }), env, undefined, failing as never);
+  expect(res.status).toBe(502);
+  expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+  expect(await res.text()).toContain('mcp.openart.ai: boom');
+  expect(new TextDecoder().decode(seen[0].body as ArrayBuffer)).toBe('{"a":1}');
+});
+
+it('passes a bodiless 204 through', async () => {
+  const res = await relay.fetch(new Request(`${RELAY}/openart/mcp`, { method: 'POST', body: '{}', headers: { Origin: APP } }), env, undefined, (async () => new Response(null, { status: 204 })) as never);
+  expect(res.status).toBe(204);
+});

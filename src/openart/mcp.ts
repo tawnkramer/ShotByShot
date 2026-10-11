@@ -22,14 +22,14 @@ export class OpenArtMcp {
     let res: Response;
     try {
       res = await this.fetchImpl(`${relay}/openart/mcp`, { method: 'POST', headers, body: JSON.stringify(body) });
-    } catch {
-      throw new Error("Couldn't reach OpenArt through the relay. Check the relay address and redeploy it if it predates OpenArt support.");
+    } catch (e) {
+      throw new Error(`Couldn't reach OpenArt through the relay (${e instanceof Error ? e.message : String(e)}). Check the relay address and redeploy it if it predates OpenArt support.`);
     }
     if (res.status === 401) throw new Error('OpenArt rejected the sign-in. Sign in again in Settings.');
     this.session = res.headers.get('Mcp-Session-Id') ?? this.session;
     if (!expectReply) return undefined;
-    const message = await readMessage(res);
-    if (!res.ok && !message) throw new Error(`OpenArt returned an error (${res.status}).`);
+    const { message, text } = await readMessage(res);
+    if (!res.ok && !message) throw new Error(`OpenArt returned an error (${res.status})${text.trim() ? `: ${text.trim().slice(0, 300)}` : '.'}`);
     const { result, error } = (message ?? {}) as { result?: unknown; error?: { message?: string } };
     if (error) throw new Error(`OpenArt: ${error.message ?? 'request failed'}`);
     return result;
@@ -65,10 +65,14 @@ export class OpenArtMcp {
 }
 
 /** Reads one JSON-RPC message from a JSON body or an event stream. */
-async function readMessage(res: Response): Promise<unknown> {
+async function readMessage(res: Response): Promise<{ message: unknown; text: string }> {
   const text = await res.text();
+  return { message: parseMessage(text, res.headers.get('Content-Type') ?? ''), text };
+}
+
+function parseMessage(text: string, type: string): unknown {
   if (!text.trim()) return undefined;
-  if ((res.headers.get('Content-Type') ?? '').includes('text/event-stream')) {
+  if (type.includes('text/event-stream')) {
     const data = text.split(/\r?\n/).filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim());
     for (const chunk of data.reverse()) {
       try {
