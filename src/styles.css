@@ -152,7 +152,10 @@ input:not([type]), input[type='password'], input[type='text'], select {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* Sit on the bottom of the visible area: iOS keeps the layout viewport full height under the
+     keyboard, so bottom: 0 hid the sheet behind it. --app-height is the visible height while typing. */
+  top: var(--app-height, 100dvh);
+  transform: translateY(-100%);
   z-index: 31;
   /* The visible height (keyboard aware), not the layout height. */
   max-height: calc(var(--app-height, 100dvh) * 0.88);
