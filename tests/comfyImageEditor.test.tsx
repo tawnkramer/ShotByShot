@@ -9,7 +9,7 @@ import { COMFY_KEY_SETTING } from '../src/comfy/client';
 import { createProject } from '../src/state/schema';
 import { newCharacter } from '../src/characters/commands';
 import { useProjectStore } from '../src/state/store';
-import { setSetting } from '../src/storage/db';
+import { deleteSetting, setSetting } from '../src/storage/db';
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -58,4 +58,24 @@ it('generates a character image with an imported Comfy text-to-image workflow', 
   expect(submitted['459:474'].inputs.on_false).toBe('Ben, a tall detective.');
   // Portrait character art at the workflow's 1 MP budget.
   expect(submitted['459:456'].inputs).toMatchObject({ width: 816, height: 1224 });
+});
+
+it('offers the built-in Qwen workflow for props once a Comfy key is saved', async () => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', ''); } });
+  URL.createObjectURL = vi.fn(() => 'blob:test'); URL.revokeObjectURL = vi.fn();
+  vi.stubGlobal('visualViewport', Object.assign(new EventTarget(), { height: 844, offsetTop: 0 }));
+  const p = createProject('Comfy prop'); p.characters.push(newCharacter('Ben', [], 'ben'));
+  useProjectStore.getState().open(p);
+  const options = async () => {
+    host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><ConceptImageEditor subject={p.characters[0]} kind="prop" defaultPrompt="A brass key." reference={new Blob(['png'], { type: 'image/png' })} onClose={vi.fn()} /></MemoryRouter>));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    const labels = [...document.querySelectorAll('option')].map((o) => o.textContent);
+    await act(async () => root.unmount()); host.remove();
+    return labels;
+  };
+  await deleteSetting(COMFY_KEY_SETTING); await saveWorkflows([]);
+  expect(await options()).not.toContain('Qwen Image 2.1 (prompt only)');
+  await setSetting(COMFY_KEY_SETTING, 'comfy-key');
+  expect(await options()).toContain('Qwen Image 2.1 (prompt only)');
 });
