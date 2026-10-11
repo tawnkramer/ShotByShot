@@ -694,7 +694,10 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .comfy-workflow { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
 .comfy-workflow p, .comfy-workflow .field { margin: 0; }
 .comfy-workflow pre { margin: 0; max-height: 40dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-.image-editor-preview video { width: 100%; max-height: 65dvh; background: #000; }
+/* Size the preview from the project's aspect, not the video's metadata: iOS lays the dialog out before the
+   video loads and doesn't move the controls down afterwards, so the video covered them. */
+.image-editor-preview video { display: block; width: 100%; height: auto; max-height: 65dvh; object-fit: contain; background: #000; }
+@media (max-width: 640px) { .image-editor-preview video { max-height: 38dvh; } }
 .video-slot { display: flex; flex-direction: column; gap: 6px; }
 .video-slot-media { max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; align-self: flex-start; }
 .video-slot audio { width: 100%; }
