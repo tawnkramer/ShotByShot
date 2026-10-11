@@ -26,7 +26,7 @@ afterEach(async()=>{if(root)await act(async()=>root.unmount());host?.remove();vi
 it('provides three tabs, captures the shot view, and retains direction after leaving Image', async()=>{
   const project=createProject('Shot UI');
   project.script.push({id:'line',index:0,type:'action',text:'A quiet cafe.'});
-  project.shots.push({id:'shot',number:'1.1',lineIds:['line']});
+  project.shots.push({id:'shot',number:'1.1',lineIds:['line'],imagePrompt:'Warm sunset lighting'});
   useProjectStore.getState().open(project);
   host=document.createElement('div');document.body.append(host);root=createRoot(host);
   await act(async()=>root.render(<MemoryRouter><ShotEditor shotId="shot"/></MemoryRouter>));
@@ -38,16 +38,13 @@ it('provides three tabs, captures the shot view, and retains direction after lea
   expect(host.querySelector('[data-testid="blocking"]')).toBeNull();
   expect(host.querySelector('[data-testid="camera-pad"]')).toBeNull();
   expect(host.querySelector('[data-testid="canvas"]')?.getAttribute('data-view')).toBe('shot');
-  const input=host.querySelector('textarea')!;
-  await act(async()=>{
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'Warm sunset lighting');
-    input.dispatchEvent(new Event('input',{bubbles:true}));
-  });
-  expect(useProjectStore.getState().project!.shots[0].imagePrompt).toBe('Warm sunset lighting');
+  expect(host.querySelector('.shot-image-panel textarea')).toBeNull();
+  expect([...host.querySelectorAll('.shot-image-panel button')].map(b=>b.textContent)).toEqual(['Generate Shot Image']);
   await act(async()=>tabs[1].click());
   expect(host.querySelector('[data-testid="camera"]')).not.toBeNull();
   await act(async()=>tabs[2].click());
-  expect(host.querySelector('textarea')!.value).toBe('Warm sunset lighting');
+  expect(host.querySelector('.shot-image-panel textarea')).toBeNull();
+  expect(useProjectStore.getState().project!.shots[0].imagePrompt).toBe('Warm sunset lighting');
   vi.stubGlobal('URL',{createObjectURL:vi.fn(()=>'blob:shot-art'),revokeObjectURL:vi.fn()});
   await putBlob('shot-art',new Blob(['art'],{type:'image/png'}));
   await act(async()=>{
