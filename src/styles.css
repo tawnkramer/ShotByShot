@@ -471,7 +471,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .camera-pad { position: absolute; inset: 0; touch-action: none; cursor: grab; display: grid; place-items: center; }
 .camera-pad-ring { width: min(60%, 220px); height: auto; fill: none; stroke: rgb(242 184 75 / 0.45); stroke-width: 1.2; pointer-events: none; }
 .camera-pad-ring path { fill: rgb(242 184 75 / 0.6); stroke: none; }
-.camera-pad-hint { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 0.72rem; padding: 2px 8px; border-radius: 8px; background: rgb(20 20 22 / 0.7); color: var(--muted); white-space: nowrap; pointer-events: none; }
+.camera-pad-hint { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 96px); text-align: center; font-size: 0.72rem; padding: 2px 8px; border-radius: 8px; background: rgb(20 20 22 / 0.7); color: var(--muted); pointer-events: none; }
 .caption {
   position: absolute;
   left: 8%;
@@ -619,4 +619,5 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .crash .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .crash pre { white-space: pre-wrap; word-break: break-word; }
 .camera-pad-ring .axis { fill: none; stroke: rgb(242 184 75 / 0.45); stroke-dasharray: 3 3; }
-.camera-moves { position: absolute; right: 6px; bottom: 6px; cursor: default; }
+.camera-moves { position: absolute; right: 6px; bottom: 6px; max-width: calc(100% - 12px); overflow-x: auto; scrollbar-width: none; cursor: default; }
+.camera-moves button { flex: 0 0 auto; white-space: nowrap; }

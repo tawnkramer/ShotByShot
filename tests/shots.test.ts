@@ -10,7 +10,7 @@ import { worldRect } from '../src/staging/placement';
 import { captionAt, captionsFor, estimateDuration, lerpAngle, lerpCamera, sample, sampleActor } from '../src/shots/timing';
 import { charactersInShot, effectiveShots, sceneLineOf, shotLines, speakersInShot, stageIdFor } from '../src/shots/setup';
 import { dialogueSplitPoints, mergeWithNext, setActorKey, setCamera, setCameraFixed, setDuration, splitShot } from '../src/shots/commands';
-import { applyCamera, cameraPosition, frameSubjects, lensToVFov, moveCamera, panCamera } from '../src/three/camera';
+import { applyCamera, cameraPosition, frameSubjects, lensToVFov, moveCamera, panCamera, turnCamera } from '../src/three/camera';
 
 function project(): Project {
   let [p, h] = runCommand(createProject('T'), emptyHistory(), importScript(SAMPLE_SCRIPT));
@@ -226,6 +226,18 @@ describe('camera moves', () => {
       expect(after.position.clone().sub(before.position).distanceTo(expected)).toBeLessThan(1e-6);
       expect(after.quaternion.angleTo(before.quaternion)).toBeLessThan(1e-6);
     }
+  });
+
+  it('pans and tilts where the camera stands', () => {
+    const before = view(s);
+    const look = (c: THREE.Camera) => new THREE.Vector3(0, 0, -1).applyQuaternion(c.quaternion);
+    const panned = view(turnCamera(s, { pan: 20 }));
+    expect(panned.position.distanceTo(before.position)).toBeLessThan(1e-6);
+    // Turning right swings the view toward the camera's right.
+    expect(look(panned).dot(new THREE.Vector3(1, 0, 0).applyQuaternion(before.quaternion))).toBeGreaterThan(0.3);
+    const tilted = view(turnCamera(s, { tilt: 15 }));
+    expect(tilted.position.distanceTo(before.position)).toBeLessThan(1e-6);
+    expect(look(tilted).y).toBeGreaterThan(look(before).y);
   });
 
   it('keeps the aim above the floor when craning down', () => {

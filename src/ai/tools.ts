@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Command } from '../state/commands';
 import {
   AGE_BANDS, BUILDS, BREAKDOWN_MODES, COMPOSITE_SHAPES, LIBRARY_ITEMS, LINE_TYPES, POSES, PRIMITIVE_SHAPES, PROP_ITEMS, SEXES, STEPS,
-  newId, type ObjectSource, type Project, type Shot, type Stage, type Step,
+  newId, type CameraState, type ObjectSource, type Project, type Shot, type Stage, type Step,
 } from '../state/schema';
 import { applyBreakdown, editLineText, setLineTypes } from '../story/commands';
 import { isFrontMatter, numberShots } from '../story/breakdown';
@@ -12,7 +12,7 @@ import { OPENAI_VOICES } from '../audio/voices';
 import { addProp, updateProp } from '../props/commands';
 import { addActor, addShotProp, mergeWithNext, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
 import { aspectOf, effectiveShot, subjectsFor } from '../shots/setup';
-import { frameSubjects, SHOT_SIZES, type ShotSize } from '../three/camera';
+import { frameSubjects, moveCamera, SHOT_SIZES, turnCamera, type ShotSize } from '../three/camera';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
 import { useAudioJob } from '../audio/job';
@@ -455,15 +455,20 @@ const frameCamera = tool(
 
 const setCameraTool = tool(
   'set_camera',
-  'Adjust the open shot camera directly. Only give fields to change.',
+  'Adjust the open shot camera directly. Only give fields to change. Absolute settings apply first, then the relative moves (truck, dolly, crane, pan, tilt) from there.',
   z.object({
-    orbit: num.optional().describe('Degrees around the target; 0 = camera at the front (+Z) looking back.'),
-    tilt: num.optional().describe('Degrees above (+) or below (-) the target.'),
+    arc: num.optional().describe('Degrees around the target; 0 = camera at the front (+Z) looking back.'),
+    angle: num.optional().describe('Degrees above (+, high angle) or below (-, low angle) the target.'),
     distance: num.positive().optional(),
     lens: z.number().min(12).max(200).optional(),
     height: num.optional().describe('Height of the point the camera looks at, in meters.'),
     target: z.tuple([num, num, num]).optional(),
-    roll: num.optional(),
+    dutch: num.optional().describe('Dutch angle (roll) in degrees.'),
+    truck: num.optional().describe('Slide the camera right (+) or left (-), in meters, without turning it.'),
+    dolly: num.optional().describe('Push in (+) or pull out (-) along the ground, in meters, without turning.'),
+    crane: num.optional().describe('Raise (+) or lower (-) the camera, in meters, without turning.'),
+    pan: num.optional().describe('Turn the camera right (+) or left (-) where it stands, in degrees.'),
+    tilt: num.optional().describe('Aim the camera up (+) or down (-) where it stands, in degrees.'),
     at,
   }),
   (a, ctx) => {
@@ -471,16 +476,17 @@ const setCameraTool = tool(
     const eff = effectiveShot(ctx.project(), shot.id)!;
     const cur = keyOf(eff.camera, a.at ?? 'start');
     const target: [number, number, number] = a.target ?? [cur.target[0], a.height ?? cur.target[1], cur.target[2]];
-    ctx.dispatch(
-      setCamera(shot.id, a.at ?? 'start', {
-        target,
-        azimuth: a.orbit ?? cur.azimuth,
-        elevation: Math.max(-80, Math.min(85, a.tilt ?? cur.elevation)),
-        distance: a.distance ?? cur.distance,
-        lens: a.lens ?? cur.lens,
-        roll: a.roll ?? cur.roll,
-      }),
-    );
+    let next: CameraState = {
+      target,
+      azimuth: a.arc ?? cur.azimuth,
+      elevation: Math.max(-80, Math.min(85, a.angle ?? cur.elevation)),
+      distance: a.distance ?? cur.distance,
+      lens: a.lens ?? cur.lens,
+      roll: a.dutch ?? cur.roll,
+    };
+    if (a.truck || a.dolly || a.crane) next = moveCamera(next, { right: a.truck, forward: a.dolly, up: a.crane });
+    if (a.pan || a.tilt) next = turnCamera(next, { pan: a.pan, tilt: a.tilt });
+    ctx.dispatch(setCamera(shot.id, a.at ?? 'start', next));
     return 'Camera updated.';
   },
 );

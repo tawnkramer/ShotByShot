@@ -71,10 +71,10 @@ export function CameraPanel({ project, shot, eff, editKey, current }: Props) {
 
       <Slider label="Lens" value={Math.log(current.lens)} min={Math.log(12)} max={Math.log(200)} step={0.01} format={(v) => `${Math.round(Math.exp(v))} mm`} onChange={(v) => set({ lens: Math.round(Math.exp(v)) }, mk('lens'))} />
       <Slider label="Distance" value={Math.log(current.distance)} min={Math.log(0.3)} max={Math.log(40)} step={0.01} format={(v) => `${Math.exp(v).toFixed(1)} m`} onChange={(v) => set({ distance: Math.exp(v) }, mk('dist'))} />
-      <Slider label="Orbit" value={wrap(current.azimuth)} min={-180} max={180} step={1} format={(v) => `${Math.round(v)}°`} onChange={(v) => set({ azimuth: v }, mk('az'))} />
-      <Slider label="Tilt" value={current.elevation} min={-60} max={80} step={1} format={(v) => `${Math.round(v)}°`} onChange={(v) => set({ elevation: v }, mk('el'))} />
+      <Slider label="Arc" value={wrap(current.azimuth)} min={-180} max={180} step={1} format={(v) => `${Math.round(v)}°`} onChange={(v) => set({ azimuth: v }, mk('az'))} />
+      <Slider label="Angle" value={current.elevation} min={-60} max={80} step={1} format={(v) => `${Math.round(v)}°`} onChange={(v) => set({ elevation: v }, mk('el'))} />
       <Slider label="Height" value={current.target[1]} min={0} max={3} step={0.01} format={(v) => `${v.toFixed(2)} m`} onChange={(v) => set({ target: [current.target[0], v, current.target[2]] }, mk('h'))} />
-      <Slider label="Roll" value={current.roll} min={-45} max={45} step={1} format={(v) => `${Math.round(v)}°`} onChange={(v) => set({ roll: v }, mk('roll'))} />
+      <Slider label="Dutch" value={current.roll} min={-45} max={45} step={1} format={(v) => `${Math.round(v)}°`} onChange={(v) => set({ roll: v }, mk('roll'))} />
 
       {shot.camera && (
         <button className="btn" onClick={() => dispatch(resetCamera(shot.id))}>

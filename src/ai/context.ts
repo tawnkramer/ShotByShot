@@ -73,7 +73,7 @@ export function describeContext(project: Project, step: Step, opts: { shotId?: s
         return `${c?.name}: start ${fmt(s)}${e ? `; end ${fmt(e)}` : ''}`;
       }).join('; ') || 'none') + '.');
       if (eff.setup.props.length) out.push('Props in shot: ' + eff.setup.props.map((p) => `${project.props.find((x) => x.id === p.propId)?.name} at x=${r(p.motion.start.position[0])} y=${r(p.motion.start.position[1])} z=${r(p.motion.start.position[2])}`).join('; ') + '.');
-      const cam = (k: typeof eff.camera.start) => `target [${k.target.map(r).join(', ')}], orbit ${Math.round(k.azimuth)}°, tilt ${Math.round(k.elevation)}°, distance ${r(k.distance)} m, lens ${Math.round(k.lens)} mm`;
+      const cam = (k: typeof eff.camera.start) => `target [${k.target.map(r).join(', ')}], arc ${Math.round(k.azimuth)}°, angle ${Math.round(k.elevation)}°, distance ${r(k.distance)} m, lens ${Math.round(k.lens)} mm`;
       out.push(`Camera (${eff.camera.mode === 'moving' ? 'moving' : 'fixed'}): start ${cam(eff.camera.start)}${eff.camera.end && eff.camera.mode === 'moving' ? `; end ${cam(eff.camera.end)}` : ''}.`);
       out.push(`Stages available: ${project.stages.map((s) => s.name).join(', ')}.`);
     }

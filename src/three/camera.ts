@@ -57,6 +57,24 @@ export function moveCamera(s: CameraState, move: { right?: number; forward?: num
   return { ...s, target: [x, Math.max(0, s.target[1] + u), z] };
 }
 
+/**
+ * Turns the camera where it stands, as on a tripod head: `pan` turns right
+ * (+) or left, `tilt` aims up (+) or down. In degrees.
+ */
+export function turnCamera(s: CameraState, turn: { pan?: number; tilt?: number }): CameraState {
+  const p = cameraPosition(s);
+  const azimuth = s.azimuth - (turn.pan ?? 0);
+  const elevation = Math.max(-80, Math.min(85, s.elevation - (turn.tilt ?? 0)));
+  const az = THREE.MathUtils.degToRad(azimuth);
+  const el = THREE.MathUtils.degToRad(elevation);
+  const target: [number, number, number] = [
+    p.x - s.distance * Math.sin(az) * Math.cos(el),
+    p.y - s.distance * Math.sin(el),
+    p.z - s.distance * Math.cos(az) * Math.cos(el),
+  ];
+  return { ...s, azimuth, elevation, target };
+}
+
 export const SHOT_SIZES = {
   EWS: { label: 'Extreme wide', center: 0.5, extent: 3.2 },
   WS: { label: 'Wide', center: 0.5, extent: 1.25 },
