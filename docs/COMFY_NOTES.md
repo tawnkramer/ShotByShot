@@ -30,3 +30,12 @@ whether the signed output URL's storage host allows CORS.
   https://cloud.comfy.org (`/oauth/authorize`, `/oauth/token`, `/oauth/register`, PKCE S256),
   scopes `comfy-mcp:tools:read`, `comfy-mcp:tools:call`. A browser "Sign in with Comfy" may be
   possible later; use the API key for now.
+
+## Relay (chosen 2026-10-11)
+MCP turned out not to be enough on its own: `upload_file` returns a single-use
+`PUT /api/uploads/<token>` and `get_output` returns `/api/s/<id>` → storage.googleapis.com,
+and none of those send CORS headers either. So the app keeps the REST v2 client and sends it
+through `relay/`, a Cloudflare Worker the user deploys (Settings → ComfyUI Cloud). Verified
+from Node through the Worker's handler: key check, asset upload, a LoadImage→SaveImage job
+and output download all work. That run also found two upload bugs, now fixed: the
+`content_type` field must come before `file`, and `tags` must be a JSON array.

@@ -1,12 +1,39 @@
 import { newId } from '../state/schema';
+import { getSetting } from '../storage/db';
 import type { AssetReference, WorkflowGraph } from './workflow';
 
 /**
  * Minimal Comfy API v2 client for the browser. The key is the user's own and
- * is only sent to cloud.comfy.org. Signed output URLs are fetched without it.
+ * is only sent to cloud.comfy.org, or to the user's own relay in front of it.
+ * Signed output URLs are fetched without it.
+ *
+ * Comfy Cloud's REST API sends no CORS headers, so a browser needs a relay
+ * (relay/, a Cloudflare Worker) that forwards requests and adds them.
  */
 export const COMFY_BASE = 'https://cloud.comfy.org';
 export const COMFY_KEY_SETTING = 'comfy.apiKey';
+export const COMFY_RELAY_SETTING = 'comfy.relayUrl';
+
+/** Cleans up a pasted relay address; throws when it isn't a usable https URL. */
+export function normalizeRelayUrl(input: string): string {
+  const text = input.trim();
+  let url: URL;
+  try { url = new URL(/^[a-z]+:\/\//i.test(text) ? text : `https://${text}`); } catch { throw new Error('That relay address is not a valid URL.'); }
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('The relay address must start with https://.');
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
+async function relayUrl(): Promise<string | undefined> {
+  return (await getSetting<string>(COMFY_RELAY_SETTING).catch(() => undefined)) || undefined;
+}
+
+/** Where to send a request for a Comfy Cloud or signed storage URL, given the relay in use. */
+export function routeUrl(url: string, relay?: string): string {
+  if (!relay) return url;
+  const target = new URL(url, COMFY_BASE);
+  return target.origin === COMFY_BASE ? `${relay}${target.pathname}${target.search}` : `${relay}/storage?url=${encodeURIComponent(target.toString())}`;
+}
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'canceling' | 'canceled' | 'failed' | 'expired';
 export interface ComfyJob {
@@ -25,19 +52,21 @@ export interface ComfyJob {
 interface ComfyAsset { id: string; hash: string | null; file_path?: string | null; url: string }
 
 const auth = (key: string) => ({ Authorization: `Bearer ${key}` });
-const UNREACHABLE = "Couldn't reach Comfy Cloud. Check your connection; if it persists, the service may not accept requests from this site.";
+const UNREACHABLE = "Couldn't reach Comfy Cloud. Check your connection and your relay address in Settings → ComfyUI Cloud.";
+const NO_RELAY = "Couldn't reach Comfy Cloud. Browsers need a relay to reach it: set one up in Settings → ComfyUI Cloud.";
 
 async function call(key: string, path: string, init: RequestInit, fetchImpl: typeof fetch): Promise<Response> {
   if (!key.trim()) throw new Error('Add your Comfy Cloud API key in Settings first.');
   const url = new URL(path, COMFY_BASE);
   // Never send the key to a host other than Comfy's, even if a response links elsewhere.
   if (url.origin !== COMFY_BASE) throw new Error('Comfy Cloud returned an unexpected link.');
+  const relay = await relayUrl();
   let res: Response;
   try {
-    res = await fetchImpl(url.toString(), { ...init, headers: { ...auth(key), ...init.headers } });
+    res = await fetchImpl(routeUrl(url.toString(), relay), { ...init, headers: { ...auth(key), ...init.headers } });
   } catch (e) {
     if (init.signal?.aborted) throw e;
-    throw new Error(UNREACHABLE);
+    throw new Error(relay ? UNREACHABLE : NO_RELAY);
   }
   if (!res.ok) throw new Error(await errorMessage(res));
   return res;
@@ -62,11 +91,12 @@ export interface KeyCheck { ok: boolean; reachable: boolean; message: string }
 
 /** A lookup of a job that can't exist: 404 means the key was accepted. */
 export async function testComfyKey(key: string, fetchImpl: typeof fetch = fetch): Promise<KeyCheck> {
+  const relay = await relayUrl();
   let res: Response;
   try {
-    res = await fetchImpl(`${COMFY_BASE}/api/v2/jobs/00000000-0000-4000-8000-000000000000`, { headers: auth(key) });
+    res = await fetchImpl(routeUrl(`${COMFY_BASE}/api/v2/jobs/00000000-0000-4000-8000-000000000000`, relay), { headers: auth(key) });
   } catch {
-    return { ok: false, reachable: false, message: UNREACHABLE };
+    return { ok: false, reachable: false, message: relay ? UNREACHABLE : NO_RELAY };
   }
   if (res.status === 401 || res.status === 403) return { ok: false, reachable: true, message: 'Comfy Cloud rejected this key.' };
   if (res.status === 404 || res.ok) return { ok: true, reachable: true, message: 'Key works.' };
@@ -75,10 +105,11 @@ export async function testComfyKey(key: string, fetchImpl: typeof fetch = fetch)
 
 export async function uploadAsset(key: string, data: Blob, fileName: string, signal?: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<AssetReference> {
   const form = new FormData();
-  form.append('file', data, fileName);
+  // Comfy reads the form as a stream and rejects a file that arrives before its content_type.
   form.append('content_type', data.type || 'application/octet-stream');
   form.append('file_path', fileName);
-  form.append('tags', 'input');
+  form.append('tags', JSON.stringify(['input']));
+  form.append('file', data, fileName);
   const res = await call(key, '/api/v2/assets', { method: 'POST', body: form, signal, headers: { 'Idempotency-Key': newId() } }, fetchImpl);
   const asset = await res.json() as ComfyAsset;
   return { __type: 'core/ASSET', info: { id: asset.id, ...(asset.hash ? { hash: asset.hash } : {}), file_path: asset.file_path ?? fileName } };
@@ -137,7 +168,7 @@ export async function downloadOutput(key: string, assetId: string, signal?: Abor
   const asset = await (await call(key, `/api/v2/assets/${assetId}`, { signal }, fetchImpl)).json() as ComfyAsset;
   let res: Response;
   try {
-    res = await fetchImpl(asset.url, { signal });
+    res = await fetchImpl(routeUrl(asset.url, await relayUrl()), { signal });
   } catch (e) {
     if (signal?.aborted) throw e;
     throw new Error(`Comfy Cloud finished, but the browser couldn't download the result from ${hostOf(asset.url)}. Try again.`);

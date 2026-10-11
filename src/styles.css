@@ -84,6 +84,7 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9rem; padding: 
   white-space: nowrap;
 }
 .btn:disabled { opacity: 0.45; cursor: default; }
+a.btn { color: inherit; align-self: flex-start; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
 .btn.ghost { background: none; border-color: transparent; }
 .btn.danger { color: var(--danger); }
@@ -687,6 +688,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .generated-image-prompt pre { margin: 0; padding: 12px; max-height: 45dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; border-top: 1px solid var(--border); }
 .comfy-category { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .comfy-category h3 { margin: 0; font-size: 1rem; }
+.comfy-step { margin: 6px 0 0; font-size: 1rem; }
 .comfy-workflow { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
 .comfy-workflow p, .comfy-workflow .field { margin: 0; }
 .image-editor-preview video { width: 100%; max-height: 65dvh; background: #000; }

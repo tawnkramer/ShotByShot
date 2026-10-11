@@ -36,7 +36,18 @@ complete and bill an already-started generation. The API key is never exported.
 
 ## ComfyUI Cloud and shot videos
 
-Settings → **ComfyUI Cloud** stores a Comfy API key (from platform.comfy.org) in
+Comfy Cloud's API sends no CORS headers, so the browser reaches it through a
+small relay you deploy once to your own Cloudflare account (free plan is enough).
+Settings → **ComfyUI Cloud** → **Set up relay on Cloudflare** opens Cloudflare's
+deploy page for [`relay/`](relay/), a Worker that forwards `/api/...` to
+cloud.comfy.org and `/storage?url=...` to Comfy's signed storage URLs, adds CORS
+headers for the sites in `ALLOWED_ORIGINS` (in `relay/wrangler.jsonc`), and stores
+nothing. Paste the Worker's address (`https://shotbyshot-comfy-relay.<you>.workers.dev`)
+into the relay field. To deploy by hand instead: `cd relay && npm install && npx wrangler deploy`.
+The app's Content Security Policy allows relays on `*.workers.dev`.
+
+Settings → **ComfyUI Cloud** also stores a Comfy API key (from
+[your Comfy platform profile](https://platform.comfy.org/profile/home)) in
 this browser and imports workflows exported from ComfyUI with **Workflow → Export
 (API)**, in four categories: image generation, image editing, text to speech and
 image to video. Each import is analyzed for what the app can fill in: Load Image,

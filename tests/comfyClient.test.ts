@@ -25,6 +25,9 @@ describe('Comfy Cloud client', () => {
     const form = init.body as FormData;
     expect(form.get('content_type')).toBe('image/png');
     expect(form.get('file_path')).toBe('shot.png');
+    // Comfy rejects a file sent before its content_type, and tags that aren't a JSON array.
+    expect([...form.keys()]).toEqual(['content_type', 'file_path', 'tags', 'file']);
+    expect(form.get('tags')).toBe('["input"]');
   });
 
   it('submits workflows and explains rejected ones', async () => {
@@ -53,7 +56,8 @@ describe('Comfy Cloud client', () => {
     const waiting = waitForJob('k', job('running'), { signal: abort.signal, intervalMs: 50 }, fetchImpl as never);
     abort.abort();
     await expect(waiting).rejects.toBeDefined();
-    expect(fetchImpl).toHaveBeenCalledWith('https://cloud.comfy.org/api/v2/jobs/job-1/cancel', expect.objectContaining({ method: 'POST' }));
+    // The cancel is sent in the background once the relay setting is read.
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledWith('https://cloud.comfy.org/api/v2/jobs/job-1/cancel', expect.objectContaining({ method: 'POST' })));
   });
 
   it('never sends the key to other hosts', async () => {
