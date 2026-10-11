@@ -1,3 +1,4 @@
+import { ImagePreview, ZoomableImage } from './ImagePreview';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_KEY_SETTING } from '../ai/openai';
@@ -36,6 +37,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     const url = URL.createObjectURL(reference); setReferenceUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [reference]);
+  const [preview, setPreview] = useState(false);
   const savedUrl = useBlobUrl(c.image?.blob);
   const [hasKey, setHasKey] = useState<boolean>();
   useEffect(() => {
@@ -60,7 +62,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   useEffect(() => {
     if (!draft) return;
     const url = URL.createObjectURL(draft.blob);
-    setDraftUrl(url);
+    setDraftUrl(url); setPreview(true);
     return () => URL.revokeObjectURL(url);
   }, [draft]);
 
@@ -116,10 +118,10 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
       </header>
       <div className="image-editor-body">
         <div className="image-editor-preview">
-          {draftUrl || savedUrl ? <img src={draftUrl || savedUrl} alt={`Concept artwork for ${c.name}`} /> : <p className="muted">Your image will appear here.</p>}
+          {draftUrl || savedUrl ? <ZoomableImage src={(draftUrl || savedUrl)!} alt={`Concept artwork for ${c.name}`} /> : <p className="muted">Your image will appear here.</p>}
         </div>
         <div className="image-editor-controls">
-          {referenceUrl && <figure className="stage-image-guidance"><img src={referenceUrl} alt={`Greyscale ${kind} preview used as guidance`} /><figcaption className="small muted">Current 3D view · sent with your prompt</figcaption></figure>}
+          {referenceUrl && <figure className="stage-image-guidance"><ZoomableImage src={referenceUrl} alt={`Greyscale ${kind} preview used as guidance`} /><figcaption className="small muted">Current 3D view · sent with your prompt</figcaption></figure>}
           <label className="field image-prompt-field"><span>Image prompt</span><textarea ref={promptInput} onFocus={() => setEditingPrompt(true)} rows={7} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => setPrompt(e.target.value)} /></label>
           <button className="btn ghost" disabled={busy} onClick={() => setPrompt(defaultPrompt)}>Reset from {kind} details</button>
           <div className="row gap">
@@ -139,5 +141,6 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
         </div>
       </div>
     </dialog>
+    {preview && draftUrl && <ImagePreview src={draftUrl} alt={`Concept artwork for ${c.name}`} onClose={() => setPreview(false)} />}
   </Overlay>;
 }

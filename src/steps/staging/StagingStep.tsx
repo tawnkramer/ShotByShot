@@ -1,3 +1,4 @@
+import { ZoomableImage } from '../../images/ImagePreview';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useProjectStore } from '../../state/store';
 import { newId, type ObjectSource, type Prop, type Stage, type Transform } from '../../state/schema';
@@ -117,7 +118,7 @@ export function StagingStep() {
         <div className={`stage-render-layer${showingImage ? ' covered' : ''}`}>
           <StageViewport key={stage.id} stage={stage} onTransformEnd={onTransformEnd} onCaptureReady={onCaptureReady} />
         </div>
-        {showingImage && <img className="character-artwork" src={artwork} alt={`Concept artwork for ${stage.name}`} />}
+        {showingImage && <ZoomableImage className="character-artwork" src={artwork!} alt={`Concept artwork for ${stage.name}`} />}
         {artwork && <button className="btn character-view-toggle" onClick={() => setShowImage(!showingImage)}>{showingImage ? '3D stage' : 'Stage image'}</button>}
         {flash && (
           <div key={flash.key} className="viewport-flash" role="status">
