@@ -612,3 +612,9 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
   font-weight: 600;
 }
+
+/* Crash screen (shell/ErrorBoundary.tsx) */
+.crash { min-height: var(--app-height, 100dvh); display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 24px 16px; max-width: 520px; margin: 0 auto; background: var(--bg); color: var(--text); }
+.crash h1 { font-size: 1.3rem; margin: 0; }
+.crash .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.crash pre { white-space: pre-wrap; word-break: break-word; }
