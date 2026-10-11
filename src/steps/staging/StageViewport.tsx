@@ -9,10 +9,11 @@ import { StageObjectView } from './StageObjectView';
 
 interface Props {
   stage: Stage;
+  onCaptureReady?: (capture: (() => Promise<Blob>) | null) => void;
   onTransformEnd: (objectId: string, transform: Transform) => void;
 }
 
-export function StageViewport({ stage, onTransformEnd }: Props) {
+export function StageViewport({ stage, onTransformEnd, onCaptureReady }: Props) {
   return (
     <Canvas
       className="viewport-canvas"
@@ -36,6 +37,7 @@ export function StageViewport({ stage, onTransformEnd }: Props) {
         shadow-camera-bottom={-12}
         shadow-bias={-0.0005}
       />
+      <Capture onReady={onCaptureReady} />
       <Ground />
       <Grid args={[40, 40]} cellSize={0.5} sectionSize={2} cellColor="#45454c" sectionColor="#5c5c66" fadeDistance={35} infiniteGrid position={[0, 0.001, 0]} />
       <Scene stage={stage} onTransformEnd={onTransformEnd} />
@@ -89,7 +91,7 @@ function Scene({ stage, onTransformEnd }: Props) {
       ))}
       {target && selected && <SelectionBox object={target} />}
       {target && selected && (
-        <TransformControls
+        <group userData={{ excludeFromImage: true }}><TransformControls
           object={target}
           mode={mode}
           size={1.1}
@@ -108,7 +110,7 @@ function Scene({ stage, onTransformEnd }: Props) {
               scale: g.scale.toArray() as Transform['scale'],
             });
           }}
-        />
+        /></group>
       )}
     </>
   );
@@ -121,6 +123,7 @@ function SelectionBox({ object }: { object: THREE.Object3D }) {
   useFrame(() => helperRef.current?.update());
   useEffect(() => {
     const helper = new THREE.BoxHelper(object, 0xf2b84b);
+    helper.userData.excludeFromImage = true;
     helper.renderOrder = 10;
     (helper.material as THREE.LineBasicMaterial).depthTest = false;
     scene.add(helper);
@@ -132,5 +135,22 @@ function SelectionBox({ object }: { object: THREE.Object3D }) {
       (helper.material as THREE.Material).dispose();
     };
   }, [object, scene]);
+  return null;
+}
+
+function Capture({ onReady }: { onReady?: Props['onCaptureReady'] }) {
+  const { gl, scene, camera, invalidate } = useThree();
+  useEffect(() => {
+    onReady?.(() => new Promise<Blob>((resolve, reject) => {
+      const hidden: THREE.Object3D[] = [];
+      scene.traverse((o) => { if (o.visible && o.userData.excludeFromImage) { hidden.push(o); o.visible = false; } });
+      try {
+        gl.render(scene, camera);
+        gl.domElement.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not capture the stage preview.')), 'image/png');
+      } catch { reject(new Error('Could not capture the stage preview. Try again after models finish loading.')); }
+      finally { hidden.forEach((o) => { o.visible = true; }); invalidate(); }
+    }));
+    return () => onReady?.(null);
+  }, [gl, scene, camera, invalidate, onReady]);
   return null;
 }

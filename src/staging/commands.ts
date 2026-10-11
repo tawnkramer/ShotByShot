@@ -98,6 +98,7 @@ export function duplicateStage(stageId: string, newStageId = newId()): Command {
         id: newStageId,
         name: `${src.name} copy`,
         sceneLineIds: [],
+        image: src.image ? { ...src.image } : undefined,
         objects: src.objects.map((o) => ({ ...(JSON.parse(JSON.stringify(o)) as StageObject), id: newId() })),
       });
     },
@@ -210,4 +211,11 @@ export function round(v: number, digits = 3): number {
 export function placeProp(stageId: string, prop: Prop, position: Transform['position'], id = newId()): Command {
   const s = prop.defaultScale;
   return addObject(stageId, prop.source, { position, rotation: [0, 0, 0, 1], scale: [s, s, s] }, id, prop.name, { propId: prop.id, grey: prop.grey });
+}
+
+export function setStageImage(stageId: string, image: Stage['image']): Command {
+  return { label: 'Save stage image', apply: (d) => {
+    const stage = findStage(d, stageId);
+    if (stage) { if (image) stage.image = image; else delete stage.image; }
+  } };
 }

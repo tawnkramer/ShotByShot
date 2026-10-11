@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
-import { CharacterImageEditor } from '../src/steps/characters/CharacterImageEditor';
+import { CharacterImageEditor, ConceptImageEditor } from '../src/steps/characters/CharacterImageEditor';
 import { createProject } from '../src/state/schema';
 import { newCharacter } from '../src/characters/commands';
 import { useProjectStore } from '../src/state/store';
@@ -17,7 +17,7 @@ afterEach(async () => {
   host?.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   await useProjectStore.getState().close();
 });
-it('opens an accessible editor, previews a generated image, and saves only on Use image', async () => {
+it.each(['character', 'stage'] as const)('opens an accessible %s editor and saves only on Use image', async (kind) => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', ''); } });
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() });
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({data:[{b64_json:'AQID'}]}))));
@@ -25,10 +25,12 @@ it('opens an accessible editor, previews a generated image, and saves only on Us
   vi.stubGlobal('visualViewport', viewport);
   await setSetting(API_KEY_SETTING, 'test-key');
   const p = createProject('Image UI'); p.characters.push(newCharacter('Ben', [], 'ben'));
+  p.stages.push({id: 'stage', name: 'Cafe', sceneLineIds: [], objects: []});
+  const reference = new Blob(['snapshot'], {type:'image/png'});
   useProjectStore.getState().open(p);
   host=document.createElement('div'); document.body.append(host); root=createRoot(host);
   const onClose=vi.fn();
-  await act(async () => root.render(<MemoryRouter><CharacterImageEditor character={p.characters[0]} onClose={onClose} /></MemoryRouter>));
+  await act(async () => root.render(<MemoryRouter>{kind === 'character' ? <CharacterImageEditor character={p.characters[0]} onClose={onClose} /> : <ConceptImageEditor subject={p.stages[0]} kind="stage" defaultPrompt="Warm cafe" reference={reference} onClose={onClose} />}</MemoryRouter>));
   const dialog=document.querySelector('dialog')!;
   expect(dialog.open).toBe(true);
   expect(dialog.getAttribute('aria-labelledby')).toBe('character-image-title');
@@ -49,8 +51,9 @@ it('opens an accessible editor, previews a generated image, and saves only on Us
   expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:test');
   expect(useProjectStore.getState().project!.characters[0].image).toBeUndefined();
   await act(async () => { button('Use image').click(); await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce()); });
-  const image=useProjectStore.getState().project!.characters[0].image!;
-  expect(image.prompt).toContain('Ben');
+  const image=useProjectStore.getState().project![kind === 'stage' ? 'stages' : 'characters'][0].image!;
+  expect(image.prompt).toContain(kind === 'stage' ? 'Warm cafe' : 'Ben');
+  if (kind === 'stage') expect(await getBlob(image.guidanceBlob!)).toBeDefined();
   expect(await getBlob(image.blob)).toBeDefined();
   expect(onClose).toHaveBeenCalledOnce();
 });

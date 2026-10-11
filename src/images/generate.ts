@@ -1,5 +1,5 @@
 import { OPENAI_BASE } from '../ai/openai';
-import type { Character } from '../state/schema';
+import type { Character, Stage } from '../state/schema';
 
 export const IMAGE_MODELS = ['gpt-image-1.5', 'gpt-image-1-mini', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] as const;
 export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS[0];
@@ -15,19 +15,25 @@ export function characterImagePrompt(c: Character): string {
 }
 
 export async function generateCharacterImage(
-  { apiKey, prompt, model = DEFAULT_IMAGE_MODEL, quality = 'medium', signal }: {
-    apiKey: string; prompt: string; model?: string; quality?: ImageQuality; signal?: AbortSignal;
+  { apiKey, prompt, model = DEFAULT_IMAGE_MODEL, quality = 'medium', signal, reference }: {
+    apiKey: string; prompt: string; model?: string; quality?: ImageQuality; signal?: AbortSignal; reference?: Blob;
   }, fetchImpl: typeof fetch = fetch,
 ): Promise<Blob> {
   if (!apiKey.trim()) throw new Error('Add your OpenAI API key in Settings first.');
   if (!prompt.trim()) throw new Error('Describe the image you want to create.');
   if (prompt.length > 32000) throw new Error('The prompt is too long (maximum 32,000 characters).');
+  if (reference && (!reference.size || reference.type !== 'image/png')) throw new Error('Capture a stage preview before generating.');
+  const form = reference ? new FormData() : undefined;
+  if (form && reference) {
+    form.append('image[]', reference, 'stage-preview.png');
+    for (const [key, value] of Object.entries({ model, prompt, quality, size: '1536x1024', n: '1', output_format: 'png' })) form.append(key, value);
+  }
   let res: Response;
   try {
-    res = await fetchImpl(`${OPENAI_BASE}/images/generations`, {
+    res = await fetchImpl(`${OPENAI_BASE}/images/${reference ? 'edits' : 'generations'}`, {
       method: 'POST', signal,
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, quality, size: '1024x1536', n: 1, output_format: 'png' }),
+      headers: { Authorization: `Bearer ${apiKey}`, ...(reference ? {} : { 'Content-Type': 'application/json' }) },
+      body: form ?? JSON.stringify({ model, prompt, quality, size: '1024x1536', n: 1, output_format: 'png' }),
     });
   } catch (e) {
     if (signal?.aborted) throw e;
@@ -47,4 +53,17 @@ export async function generateCharacterImage(
   } catch {
     throw new Error('OpenAI returned an unreadable image. Try again.');
   }
+}
+
+export function generateStageImage(options: Parameters<typeof generateCharacterImage>[0] & { reference: Blob }, fetchImpl: typeof fetch = fetch): Promise<Blob> {
+  if (!options.reference) return Promise.reject(new Error('Capture a stage preview before generating.'));
+  return generateCharacterImage(options, fetchImpl);
+}
+
+export function stageImagePrompt(stage: Stage): string {
+  return [
+    `Create a detailed cinematic concept illustration of ${stage.name}.`,
+    'Use the supplied greyscale stage preview as spatial guidance. Preserve its camera angle, perspective, room shape, and placement and proportions of furniture and props. Add convincing materials, colors, lighting, and atmosphere. No labels, text, people, grid lines, or editing handles.',
+    stage.objects.length ? `Stage objects: ${stage.objects.map((o) => o.name).join(', ')}.` : '',
+  ].filter(Boolean).join('\n');
 }

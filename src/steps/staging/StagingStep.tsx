@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useProjectStore } from '../../state/store';
 import { newId, type ObjectSource, type Prop, type Stage, type Transform } from '../../state/schema';
 import { freeSpot } from '../../staging/placement';
@@ -10,6 +10,10 @@ import { Inspector } from './Inspector';
 import { AddSheet } from './AddSheet';
 import { NewStageSheet, StageActionsSheet, useUnstagedLocations } from './StageSheets';
 import { createStagesForScenes } from '../../staging/commands';
+
+import { ConceptImageEditor } from '../characters/CharacterImageEditor';
+import { stageImagePrompt } from '../../images/generate';
+import { useBlobUrl } from '../../images/useBlobUrl';
 
 const MODES: { mode: GizmoMode; label: string }[] = [
   { mode: 'translate', label: 'Move' },
@@ -35,6 +39,27 @@ export function StagingStep() {
   useEffect(() => {
     if (stage && stage.id !== stageId) setStage(stage.id);
   }, [stage, stageId, setStage]);
+
+  const capture = useRef<(() => Promise<Blob>) | null>(null);
+  const onCaptureReady = useCallback((fn: (() => Promise<Blob>) | null) => { capture.current = fn; }, []);
+  const [reference, setReference] = useState<Blob>();
+  const [capturing, setCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState('');
+  const [showImage, setShowImage] = useState(true);
+  const artwork = useBlobUrl(stage?.image?.blob);
+  useEffect(() => { setShowImage(true); setReference(undefined); setCaptureError(''); }, [stage?.id]);
+  useEffect(() => { setShowImage(true); }, [stage?.image?.blob]);
+  const showingImage = showImage && Boolean(artwork);
+  const openImage = async () => {
+    if (capturing || !capture.current || !stage) return;
+    const id = stage.id;
+    setCapturing(true); setCaptureError('');
+    try {
+      const blob = await capture.current();
+      if (useStagingUI.getState().stageId === id) setReference(blob);
+    } catch (e) { setCaptureError(e instanceof Error ? e.message : String(e)); }
+    finally { setCapturing(false); }
+  };
 
   const selected = stage?.objects.find((o) => o.id === selectedId);
 
@@ -89,13 +114,17 @@ export function StagingStep() {
     <div className="split">
       <StageChips stages={project.stages} current={stage.id} onPick={setStage} onLongPress={() => setSheet('actions')} onNew={() => setSheet('new')} />
       <div className="viewport">
-        <StageViewport stage={stage} onTransformEnd={onTransformEnd} />
+        <div className={`stage-render-layer${showingImage ? ' covered' : ''}`}>
+          <StageViewport key={stage.id} stage={stage} onTransformEnd={onTransformEnd} onCaptureReady={onCaptureReady} />
+        </div>
+        {showingImage && <img className="character-artwork" src={artwork} alt={`Concept artwork for ${stage.name}`} />}
+        {artwork && <button className="btn character-view-toggle" onClick={() => setShowImage(!showingImage)}>{showingImage ? '3D stage' : 'Stage image'}</button>}
         {flash && (
           <div key={flash.key} className="viewport-flash" role="status">
             {flash.text}
           </div>
         )}
-        <div className="viewport-toolbar">
+        <div className="viewport-toolbar" hidden={showingImage}>
           <button className={`btn primary ${selected ? 'icon' : ''}`} aria-label="Add" onClick={() => setSheet('add')}>
             {selected ? '+' : '+ Add'}
           </button>
@@ -147,6 +176,9 @@ export function StagingStep() {
         </div>
       </div>
       <div className="split-panel">
+        <div className="stage-image-action"><button className="btn" disabled={capturing} onClick={() => void openImage()}>{capturing ? 'Capturing preview…' : stage.image ? 'View / generate stage image' : 'Generate stage image'}</button>
+        <p className="small muted">Uses the current 3D view as guidance. Frame your stage before generating.</p>
+        {captureError && <p role="alert" className="error small">{captureError}</p>}</div>
         {selected ? (
           <>
             <div className="row gap panel-head">
@@ -157,10 +189,11 @@ export function StagingStep() {
             <Inspector stage={stage} object={selected} />
           </>
         ) : (
-          <ObjectList stage={stage} onPick={select} onAdd={() => setSheet('add')} />
+          <ObjectList stage={stage} onPick={(id) => { setShowImage(false); select(id); }} onAdd={() => setSheet('add')} />
         )}
       </div>
-      {sheet === 'add' && <AddSheet onAdd={add} projectProps={project.props} onAddProp={addProp} onClose={() => setSheet(null)} />}
+      {reference && <ConceptImageEditor key={stage.id} subject={stage} kind="stage" defaultPrompt={stageImagePrompt(stage)} reference={reference} onClose={() => setReference(undefined)} />}
+      {sheet === 'add'  && <AddSheet onAdd={add} projectProps={project.props} onAddProp={addProp} onClose={() => setSheet(null)} />}
       {sheet === 'new' && <NewStageSheet onCreated={(id) => { setStage(id); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === 'actions' && <StageActionsSheet stage={stage} onSelect={setStage} onClose={() => setSheet(null)} />}
     </div>
