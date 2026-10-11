@@ -1,11 +1,46 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import { Overlay } from '../shell/Overlay';
+import { saveFile } from '../shell/download';
+import { safeFileName } from '../storage/projectFile';
 
 type View = { scale: number; x: number; y: number };
 const FIT: View = { scale: 1, x: 0, y: 0 };
 
+const EXTENSION: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' };
+
+/** Saves what a preview shows, under its name. Sources are blob: or data: URLs the app made. */
+export async function downloadPreview(src: string, name: string, fallbackType: string): Promise<void> {
+  const blob = await (await fetch(src)).blob();
+  const type = blob.type || fallbackType;
+  await saveFile(blob, `${safeFileName(name)}.${EXTENSION[type] ?? fallbackType.split('/')[1]}`, type);
+}
+
+/** Header shared by the full-screen viewers: a hint, then Download and Close. */
+function PreviewHeader({ hint, label, onDownload, onClose }: { hint: string; label: string; onDownload: () => Promise<void>; onClose: () => void }) {
+  const [error, setError] = useState('');
+  return <header className="image-preview-header">
+    <span className="small muted grow">{error ? <span className="error" role="alert">{error}</span> : hint}</span>
+    <button className="btn" onClick={() => { setError(''); void onDownload().catch((e) => setError(e instanceof Error ? e.message : String(e))); }}>Download</button>
+    <button className="btn" autoFocus onClick={onClose} aria-label={`Close ${label} preview`}>Close</button>
+  </header>;
+}
+
+/** Keeps a full-screen dialog sized to the visible viewport (mobile keyboards and toolbars shrink it). */
+function useFullScreen(dialog: RefObject<HTMLDialogElement | null>) {
+  useEffect(() => {
+    dialog.current?.showModal();
+    const vv = window.visualViewport;
+    const fit = () => {
+      dialog.current?.style.setProperty('--preview-height', `${vv?.height ?? window.innerHeight}px`);
+      dialog.current?.style.setProperty('--preview-top', `${vv?.offsetTop ?? 0}px`);
+    };
+    fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit); window.addEventListener('resize', fit);
+    return () => { vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit); window.removeEventListener('resize', fit); };
+  }, [dialog]);
+}
+
 /** A full-screen image viewer shared by generated artwork and reference snapshots. */
-export function ImagePreview({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+export function ImagePreview({ src, alt, fileName, onClose }: { src: string; alt: string; fileName?: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>(FIT);
@@ -22,16 +57,7 @@ export function ImagePreview({ src, alt, onClose }: { src: string; alt: string; 
     const ratio = scale / old.scale;
     apply({ scale, x: x - (x - old.x) * ratio, y: y - (y - old.y) * ratio });
   };
-  useEffect(() => {
-    dialog.current?.showModal();
-    const vv = window.visualViewport;
-    const fit = () => {
-      dialog.current?.style.setProperty('--preview-height', `${vv?.height ?? window.innerHeight}px`);
-      dialog.current?.style.setProperty('--preview-top', `${vv?.offsetTop ?? 0}px`);
-    };
-    fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit); window.addEventListener('resize', fit);
-    return () => { vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit); window.removeEventListener('resize', fit); };
-  }, []);
+  useFullScreen(dialog);
   // A non-passive listener prevents wheel zoom from scrolling the page underneath.
   useEffect(() => {
     const node = surface.current;
@@ -63,7 +89,7 @@ export function ImagePreview({ src, alt, onClose }: { src: string; alt: string; 
     } else apply({ ...v, x: v.x + next[0].x - old[0].x, y: v.y + next[0].y - old[0].y });
   };
   return <Overlay><dialog ref={dialog} className="image-preview-dialog" aria-label={alt} onCancel={(e) => { e.preventDefault(); onClose(); }}>
-    <header className="image-preview-header"><span className="small muted">Pinch to zoom · drag to pan</span><button className="btn" autoFocus onClick={onClose} aria-label="Close image preview">Close</button></header>
+    <PreviewHeader hint="Pinch to zoom · drag to pan" label="image" onDownload={() => downloadPreview(src, fileName ?? alt, 'image/png')} onClose={onClose} />
     <div ref={surface} className="image-preview-surface" tabIndex={0} aria-label="Zoomable image" onKeyDown={(e) => {
       if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(1.5); }
       else if (e.key === '-') { e.preventDefault(); zoom(1 / 1.5); }
@@ -76,7 +102,17 @@ export function ImagePreview({ src, alt, onClose }: { src: string; alt: string; 
   </dialog></Overlay>;
 }
 
-export function ZoomableImage({ src, alt, className = '' }: { src: string; alt: string; className?: string }) {
+export function ZoomableImage({ src, alt, fileName, className = '' }: { src: string; alt: string; fileName?: string; className?: string }) {
   const [open, setOpen] = useState(false);
-  return <><button className={`image-preview-trigger ${className}`} aria-label={`Enlarge ${alt}`} onClick={() => setOpen(true)}><img src={src} alt={alt} /></button>{open && <ImagePreview src={src} alt={alt} onClose={() => setOpen(false)} />}</>;
+  return <><button className={`image-preview-trigger ${className}`} aria-label={`Enlarge ${alt}`} onClick={() => setOpen(true)}><img src={src} alt={alt} /></button>{open && <ImagePreview src={src} alt={alt} fileName={fileName} onClose={() => setOpen(false)} />}</>;
+}
+
+/** A full-screen video player with Download and Close. */
+export function VideoPreview({ src, label, fileName, onClose }: { src: string; label: string; fileName: string; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useFullScreen(dialog);
+  return <Overlay><dialog ref={dialog} className="image-preview-dialog" aria-label={label} onCancel={(e) => { e.preventDefault(); onClose(); }}>
+    <PreviewHeader hint={label} label="video" onDownload={() => downloadPreview(src, fileName, 'video/mp4')} onClose={onClose} />
+    <div className="image-preview-surface video-preview-surface"><video src={src} controls autoPlay playsInline loop aria-label={label} /></div>
+  </dialog></Overlay>;
 }

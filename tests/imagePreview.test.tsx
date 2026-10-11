@@ -47,3 +47,26 @@ it('opens a full-screen viewer, supports zoom, pan, pinch, fit, and closes back 
   await act(async () => document.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true })));
   expect(document.querySelector('dialog')).toBeNull();
 });
+
+it('downloads the previewed image and video under their names', async () => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', ''); } });
+  URL.createObjectURL = vi.fn(() => 'blob:saved'); URL.revokeObjectURL = vi.fn();
+  const saved: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { saved.push(this.download); });
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(url === 'blob:art' ? 'png' : 'mp4', { headers: { 'Content-Type': url === 'blob:art' ? 'image/png' : 'video/mp4' } })));
+  const { VideoPreview } = await import('../src/images/ImagePreview');
+  host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+  await act(async () => root.render(<ZoomableImage src="blob:art" alt="Mug artwork" />));
+  await act(async () => host.querySelector('button')!.click());
+  const button = (text: string) => [...document.querySelectorAll('dialog button')].find((b) => b.textContent === text) as HTMLButtonElement;
+  await act(async () => button('Download').click());
+  await vi.waitFor(() => expect(saved).toEqual(['Mug_artwork.png']));
+  const onClose = vi.fn();
+  await act(async () => root.render(<VideoPreview src="blob:clip" label="Shot 2 video" fileName="Shot 2" onClose={onClose} />));
+  expect(document.querySelector('dialog video')?.getAttribute('src')).toBe('blob:clip');
+  await act(async () => button('Download').click());
+  await vi.waitFor(() => expect(saved).toEqual(['Mug_artwork.png', 'Shot_2.mp4']));
+  await act(async () => button('Close').click());
+  expect(onClose).toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});

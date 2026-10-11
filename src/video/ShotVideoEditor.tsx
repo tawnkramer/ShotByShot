@@ -9,6 +9,7 @@ import { safeFileName } from '../storage/projectFile';
 import { aspectOf, effectiveShot } from '../shots/setup';
 import { setShotVideo, setShotVideoPrompt } from '../shots/commands';
 import { useBlobUrl } from '../images/useBlobUrl';
+import { VideoPreview } from '../images/ImagePreview';
 import { COMFY_KEY_SETTING } from '../comfy/client';
 import { runWorkflow, type RunInput } from '../comfy/run';
 import { listWorkflows, type ComfyWorkflow } from '../comfy/settings';
@@ -51,6 +52,7 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<{ blob: Blob; prompt: string; workflow: string; seconds?: number; credits?: number }>();
   const draftUrl = useObjectUrl(draft?.blob);
+  const [fullScreen, setFullScreen] = useState(false);
   const savedUrl = useBlobUrl(shot.video?.blob);
 
   useEffect(() => {
@@ -147,10 +149,10 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
           model: openArtModel.id, inputs: inputs.map(({ kind, tag }, i) => ({ kind, label: tag, fileName: files[i].fileName, data: files[i].data })),
           prompt: full, durationSec: eff.durationSec, aspect, resolution, generateAudio, signal: abort.signal, onStatus: setStatus,
         });
-        if (!abort.signal.aborted) setDraft({ blob, prompt: full, workflow: `OpenArt · ${openArtModel.name}`, credits });
+        if (!abort.signal.aborted) { setDraft({ blob, prompt: full, workflow: `OpenArt · ${openArtModel.name}`, credits }); setFullScreen(true); }
       } else {
         const { blob, seconds } = await runWorkflow({ key: key!, workflow: workflow!, inputs: files, prompt: full, durationSec: eff.durationSec, aspect, output: 'video', signal: abort.signal, onStatus: setStatus });
-        if (!abort.signal.aborted) setDraft({ blob: new Blob([blob], { type: blob.type.startsWith('video/') ? blob.type : 'video/mp4' }), prompt: full, workflow: workflow!.name, seconds });
+        if (!abort.signal.aborted) { setDraft({ blob: new Blob([blob], { type: blob.type.startsWith('video/') ? blob.type : 'video/mp4' }), prompt: full, workflow: workflow!.name, seconds }); setFullScreen(true); }
       }
       setStatus('');
     } catch (e) {
@@ -246,10 +248,12 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
           <div className="row gap">
             {draft && <button className="btn primary grow" disabled={busy || saving} onClick={() => void save()}>Use video</button>}
             {(draft || shot.video) && <button className="btn grow" disabled={busy} onClick={() => void download()}>Download</button>}
+            {shown && <button className="btn grow" onClick={() => setFullScreen(true)}>Full screen</button>}
           </div>
         </div>
       </div>
     </dialog>
+    {fullScreen && shown && <VideoPreview src={shown} label={`Shot ${shot.number} video`} fileName={`Shot ${shot.number}`} onClose={() => setFullScreen(false)} />}
   </Overlay>;
 }
 
