@@ -1,3 +1,4 @@
+import { ZoomableImage } from '../../images/ImagePreview';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
@@ -56,7 +57,7 @@ export function PropEditor({ prop: p, onBack }: { prop: Prop; onBack: () => void
         <div className={`stage-render-layer${showingImage ? ' covered' : ''}`}>
           <PropView prop={p} person={person} onSize={setSize} onCaptureReady={onCaptureReady} />
         </div>
-        {showingImage && <img className="character-artwork" src={artwork} alt={`Concept artwork for ${p.name}`} />}
+        {showingImage && <ZoomableImage className="character-artwork" src={artwork!} alt={`Concept artwork for ${p.name}`} />}
         {artwork && <button className="btn character-view-toggle" onClick={() => setShowImage(!showingImage)}>{showingImage ? '3D prop' : 'Prop image'}</button>}
         {sizeText && <div className="viewport-badge">{sizeText}</div>}
         <div className="viewport-toolbar" hidden={showingImage}>

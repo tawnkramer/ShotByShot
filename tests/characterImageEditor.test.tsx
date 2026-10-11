@@ -50,6 +50,12 @@ it.each(['character', 'stage', 'prop'] as const)('opens an accessible %s editor 
   expect(document.activeElement).not.toBe(input);
   await act(async () => button('Generate image').click());
   expect(dialog.querySelector('img')?.getAttribute('src')).toBe('blob:test');
+  const preview = document.querySelector('.image-preview-dialog') as HTMLDialogElement;
+  expect(preview.open).toBe(true);
+  expect(preview.querySelector('img')?.getAttribute('src')).toBe('blob:test');
+  await act(async () => preview.querySelector<HTMLButtonElement>('[aria-label="Close image preview"]')!.click());
+  expect(document.querySelector('.image-preview-dialog')).toBeNull();
+  expect(dialog.open).toBe(true);
   expect(useProjectStore.getState().project![kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image).toBeUndefined();
   await act(async () => { button('Use image').click(); await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce()); });
   const image=useProjectStore.getState().project![kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image!;

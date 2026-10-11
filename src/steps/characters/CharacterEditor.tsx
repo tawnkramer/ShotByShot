@@ -1,3 +1,4 @@
+import { ZoomableImage } from '../../images/ImagePreview';
 import { useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
@@ -33,7 +34,7 @@ export function CharacterEditor({ character: c, onBack }: { character: Character
   return (
     <div className="split">
       <div className="viewport">
-        {showImage && imageUrl ? <img className="character-artwork" src={imageUrl} alt={`Concept artwork for ${c.name}`} /> : <MannequinView character={c} pose={pose} />}
+        {showImage && imageUrl ? <ZoomableImage className="character-artwork" src={imageUrl} alt={`Concept artwork for ${c.name}`} /> : <MannequinView character={c} pose={pose} />}
         {imageUrl && <button className="btn character-view-toggle" onClick={() => setShowImage(!showImage)}>{showImage ? '3D mannequin' : 'Character image'}</button>}
         <div className="viewport-badge">{heightLabel(c.heightCm)}</div>
         <div className="viewport-toolbar" hidden={showImage && Boolean(imageUrl)}>
