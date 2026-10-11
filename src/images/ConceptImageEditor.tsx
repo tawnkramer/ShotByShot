@@ -6,14 +6,17 @@ import { setShotImage } from '../shots/commands';
 import { setStageImage } from '../staging/commands';
 import { updateProp } from '../props/commands';
 import { updateCharacter } from '../characters/commands';
-import { DEFAULT_IMAGE_MODEL, generateCharacterImage, generateStageImage, generatePropImage, generateShotImage, IMAGE_MODELS, type ImageQuality } from './generate';
+import { DEFAULT_IMAGE_MODEL, generateCharacterImage, generateStageImage, generatePropImage, generateShotImage, shotImageSize, IMAGE_MODELS, type ImageQuality } from './generate';
+import { estimateImageCost, formatImageCost } from './cost';
 import { useBlobUrl } from './useBlobUrl';
 import { Overlay } from '../shell/Overlay';
 import { saveFile } from '../shell/download';
 import { newId, type Character } from '../state/schema';
 import { useProjectStore } from '../state/store';
-import { getBlob, getSetting, putBlob } from '../storage/db';
+import { getBlob, getSetting, putBlob, setSetting } from '../storage/db';
 import { safeFileName } from '../storage/projectFile';
+
+export const IMAGE_PREFERENCES_SETTING = 'image-generation-preferences';
 
 export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference, references = [], imageContext, buildPrompt, onPromptChange, onClose }: {
   subject: { id: string; name: string; image?: Character['image'] }; defaultPrompt: string; kind: 'character' | 'stage' | 'prop' | 'shot'; reference?: Blob;
@@ -30,6 +33,23 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   const [prompt, setPrompt] = useState(kind === 'shot' ? defaultPrompt : c.image?.prompt ?? defaultPrompt);
   const [model, setModel] = useState<string>(c.image?.model ?? DEFAULT_IMAGE_MODEL);
   const [quality, setQuality] = useState<ImageQuality>('medium');
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void getSetting<{ model?: string; quality?: ImageQuality }>(IMAGE_PREFERENCES_SETTING).then((saved) => {
+      if (!active) return;
+      if (saved?.model && IMAGE_MODELS.includes(saved.model as typeof IMAGE_MODELS[number])) setModel(saved.model);
+      if (saved?.quality && ['low', 'medium', 'high'].includes(saved.quality)) setQuality(saved.quality);
+    }).catch(() => {}).finally(() => { if (active) setPreferencesReady(true); });
+    return () => { active = false; };
+  }, []);
+  const choosePreferences = (nextModel: string, nextQuality: ImageQuality) => {
+    setModel(nextModel); setQuality(nextQuality);
+    void setSetting(IMAGE_PREFERENCES_SETTING, { model: nextModel, quality: nextQuality }).catch(() => setError('Could not remember image preferences in browser storage.'));
+  };
+  const size = kind === 'shot' ? shotImageSize(imageContext?.aspect ?? 1, model) : kind === 'prop' ? '1024x1024' : kind === 'stage' ? '1536x1024' : '1024x1536';
+  const estimate = estimateImageCost(model, quality, size, buildPrompt ? buildPrompt(prompt) : prompt);
+  const referenceCount = reference ? 1 + references.length : 0;
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -131,14 +151,18 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
           <label className="field image-prompt-field"><span>{kind === 'shot' ? 'Additional prompt' : 'Image prompt'}</span><textarea ref={promptInput} onFocus={() => setEditingPrompt(true)} rows={7} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => { setPrompt(e.target.value); onPromptChange?.(e.target.value); }} /></label>
           <button className="btn ghost" disabled={busy} onClick={() => { setPrompt(defaultPrompt); onPromptChange?.(defaultPrompt); }}>Reset from {kind} details</button>
           <div className="row gap">
-            <label className="field grow"><span>Model</span><select value={model} disabled={busy} onChange={(e) => setModel(e.target.value)}>{[...new Set([...IMAGE_MODELS, model])].map((m) => <option key={m}>{m}</option>)}</select></label>
-            <label className="field"><span>Quality</span><select value={quality} disabled={busy} onChange={(e) => setQuality(e.target.value as ImageQuality)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+            <label className="field grow"><span>Model</span><select value={model} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(e.target.value, quality)}>{[...new Set([...IMAGE_MODELS, model])].map((m) => <option key={m}>{m}</option>)}</select></label>
+            <label className="field"><span>Quality</span><select value={quality} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(model, e.target.value as ImageQuality)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
           </div>
           <p className="small muted">Creates one {kind === 'shot' ? 'shot' : kind === 'stage' ? 'landscape' : kind === 'prop' ? 'square' : 'portrait'} image using your OpenAI key. API charges apply. This artwork is separate from the 3D {kind === 'shot' ? 'scene' : kind === 'stage' ? 'stage' : kind === 'prop' ? 'model' : 'mannequin'}.</p>
           {hasKey === false && <Link className="btn" to="/settings" onClick={onClose}>Add key in Settings</Link>}
           {error && <p className="error small" role="alert">{error}</p>}
           <p className="small muted" role="status">{busy ? 'Working… This can take a few minutes. Keep this page open.' : draft ? `Preview ready. Use image to save it to this ${kind}.` : ''}</p>
-          <button className="btn primary" disabled={busy || (kind !== 'shot' && !prompt.trim()) || hasKey === false} onClick={() => void generate()}>{busy ? 'Working…' : draft || c.image ? 'Generate another image' : 'Generate image'}</button>
+          <div className="small" aria-live="polite">
+            <strong>{estimate ? `Estimated ${referenceCount ? 'output + prompt' : 'cost'}: ${formatImageCost(estimate.subtotal)}` : 'Cost estimate unavailable for this model'}</strong>
+            <p className="muted">{size} · one image. {referenceCount > 0 && estimate ? `${referenceCount} reference image${referenceCount === 1 ? '' : 's'} billed additionally at $${estimate.imageRate} per million image input tokens; excluded from this estimate. ` : ''}Approximate, not a guaranteed charge. <a href="https://developers.openai.com/api/docs/guides/image-generation#cost-and-latency" target="_blank" rel="noreferrer">Pricing</a></p>
+          </div>
+          <button className="btn primary" disabled={busy || !preferencesReady || (kind !== 'shot' && !prompt.trim()) || hasKey === false} onClick={() => void generate()}>{busy ? 'Working…' : draft || c.image ? 'Generate another image' : 'Generate image'}</button>
           {busy && !saving && <button className="btn" onClick={() => { controller.current?.abort(); controller.current = null; pending.current = false; setBusy(false); }}>Cancel request</button>}
           <div className="row gap">
             {draft && <button className="btn primary grow" disabled={busy} onClick={() => void save()}>Use image</button>}
