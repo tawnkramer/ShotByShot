@@ -93,11 +93,14 @@ export const stageObjectSchema = z.object({
 });
 export type StageObject = z.infer<typeof stageObjectSchema>;
 
+const conceptImageSchema = z.object({ blob: z.string(), prompt: z.string(), model: z.string(), createdAt: z.number(), guidanceBlob: z.string().optional() });
+
 export const stageSchema = z.object({
   id: z.string(),
   name: z.string(),
   sceneLineIds: z.array(z.string()),
   objects: z.array(stageObjectSchema),
+  image: conceptImageSchema.optional(),
 });
 export type Stage = z.infer<typeof stageSchema>;
 export type Transform = z.infer<typeof transformSchema>;
@@ -130,7 +133,7 @@ export const characterSchema = z.object({
   tint: z.string().optional(),
   voice: voiceSchema,
   /** Generated concept artwork, stored with the project's binary assets. */
-  image: z.object({ blob: z.string(), prompt: z.string(), model: z.string(), createdAt: z.number() }).optional(),
+  image: conceptImageSchema.optional(),
 });
 export type Character = z.infer<typeof characterSchema>;
 export type Voice = z.infer<typeof voiceSchema>;
