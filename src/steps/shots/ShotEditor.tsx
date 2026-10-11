@@ -1,3 +1,6 @@
+import { ShotImagePanel } from './ShotImagePanel';
+import type { ShotCapture } from '../../images/shotImages';
+import { useCallback } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useProjectStore } from '../../state/store';
@@ -14,7 +17,7 @@ import { CameraPanel } from './CameraPanel';
 import { AudioPanel } from '../common/AudioPanel';
 import { audioContext, DialoguePlayer, loadBuffer } from '../../audio/player';
 
-type Mode = 'blocking' | 'camera';
+type Mode = 'blocking' | 'camera' | 'image';
 
 export function ShotEditor({ shotId }: { shotId: string }) {
   const project = useProjectStore((s) => s.project)!;
@@ -25,6 +28,8 @@ export function ShotEditor({ shotId }: { shotId: string }) {
   const rig = useMemo(() => new ShotRig(), []);
   useEffect(() => () => rig.dispose(), [rig]);
 
+  const [capture, setCapture] = useState<(() => Promise<ShotCapture>) | null>(null);
+  const onCaptureReady = useCallback((fn: (() => Promise<ShotCapture>) | null) => setCapture(() => fn), []);
   const [mode, setMode] = useState<Mode>('blocking');
   const [view, setView] = useState<'shot' | 'free'>('shot');
   const [editKey, setEditKey] = useState<'start' | 'end'>('start');
@@ -87,6 +92,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
       <div className="frame-wrap">
         <div className="frame" style={{ aspectRatio: String(aspect), width: `min(100%, calc(40dvh * ${aspect}))` }}>
           <ShotCanvas
+            onCaptureReady={onCaptureReady}
             project={project}
             shotId={shotId}
             rig={rig}
@@ -105,7 +111,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
             gizmo={gizmo}
             onGizmoEnd={onGizmoEnd}
           />
-          {!blocking && !playing && (
+          {mode === 'camera' && !playing && (
             <CameraPad
               base={keyCamera}
               aspect={aspect}
@@ -176,8 +182,8 @@ export function ShotEditor({ shotId }: { shotId: string }) {
         </button>
         <button
           role="tab"
-          aria-selected={!blocking}
-          className={!blocking ? 'on' : ''}
+          aria-selected={mode === 'camera'}
+          className={mode === 'camera' ? 'on' : ''}
           onClick={() => {
             setMode('camera');
             setPlaying(false);
@@ -186,11 +192,12 @@ export function ShotEditor({ shotId }: { shotId: string }) {
         >
           Camera
         </button>
+        <button role="tab" aria-selected={mode === 'image'} className={mode === 'image' ? 'on' : ''} onClick={() => { setMode('image'); setPlaying(false); setLiveCamera(null); }}>Image</button>
       </div>
 
       <div className="split-panel">
-        <AudioPanel project={project} lineIds={shot.lineIds} compact />
-        {blocking ? (
+        {mode !== 'image' && <AudioPanel project={project} lineIds={shot.lineIds} compact />}
+        {mode === 'image' ? <ShotImagePanel key={shotId} project={project} shot={shot} capture={capture} /> : blocking ? (
           <BlockingPanel project={project} shot={shot} eff={eff} editKey={editKey} selected={selected} onSelect={setSelected} />
         ) : (
           <CameraPanel project={project} shot={shot} eff={eff} editKey={editKey} current={shownCamera} />
