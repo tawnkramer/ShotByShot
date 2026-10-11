@@ -109,3 +109,33 @@ it('calls the global fetch without binding it to the client', async () => {
   await expect(new OpenArtMcp().listTools()).resolves.toEqual([]);
   vi.unstubAllGlobals();
 });
+
+it('runs a read-only OpenArt tool from Settings and shows the result', async () => {
+  const { act } = await import('react');
+  const { createRoot } = await import('react-dom/client');
+  const { OpenArtSettings } = await import('../src/openart/OpenArtSettings');
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  await setSetting(COMFY_RELAY_SETTING, 'https://relay.example');
+  await setSetting(OPENART_TOKEN_SETTING, { access: 't' });
+  const calls: { method: string; params?: { name?: string } }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(init.body as string) as { id?: number; method: string; params?: { name?: string } };
+    calls.push(body);
+    const result = body.method === 'tools/list'
+      ? { tools: [{ name: 'openart_model_list', annotations: { readOnlyHint: true } }, { name: 'openart_generate_video', annotations: { readOnlyHint: false } }] }
+      : body.method === 'tools/call' ? { structuredContent: { models: [{ id: 'seedance' }] } } : {};
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }), { headers: { 'Content-Type': 'application/json' } });
+  }));
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => root.render(<OpenArtSettings />));
+  await vi.waitFor(() => expect(host.textContent).toContain('Show tools'));
+  await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Show tools')!.click());
+  await vi.waitFor(() => expect(host.textContent).toContain('2 OpenArt tools'));
+  // Only the read-only tool gets a Run button.
+  expect([...host.querySelectorAll('button')].filter((b) => b.textContent === 'Run')).toHaveLength(1);
+  await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Run')!.click());
+  await vi.waitFor(() => expect(host.textContent).toContain('"seedance"'));
+  expect(calls.at(-1)).toMatchObject({ method: 'tools/call', params: { name: 'openart_model_list' } });
+  await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals();
+});
