@@ -60,10 +60,10 @@ describe('breakdownScript', () => {
 
   it('numbers shots by scene', () => {
     const shots = breakdownScript(lines, 'line', id);
-    expect(shots[0].number).toBe('1A');
-    expect(shots[1].number).toBe('1B');
-    expect(shots.some((s) => s.number === '2A')).toBe(true);
-    expect(shots.at(-1)!.number).toBe('3A');
+    expect(shots[0].number).toBe('1.1');
+    expect(shots[1].number).toBe('1.2');
+    expect(shots.some((s) => s.number === '2.1')).toBe(true);
+    expect(shots.at(-1)!.number).toBe('3.1');
   });
 
   it('numbers sequentially without scene headings', () => {

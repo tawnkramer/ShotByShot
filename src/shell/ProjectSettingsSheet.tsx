@@ -1,5 +1,7 @@
 import { ASPECT_RATIOS, type AspectRatioId } from '../state/schema';
 import { useProjectStore } from '../state/store';
+import { NUMBERING_INFO, SHOT_NUMBERINGS } from '../story/numbering';
+import { setShotNumbering } from '../story/commands';
 
 const FPS_OPTIONS = [24, 25, 30];
 
@@ -44,6 +46,24 @@ export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
               </button>
             ))}
           </div>
+        </div>
+        <div className="field">
+          <span>Shot numbers</span>
+          <div className="numbering-options">
+            {SHOT_NUMBERINGS.map((n) => (
+              <button
+                key={n}
+                className={`numbering-option ${project.shotNumbering === n ? 'selected' : ''}`}
+                aria-pressed={project.shotNumbering === n}
+                onClick={() => project.shotNumbering !== n && dispatch(setShotNumbering(n))}
+              >
+                <strong>{NUMBERING_INFO[n].label}</strong>
+                <span className="mono small">{NUMBERING_INFO[n].example}</span>
+                <span className="muted small">{NUMBERING_INFO[n].note}</span>
+              </button>
+            ))}
+          </div>
+          <p className="muted small">Numbered scene headings in the script (like “12 INT. CAFE - DAY 12”) are used as scene numbers.</p>
         </div>
         <label className="field">
           <span>Frame rate</span>

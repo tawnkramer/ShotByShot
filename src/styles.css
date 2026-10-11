@@ -544,3 +544,9 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .chatbar .stop { width: 42px; height: 42px; border-radius: 50%; color: var(--danger); }
 .chat-attachment { position: relative; z-index: 24; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--surface); border-top: 1px solid var(--border); }
 .chat-attachment img { height: 48px; border-radius: 6px; }
+
+/* Shot numbering setting */
+.numbering-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.numbering-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; }
+.numbering-option.selected { border-color: var(--accent); }
+.mono { font-family: ui-monospace, Menlo, monospace; }

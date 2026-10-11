@@ -112,7 +112,7 @@ const goToStep = tool('go_to_step', 'Switch the app to another workflow step.', 
   return `Opened ${a.step}. Its tools are available on your next message.`;
 });
 
-const openShot = tool('open_shot', 'Open a shot in the shot editor by its number (e.g. "1C").', z.object({ number: z.string() }), (a, ctx) => {
+const openShot = tool('open_shot', 'Open a shot in the shot editor by its number exactly as listed.', z.object({ number: z.string() }), (a, ctx) => {
   const s = shotByNumber(ctx.project(), a.number);
   ctx.navigate(`/p/${ctx.project().id}/shots/${s.id}`);
   return `Opened shot ${s.number}. Shot tools are available on your next message.`;
@@ -156,8 +156,8 @@ const setShotBreaks = tool(
       if (!ids.length) return;
       shots.push(existing.get(ids.join(',')) ?? { id: newId(), number: '', lineIds: ids });
     });
-    ctx.dispatch({ label: 'Set shot breaks', apply: (d) => void (d.shots = numberShots(d.script, shots) as typeof d.shots) });
-    return `Now ${shots.length} shots: ${numberShots(p.script, shots).map((s) => s.number).join(', ')}.`;
+    ctx.dispatch({ label: 'Set shot breaks', apply: (d) => void (d.shots = numberShots(d.script, shots, d.shotNumbering) as typeof d.shots) });
+    return `Now ${shots.length} shots: ${ctx.project().shots.map((s) => s.number).join(', ')}.`;
   },
 );
 

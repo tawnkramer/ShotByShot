@@ -44,6 +44,8 @@ export const scriptLineSchema = z.object({
   confidence: z.number().optional(),
   speakerId: z.string().optional(),
   sceneId: z.string().optional(),
+  /** The script's own number for a scene heading, e.g. "12" or "12A". */
+  sceneNumber: z.string().optional(),
 });
 
 export const SET_ITEMS = ['table', 'chair', 'door', 'window', 'bar', 'stool', 'wall', 'room'] as const;
@@ -230,6 +232,7 @@ export const projectSchema = z.object({
   step: z.enum(STEPS),
   script: z.array(scriptLineSchema),
   breakdownMode: z.enum(BREAKDOWN_MODES).default('mixed'),
+  shotNumbering: z.enum(['scene.shot', 'slate', 'vfx', 'sequential']).default('scene.shot'),
   shots: z.array(shotSchema),
   stages: z.array(stageSchema),
   characters: z.array(characterSchema),
@@ -267,6 +270,7 @@ export function createProject(name: string): Project {
     step: 'story',
     script: [],
     breakdownMode: 'mixed',
+    shotNumbering: 'scene.shot',
     shots: [],
     stages: [],
     characters: [],

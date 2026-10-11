@@ -111,7 +111,8 @@ export function shotMoves(project: Project, shotId: string): boolean {
 }
 
 export function stillName(number: string, which: 'start' | 'end'): string {
-  return `S${number.padStart(3, '0')}_${which}.png`;
+  const safe = number.replace(/[^\w.-]/g, '');
+  return `${/^SQ/.test(safe) ? '' : 'S'}${safe}_${which}.png`;
 }
 
 /** First frame of every shot (and last frame of shots that move) as PNGs in a zip. No captions. */

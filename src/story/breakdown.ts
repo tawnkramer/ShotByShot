@@ -1,5 +1,6 @@
 import type { BreakdownMode, ScriptLine, Shot } from '../state/schema';
 import { cueName, isCameraHeading, isTransition } from './classify';
+import { renumber, type ShotNumbering } from './numbering';
 
 /** Lines that never belong to a shot. */
 export function isFrontMatter(l: Pick<ScriptLine, 'type'>): boolean {
@@ -137,39 +138,18 @@ function fits(current: Beat[], beat: Beat, mode: BreakdownMode): boolean {
 }
 
 /** Builds new shots from scratch for the whole script. */
-export function breakdownScript(lines: ScriptLine[], mode: BreakdownMode, newId: () => string): Shot[] {
+export function breakdownScript(lines: ScriptLine[], mode: BreakdownMode, newId: () => string, style: ShotNumbering = 'scene.shot'): Shot[] {
   const shots = groupBeats(toBeats(lines), mode).map((group) => ({
     id: newId(),
     number: '',
     lineIds: group.flatMap((b) => b.lineIds),
   }));
-  return numberShots(lines, shots);
+  return numberShots(lines, shots, style);
 }
 
-/**
- * Shot numbers: "12" when the script has no scene headings, otherwise scene
- * number + letter ("3A", "3B").
- */
-export function numberShots<T extends Shot>(lines: ScriptLine[], shots: T[]): T[] {
-  const sceneOfLine = new Map<string, number>();
-  let scene = 0;
-  for (const l of lines) {
-    if (l.type === 'scene') scene++;
-    sceneOfLine.set(l.id, scene);
-  }
-  const hasScenes = scene > 0;
-  const counters = new Map<number, number>();
-  return shots.map((shot, i) => {
-    let number: string;
-    if (!hasScenes) number = String(i + 1);
-    else {
-      const s = Math.max(1, sceneOfLine.get(shot.lineIds[0]) ?? 1);
-      const n = counters.get(s) ?? 0;
-      counters.set(s, n + 1);
-      number = `${s}${letterIndex(n)}`;
-    }
-    return shot.number === number ? shot : { ...shot, number };
-  });
+/** Numbers shots in the project's style (see numbering.ts). */
+export function numberShots<T extends Shot>(lines: ScriptLine[], shots: T[], style: ShotNumbering = 'scene.shot'): T[] {
+  return renumber(lines, shots, style);
 }
 
 /** 0 → A, 25 → Z, 26 → AA */
@@ -210,12 +190,12 @@ export function toggleBreakBefore(shots: Shot[], lineId: string, newId: () => st
  * Keeps shots consistent after script lines change: drops ids of deleted lines,
  * removes empty shots, and keeps each shot's lines in script order.
  */
-export function reconcileShots(lines: ScriptLine[], shots: Shot[]): Shot[] {
+export function reconcileShots(lines: ScriptLine[], shots: Shot[], style: ShotNumbering = 'scene.shot'): Shot[] {
   const order = new Map(lines.map((l, i) => [l.id, i]));
   const result: Shot[] = [];
   for (const s of shots) {
     const ids = s.lineIds.filter((id) => order.has(id)).sort((a, b) => order.get(a)! - order.get(b)!);
     if (ids.length) result.push(ids.length === s.lineIds.length && ids.every((id, i) => id === s.lineIds[i]) ? s : { ...s, lineIds: ids });
   }
-  return numberShots(lines, result);
+  return numberShots(lines, result, style);
 }

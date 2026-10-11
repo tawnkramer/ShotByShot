@@ -3,6 +3,8 @@ import type { LineType } from '../state/schema';
 export interface ClassifiedLine {
   text: string;
   type: LineType;
+  /** For numbered scene headings ("12 INT. CAFE - DAY 12" or "INT. CAFE - DAY #12#"). */
+  sceneNumber?: string;
   /** 0..1. Lines below LOW_CONFIDENCE are highlighted for review. */
   confidence: number;
 }
@@ -15,6 +17,31 @@ const CAMERA_RE =
   /^(CLOSE ON|CLOSE[- ]?UP|EXTREME CLOSE|ANGLE ON|REVERSE ANGLE|WIDE( SHOT| ANGLE)?|MEDIUM( SHOT)?|ESTABLISHING( SHOT)?|POV|PAN( TO)?|TRACKING( SHOT)?|INSERT|ECU|CU|MCU|MS|MWS|WS|EWS|OTS|OVER THE SHOULDER|AERIAL|ZOOM|DOLLY|CRANE|PUSH IN|PULL BACK|TWO[- ]SHOT|ON [A-Z])\b/;
 /** "SAM: Hello there." or "Sam (V.O.): Hello." */
 const INLINE_DIALOGUE_RE = /^([A-Z][A-Za-z0-9.'\- ]{0,30}?)(\s*\([^)]*\))?\s*:\s+(\S.*)$/;
+/** "12 INT. …", "12A. INT. …", "12) EXT. …" */
+const LEADING_SCENE_NUM_RE = /^(\d+[A-Z]{0,2})[.)]?\s+(?=(INT|EXT|EST|I\/E)[.\s/])/i;
+/** Fountain's "#12A#" at the end of a heading. */
+const FOUNTAIN_SCENE_NUM_RE = /\s*#([\w.-]+)#\s*$/;
+
+/** Splits a scene number off a heading, if it has one. Returns null for lines that aren't headings. */
+export function parseSceneHeading(line: string): { heading: string; sceneNumber?: string } | null {
+  let text = line.trim();
+  let sceneNumber: string | undefined;
+  const fountain = FOUNTAIN_SCENE_NUM_RE.exec(text);
+  if (fountain) {
+    sceneNumber = fountain[1];
+    text = text.slice(0, fountain.index).trim();
+  }
+  const lead = LEADING_SCENE_NUM_RE.exec(text);
+  if (lead) {
+    sceneNumber ??= lead[1].toUpperCase();
+    text = text.slice(lead[0].length);
+    // Shooting scripts repeat the number at the end of the line.
+    text = text.replace(new RegExp(`\\s+${lead[1]}\\.?$`, 'i'), '');
+  }
+  if (!SCENE_RE.test(text)) return null;
+  return { heading: text, sceneNumber };
+}
+
 const TITLE_KEY_RE = /^title\s*:/i;
 const TITLE_PAGE_KEY_RE = /^(credit|author|authors|source|draft date|date|contact|copyright|notes)\s*:/i;
 const PARENTHETICAL_RE = /^\(.*\)$/;
@@ -39,7 +66,7 @@ function looksLikeCue(s: string): boolean {
  */
 export function classifyScript(text: string): ClassifiedLine[] {
   const raw = text.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');
-  const hasScenes = raw.some((l) => SCENE_RE.test(l.trim()) || /^\.[A-Za-z]/.test(l.trim()));
+  const hasScenes = raw.some((l) => parseSceneHeading(l) !== null || /^\.[A-Za-z]/.test(l.trim()));
   const out: ClassifiedLine[] = [];
   let inDialogue = false;
   let seenBody = false; // anything past the title block
@@ -86,8 +113,9 @@ export function classifyScript(text: string): ClassifiedLine[] {
       continue;
     }
 
-    if (SCENE_RE.test(line)) {
-      push('scene', 0.95);
+    const scene = parseSceneHeading(line);
+    if (scene) {
+      out.push({ text: scene.heading, type: 'scene', confidence: 0.95, ...(scene.sceneNumber ? { sceneNumber: scene.sceneNumber } : {}) });
       seenBody = true;
       continue;
     }

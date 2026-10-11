@@ -39,8 +39,9 @@ describe('caption wrapping', () => {
 
 describe('stills', () => {
   it('names files by shot number', () => {
-    expect(stillName('1A', 'start')).toBe('S01A_start.png');
-    expect(stillName('12', 'end')).toBe('S012_end.png');
+    expect(stillName('12.3', 'start')).toBe('S12.3_start.png');
+    expect(stillName('12A', 'end')).toBe('S12A_end.png');
+    expect(stillName('SQ010_SH0020', 'start')).toBe('SQ010_SH0020_start.png');
   });
 
   it('knows which shots move', () => {

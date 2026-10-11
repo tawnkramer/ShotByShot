@@ -751,6 +751,13 @@ AI tools only depend on M1.
   Everything it changes is tagged per reply: the chat lists the changes and
   offers **Undo these changes**. Suggestions per step; "✨ Check" in Story and
   "✨ Model with AI" in Props open the chat ready to go.
+- **Shot numbering** is a project setting (Project settings → Shot numbers):
+  **scene.shot** (12.1, 12.2; default), **slate** (12, 12A, 12B, skipping I
+  and O), **previs/VFX** (SQ120_SH0010 in tens; shots keep their numbers and
+  splits take a number in the gap, e.g. SH0015), and **sequential** (1, 2, 3).
+  Scene numbers come from numbered headings in the script ("12 INT. CAFE -
+  DAY 12", "12A. EXT. …", Fountain "#12A#"), otherwise they count up from the
+  last number. Older projects switch to scene.shot when opened.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

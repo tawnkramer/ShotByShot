@@ -2,6 +2,15 @@ import { create } from 'zustand';
 import { emptyHistory, redo, runCommand, undo, type Command, type History } from './commands';
 import type { Project, Step } from './schema';
 import { saveProject } from '../storage/db';
+import { renumber } from '../story/numbering';
+
+/** Brings projects saved by older versions up to date when they're opened. */
+export function upgradeLoaded(p: Project): Project {
+  let next = p;
+  if (!next.shotNumbering) next = { ...next, shotNumbering: 'scene.shot', shots: renumber(next.script, next.shots.map((s) => ({ ...s, number: '' })), 'scene.shot') };
+  if (!next.audio) next = { ...next, audio: {} };
+  return next;
+}
 
 const AUTOSAVE_MS = 500;
 
@@ -35,9 +44,11 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     history: emptyHistory(),
     saving: 'idle',
 
-    open: (project) => {
+    open: (loaded) => {
       clearTimeout(saveTimer);
+      const project = upgradeLoaded(loaded);
       set({ project, history: emptyHistory(), saving: 'idle' });
+      if (project !== loaded) scheduleSave();
     },
 
     close: async () => {

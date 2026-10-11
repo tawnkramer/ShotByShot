@@ -156,7 +156,7 @@ describe('shot commands', () => {
     const [q] = run(p, mergeWithNext(p.shots[0].id));
     expect(q.shots).toHaveLength(p.shots.length - 1);
     expect(q.shots[0].lineIds).toEqual([...p.shots[0].lineIds, ...p.shots[1].lineIds]);
-    expect(q.shots[1].number).toBe('1B');
+    expect(q.shots[1].number).toBe('1.2');
   });
 
   it('splits a shot by dialogue, copying its setup', () => {

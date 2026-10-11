@@ -153,7 +153,7 @@ export function mergeWithNext(shotId: string): Command {
         delete a.durationSec;
       }
       d.shots.splice(i + 1, 1);
-      d.shots = numberShots(current(d.script), current(d.shots)) as Draft<Shot>[];
+      d.shots = numberShots(current(d.script), current(d.shots), d.shotNumbering) as Draft<Shot>[];
     },
   };
 }
@@ -173,7 +173,7 @@ export function splitShot(shotId: string, beforeLineIds: string[]): Command {
       // Durations were for the whole shot; let the pieces re-estimate.
       const script = current(d.script) as Project['script'];
       shots = shots.map((s) => (beforeLineIds.some((l) => s.lineIds.includes(l)) || s.id === shotId ? { ...s, durationLocked: undefined, durationSec: undefined } : s));
-      d.shots = numberShots(script, shots.map(stripUndefined)) as Draft<Shot>[];
+      d.shots = numberShots(script, shots.map(stripUndefined), d.shotNumbering) as Draft<Shot>[];
     },
   };
 }

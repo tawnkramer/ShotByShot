@@ -24,7 +24,7 @@ describe('story commands', () => {
     const [cut] = runCommand(p, h, toggleBreak(second));
     expect(cut.shots).toHaveLength(p.shots.length + 1);
     expect(cut.shots[1].lineIds[0]).toBe(second);
-    expect(cut.shots.map((s) => s.number).slice(0, 3)).toEqual(['1A', '1B', '1C']);
+    expect(cut.shots.map((s) => s.number).slice(0, 3)).toEqual(['1.1', '1.2', '1.3']);
   });
 
   it('switches breakdown mode', () => {
