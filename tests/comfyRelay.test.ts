@@ -5,7 +5,7 @@ import { deleteSetting, setSetting } from '../src/storage/db';
 
 const APP = 'https://tawnkramer.github.io';
 const env = { ALLOWED_ORIGINS: `${APP},http://localhost:5173` };
-const RELAY = 'https://shotbyshot-comfy-relay.me.workers.dev';
+const RELAY = 'https://shotbyshot.me.workers.dev';
 
 describe('Comfy relay worker', () => {
   it('answers preflights for the app and refuses other sites', async () => {
@@ -48,7 +48,7 @@ describe('Comfy client with a relay', () => {
   afterEach(() => deleteSetting(COMFY_RELAY_SETTING));
 
   it('cleans up pasted relay addresses', () => {
-    expect(normalizeRelayUrl(' shotbyshot-comfy-relay.me.workers.dev/ ')).toBe(RELAY);
+    expect(normalizeRelayUrl(' shotbyshot.me.workers.dev/ ')).toBe(RELAY);
     expect(() => normalizeRelayUrl('http://example.com')).toThrow(/https/);
     expect(normalizeRelayUrl('http://localhost:8787')).toBe('http://localhost:8787');
   });

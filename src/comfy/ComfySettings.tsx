@@ -6,8 +6,8 @@ import { BUILTIN_WORKFLOWS, importWorkflow, listWorkflows, saveWorkflows, type C
 import { analyzeWorkflow, CATEGORY_LABELS, CATEGORY_OUTPUT, defaultPromptTarget, describeAnalysis, slotKey, WORKFLOW_CATEGORIES, type WorkflowCategory } from './workflow';
 
 export const COMFY_KEY_PAGE = 'https://platform.comfy.org/profile/home';
-/** Copies relay/ into the user's own GitHub and Cloudflare accounts and deploys it as a Worker. */
-export const RELAY_DEPLOY_URL = 'https://deploy.workers.cloudflare.com/?url=https://github.com/tawnkramer/ShotByShot/tree/main/relay';
+/** Copies this repo into the user's own GitHub and Cloudflare accounts and deploys the relay Worker (wrangler.jsonc). */
+export const RELAY_DEPLOY_URL = 'https://deploy.workers.cloudflare.com/?url=https://github.com/tawnkramer/ShotByShot';
 
 export function ComfySettings() {
   const [key, setKey] = useState('');
@@ -68,7 +68,7 @@ export function ComfySettings() {
     <p className="muted small">
       Comfy Cloud doesn't accept requests from web pages directly, so the app talks to it through a small relay you run for free on
       Cloudflare. It forwards each request to cloud.comfy.org and stores nothing. Set it up once, then paste its address here. It looks
-      like <code>https://shotbyshot-comfy-relay.your-name.workers.dev</code>.
+      like <code>https://shotbyshot.your-name.workers.dev</code>.
     </p>
     {savedRelay ? <div className="row gap">
       <code className="grow">{savedRelay}</code>

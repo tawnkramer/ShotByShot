@@ -1,0 +1,11 @@
+{
+  // Cloudflare Worker for the Comfy relay (relay/src/index.ts), not the web app, which deploys to GitHub Pages.
+  // It sits at the repo root so connecting this repo in Cloudflare and pressing Deploy builds the relay.
+  "name": "shotbyshot",
+  "main": "relay/src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    // Sites allowed to use this relay, comma separated. Add your own if you host the app elsewhere.
+    "ALLOWED_ORIGINS": "https://tawnkramer.github.io,http://localhost:5173"
+  }
+}
