@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/minimax_h3_i2v.json';
 import seedanceFixture from './fixtures/seedance25_r2v.json';
 import seedanceMulti from './fixtures/seedance25_r2v_multi.json';
+import qwenFixture from './fixtures/qwen_image_2_1_t2i.json';
 import { estimateWorkflowCost, formatCost } from '../src/comfy/cost';
 import { analyzeWorkflow, bindWorkflow, boundDuration, closestRatio, defaultPromptTarget, describeAnalysis, groupKey, parseWorkflow, sizeForAspect, type AssetReference } from '../src/comfy/workflow';
 
@@ -146,4 +147,21 @@ it('rewires a Seedance export with three images, a video and two audio clips', (
 it('treats an empty standalone loader as a fixed input', () => {
   const a = analyzeWorkflow(parseWorkflow(JSON.stringify({ 1: { class_type: 'LoadAudio', inputs: { audio: null } }, 2: { class_type: 'SaveAudio', inputs: { audio: ['1', 0] } } })));
   expect(a.slots).toEqual([{ nodeId: '1', input: 'audio', kind: 'audio', title: 'LoadAudio' }]);
+});
+
+it('sends the Qwen Image 2.1 prompt to the text the encoder actually uses', () => {
+  const graph = parseWorkflow(JSON.stringify(qwenFixture));
+  const a = analyzeWorkflow(graph);
+  // The switch is off, so the encoder reads on_false; the rewriter's system prompt is never a target.
+  expect(defaultPromptTarget(a)).toMatchObject({ nodeId: '459:474', input: 'on_false', traced: true });
+  expect(a.prompts.some((p) => p.nodeId === '459:475')).toBe(false);
+  expect(a.slots).toEqual([]);
+  expect(a.outputs).toEqual(['image']);
+  expect(a.sizes).toEqual([{ nodeId: '459:456', pixels: 1_000_000, multiple: 8 }]);
+  const bound = bindWorkflow(graph, a, { prompt: 'A lighthouse at dusk.', seed: 9, aspect: 2 / 3 });
+  expect(bound['459:474'].inputs.on_false).toBe('A lighthouse at dusk.');
+  expect(bound['459:471'].inputs.prompt).toBe('Placeholder prompt for the rewriter.');
+  expect(bound['459:475'].inputs.value).toBe(graph['459:475'].inputs.value);
+  expect(bound['459:456'].inputs).toMatchObject({ width: 816, height: 1224 });
+  expect(bound['459:458'].inputs.seed).toBe(9);
 });

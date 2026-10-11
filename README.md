@@ -65,5 +65,18 @@ Jobs run through the Comfy API v2 (`/api/v2/assets`, `/api/v2/jobs`). Canceling
 asks Comfy Cloud to stop the job. Seedance runs show an estimated price ported
 from ComfyUI's published rates. GPU workflows can't be priced in advance, because
 Comfy Cloud bills run time on your plan; the panel shows how long a run took.
-Image generation, editing and speech workflows can be imported and checked here,
-but aren't yet selectable in the image and voice editors.
+Imported image generation workflows appear under **ComfyUI Cloud** in the
+character image editor's Model menu; image editing workflows appear for stage,
+prop and shot images, receiving the greyscale 3D preview and references as their
+input images. The prompt goes to the text the workflow's encoder actually reads
+(followed back through switches, so prompt-rewriter system prompts are left
+alone). Speech workflows can be imported and checked but aren't used yet.
+
+To check a workflow against Comfy Cloud outside the browser:
+
+```sh
+COMFY_API_KEY=comfyui-… npx vitest run tests/comfy.live.test.ts
+```
+
+It runs `tests/fixtures/qwen_image_2_1_t2i.json` (or `COMFY_WORKFLOW=path`) with
+the app's own client and writes `comfy-live-output.png`. The run is billed.

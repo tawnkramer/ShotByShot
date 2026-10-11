@@ -17,7 +17,8 @@ export type WorkflowGraph = Record<string, ApiNode>;
 
 export interface InputRef { nodeId: string; input: string }
 export interface MediaSlot extends InputRef { kind: MediaKind; title: string }
-export interface PromptTarget extends InputRef { title: string; length: number }
+/** `traced` marks text that was followed back from an encoder, so it's the text the model actually receives. */
+export interface PromptTarget extends InputRef { title: string; length: number; traced?: boolean }
 export interface SizeTarget { nodeId: string; pixels: number; multiple: number }
 export interface DurationTarget extends InputRef { min?: number; max?: number; integer: boolean }
 /**
@@ -121,7 +122,8 @@ export function analyzeWorkflow(graph: WorkflowGraph): WorkflowAnalysis {
       if (group && !analysis.groups.some((g) => g.nodeId === id && g.kind === group[3])) {
         analysis.groups.push({ nodeId: id, kind: group[3] as MediaKind, prefix: `${group[1] ?? ''}reference_${group[2]}s.${group[3]}_`, max: 9, title: name });
       }
-      if (typeof v === 'string' && !negative.has(id) && !/negative/i.test(name) && !/negative/i.test(k)
+      // System prompts instruct a prompt-rewriting LLM; they aren't the image description.
+      if (typeof v === 'string' && !negative.has(id) && !/negative|system/i.test(name) && !/negative|system/i.test(k)
         && (PROMPT_INPUT.test(key) || (k === 'value' && /PrimitiveString/i.test(node.class_type) && /prompt/i.test(name)))) {
         analysis.prompts.push({ nodeId: id, input: k, title: name, length: v.length });
       }
@@ -136,7 +138,35 @@ export function analyzeWorkflow(graph: WorkflowGraph): WorkflowAnalysis {
       analysis.sizes.push(sizeTarget(graph, id, width, height));
     }
   }
+  // An encoder whose prompt is wired in (through switches, previews or primitives) reveals which text it really uses.
+  for (const id of ids) {
+    if (negative.has(id)) continue;
+    for (const [k, v] of Object.entries(graph[id].inputs)) {
+      if (!isLink(v) || !PROMPT_INPUT.test(leaf(k)) || /negative/i.test(k)) continue;
+      const source = traceText(graph, v[0]);
+      if (!source || /system/i.test(title(graph, source.nodeId))) continue;
+      const existing = analysis.prompts.find((p) => p.nodeId === source.nodeId && p.input === source.input);
+      if (existing) existing.traced = true;
+      else analysis.prompts.push({ ...source, title: title(graph, source.nodeId), length: String(graph[source.nodeId].inputs[source.input]).length, traced: true });
+    }
+  }
   return analysis;
+}
+
+const TEXT_INPUTS = ['value', 'text', 'prompt', 'string'];
+function traceText(graph: WorkflowGraph, id: string, depth = 0): InputRef | undefined {
+  const node = graph[id];
+  if (!node || depth > 10) return undefined;
+  const follow = (input: string): InputRef | undefined => {
+    const v = node.inputs[input];
+    return typeof v === 'string' ? { nodeId: id, input } : isLink(v) ? traceText(graph, v[0], depth + 1) : undefined;
+  };
+  // A switch passes on one branch; an unknown (linked) switch is read as its default, off.
+  if ('on_false' in node.inputs || 'on_true' in node.inputs) return follow(node.inputs.switch === true ? 'on_true' : 'on_false');
+  const text = TEXT_INPUTS.find((k) => typeof node.inputs[k] === 'string' || isLink(node.inputs[k]));
+  if (text) return follow(text);
+  const passthrough = Object.keys(node.inputs).filter((k) => isLink(node.inputs[k]));
+  return passthrough.length === 1 ? follow(passthrough[0]) : undefined;
 }
 
 function sizeTarget(graph: WorkflowGraph, id: string, width: number | Link, height: number | Link): SizeTarget {
@@ -148,9 +178,9 @@ function sizeTarget(graph: WorkflowGraph, id: string, width: number | Link, heig
   return { nodeId: id, pixels: megapixels * 1_000_000, multiple };
 }
 
-/** The prompt input used by default: the longest existing positive prompt, which is the main one in most workflows. */
+/** The prompt input used by default: text traced from an encoder, else the longest positive prompt, which is the main one in most workflows. */
 export function defaultPromptTarget(analysis: WorkflowAnalysis): PromptTarget | undefined {
-  return [...analysis.prompts].sort((a, b) => b.length - a.length)[0];
+  return [...analysis.prompts].sort((a, b) => Number(Boolean(b.traced)) - Number(Boolean(a.traced)) || b.length - a.length)[0];
 }
 
 export function sizeForAspect(aspect: number, pixels: number, multiple: number): { width: number; height: number } {

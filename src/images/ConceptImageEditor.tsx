@@ -15,8 +15,13 @@ import { newId, type Character } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { getBlob, getSetting, putBlob, setSetting } from '../storage/db';
 import { safeFileName } from '../storage/projectFile';
+import { COMFY_KEY_SETTING } from '../comfy/client';
+import { listWorkflows, type ComfyWorkflow } from '../comfy/settings';
+import { asPng, placeImages, runWorkflow } from '../comfy/run';
 
 export const IMAGE_PREFERENCES_SETTING = 'image-generation-preferences';
+/** Model values for imported Comfy workflows: `comfy:<workflow id>`. */
+const COMFY_PREFIX = 'comfy:';
 
 export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference, references = [], imageContext, buildPrompt, onPromptChange, onClose }: {
   subject: { id: string; name: string; image?: Character['image'] }; defaultPrompt: string; kind: 'character' | 'stage' | 'prop' | 'shot'; reference?: Blob;
@@ -38,7 +43,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     let active = true;
     void getSetting<{ model?: string; quality?: ImageQuality }>(IMAGE_PREFERENCES_SETTING).then((saved) => {
       if (!active) return;
-      if (saved?.model && IMAGE_MODELS.includes(saved.model as typeof IMAGE_MODELS[number])) setModel(saved.model);
+      if (saved?.model && (IMAGE_MODELS.includes(saved.model as typeof IMAGE_MODELS[number]) || saved.model.startsWith(COMFY_PREFIX))) setModel(saved.model);
       if (saved?.quality && ['low', 'medium', 'high'].includes(saved.quality)) setQuality(saved.quality);
     }).catch(() => {}).finally(() => { if (active) setPreferencesReady(true); });
     return () => { active = false; };
@@ -47,8 +52,12 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     setModel(nextModel); setQuality(nextQuality);
     void setSetting(IMAGE_PREFERENCES_SETTING, { model: nextModel, quality: nextQuality }).catch(() => setError('Could not remember image preferences in browser storage.'));
   };
+  // Comfy workflows: text-to-image for characters, image editing where a 3D preview guides the result.
+  const [comfyWorkflows, setComfyWorkflows] = useState<ComfyWorkflow[]>([]);
+  const comfy = model.startsWith(COMFY_PREFIX) ? comfyWorkflows.find((w) => COMFY_PREFIX + w.id === model) : undefined;
+  const [status, setStatus] = useState('');
   const size = kind === 'shot' ? shotImageSize(imageContext?.aspect ?? 1, model) : kind === 'prop' ? '1024x1024' : kind === 'stage' ? '1536x1024' : '1024x1536';
-  const estimate = estimateImageCost(model, quality, size, buildPrompt ? buildPrompt(prompt) : prompt);
+  const estimate = comfy ? undefined : estimateImageCost(model, quality, size, buildPrompt ? buildPrompt(prompt) : prompt);
   const referenceCount = reference ? 1 + references.length : 0;
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,7 +72,8 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   }, [reference]);
   const [preview, setPreview] = useState(false);
   const savedUrl = useBlobUrl(c.image?.blob);
-  const [hasKey, setHasKey] = useState<boolean>();
+  const [keys, setKeys] = useState<{ openai?: boolean; comfy?: boolean }>({});
+  const hasKey = model.startsWith(COMFY_PREFIX) ? keys.comfy : keys.openai;
   useEffect(() => {
     dialog.current?.showModal();
     const vv = window.visualViewport;
@@ -75,7 +85,9 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     vv?.addEventListener('resize', fitScreen);
     vv?.addEventListener('scroll', fitScreen);
     window.addEventListener('resize', fitScreen);
-    void getSetting<string>(API_KEY_SETTING).then((key) => setHasKey(Boolean(key))).catch(() => setHasKey(false));
+    void Promise.all([getSetting<string>(API_KEY_SETTING), getSetting<string>(COMFY_KEY_SETTING)])
+      .then(([openai, comfyKey]) => setKeys({ openai: Boolean(openai), comfy: Boolean(comfyKey) })).catch(() => setKeys({ openai: false, comfy: false }));
+    void listWorkflows(kind === 'character' ? 'image' : 'edit', true).then(setComfyWorkflows).catch(() => {});
     return () => {
       controller.current?.abort();
       vv?.removeEventListener('resize', fitScreen);
@@ -97,9 +109,22 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     const abort = new AbortController();
     controller.current = abort;
     try {
-      const apiKey = await getSetting<string>(API_KEY_SETTING);
-      if (!apiKey) { setHasKey(false); throw new Error('Add your OpenAI API key in Settings first.'); }
       const renderedPrompt = buildPrompt ? buildPrompt(prompt) : prompt;
+      if (model.startsWith(COMFY_PREFIX)) {
+        if (!comfy) throw new Error('This Comfy workflow is no longer imported. Choose another model.');
+        const comfyKey = await getSetting<string>(COMFY_KEY_SETTING);
+        if (!comfyKey) { setKeys((k) => ({ ...k, comfy: false })); throw new Error('Add your Comfy Cloud API key in Settings first.'); }
+        const images = [
+          ...(reference ? [{ data: reference, label: '3D preview', fileName: `${kind}-preview.png` }] : []),
+          ...references.map((r, i) => ({ data: r.data, label: r.name, fileName: `reference-${i + 2}.png` })),
+        ];
+        const [width, height] = size.split('x').map(Number);
+        const { blob } = await runWorkflow({ key: comfyKey, workflow: comfy, inputs: placeImages(comfy, images), prompt: renderedPrompt, aspect: kind === 'shot' ? imageContext?.aspect ?? width / height : width / height, output: 'image', signal: abort.signal, onStatus: setStatus });
+        if (!abort.signal.aborted) setDraft({ blob: await asPng(blob), prompt: renderedPrompt, model, additionalPrompt: prompt });
+        return;
+      }
+      const apiKey = await getSetting<string>(API_KEY_SETTING);
+      if (!apiKey) { setKeys((k) => ({ ...k, openai: false })); throw new Error('Add your OpenAI API key in Settings first.'); }
       const options = { apiKey, prompt: renderedPrompt, model, quality, signal: abort.signal };
       if (kind !== 'character' && !reference) throw new Error('Capture a 3D preview before generating.');
       const blob = await (kind === 'shot' ? generateShotImage({ ...options, reference: reference!, referenceImages: references.map((r) => r.data), aspect: imageContext?.aspect ?? 1 }) : kind === 'prop' ? generatePropImage({ ...options, reference: reference! }) : kind === 'stage' ? generateStageImage({ ...options, reference: reference! }) : generateCharacterImage(options));
@@ -107,7 +132,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     } catch (e) {
       if (!abort.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (controller.current === abort) { pending.current = false; setBusy(false); }
+      if (controller.current === abort) { pending.current = false; setBusy(false); setStatus(''); }
     }
   };
   const save = async () => {
@@ -155,16 +180,20 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
           <label className="field image-prompt-field"><span>{kind === 'shot' ? 'Additional prompt' : 'Image prompt'}</span><textarea ref={promptInput} onFocus={() => setEditingPrompt(true)} rows={7} maxLength={32000} value={prompt} disabled={busy} onChange={(e) => { setPrompt(e.target.value); onPromptChange?.(e.target.value); }} /></label>
           <button className="btn ghost" disabled={busy} onClick={() => { setPrompt(defaultPrompt); onPromptChange?.(defaultPrompt); }}>Reset from {kind} details</button>
           <div className="row gap">
-            <label className="field grow"><span>Model</span><select value={model} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(e.target.value, quality)}>{[...new Set([...IMAGE_MODELS, model])].map((m) => <option key={m}>{m}</option>)}</select></label>
-            <label className="field"><span>Quality</span><select value={quality} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(model, e.target.value as ImageQuality)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+            <label className="field grow"><span>Model</span><select value={model} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(e.target.value, quality)}>
+              {[...new Set([...IMAGE_MODELS, ...(model.startsWith(COMFY_PREFIX) ? [] : [model])])].map((m) => <option key={m}>{m}</option>)}
+              {comfyWorkflows.length > 0 && <optgroup label="ComfyUI Cloud">{comfyWorkflows.map((w) => <option key={w.id} value={COMFY_PREFIX + w.id}>{w.name}</option>)}</optgroup>}
+              {model.startsWith(COMFY_PREFIX) && !comfy && <option value={model}>Comfy workflow (not imported)</option>}
+            </select></label>
+            {!comfy && <label className="field"><span>Quality</span><select value={quality} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(model, e.target.value as ImageQuality)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>}
           </div>
-          <p className="small muted">Creates one {kind === 'shot' ? 'shot' : kind === 'stage' ? 'landscape' : kind === 'prop' ? 'square' : 'portrait'} image using your OpenAI key. API charges apply. This artwork is separate from the 3D {kind === 'shot' ? 'scene' : kind === 'stage' ? 'stage' : kind === 'prop' ? 'model' : 'mannequin'}.</p>
+          <p className="small muted">Creates one {kind === 'shot' ? 'shot' : kind === 'stage' ? 'landscape' : kind === 'prop' ? 'square' : 'portrait'} image using your {comfy ? 'Comfy Cloud' : 'OpenAI'} key. {comfy ? 'Comfy Cloud charges apply.' : 'API charges apply.'} This artwork is separate from the 3D {kind === 'shot' ? 'scene' : kind === 'stage' ? 'stage' : kind === 'prop' ? 'model' : 'mannequin'}.</p>
           {hasKey === false && <Link className="btn" to="/settings" onClick={onClose}>Add key in Settings</Link>}
           {error && <p className="error small" role="alert">{error}</p>}
-          <p className="small muted" role="status">{busy ? 'Working… This can take a few minutes. Keep this page open.' : draft ? `Preview ready. Use image to save it to this ${kind}.` : ''}</p>
+          <p className="small muted" role="status">{busy ? status || 'Working… This can take a few minutes. Keep this page open.' : draft ? `Preview ready. Use image to save it to this ${kind}.` : ''}</p>
           <div className="small" aria-live="polite">
-            <strong>{estimate ? `Estimated ${referenceCount ? 'output + prompt' : 'cost'}: ${formatImageCost(estimate.subtotal)}` : 'Cost estimate unavailable for this model'}</strong>
-            <p className="muted">{size} · one image. {referenceCount > 0 && estimate ? `${referenceCount} reference image${referenceCount === 1 ? '' : 's'} billed additionally at $${estimate.imageRate} per million image input tokens; excluded from this estimate. ` : ''}Approximate, not a guaranteed charge. <a href="https://developers.openai.com/api/docs/guides/image-generation#cost-and-latency" target="_blank" rel="noreferrer">Pricing</a></p>
+            {comfy ? <><strong>Cost estimate unavailable</strong><p className="muted">{size.replace('x', '×')} aspect · one image. Comfy Cloud bills GPU run time on your plan.</p></> : <><strong>{estimate ? `Estimated ${referenceCount ? 'output + prompt' : 'cost'}: ${formatImageCost(estimate.subtotal)}` : 'Cost estimate unavailable for this model'}</strong>
+            <p className="muted">{size} · one image. {referenceCount > 0 && estimate ? `${referenceCount} reference image${referenceCount === 1 ? '' : 's'} billed additionally at $${estimate.imageRate} per million image input tokens; excluded from this estimate. ` : ''}Approximate, not a guaranteed charge. <a href="https://developers.openai.com/api/docs/guides/image-generation#cost-and-latency" target="_blank" rel="noreferrer">Pricing</a></p></>}
           </div>
           <button className="btn primary" disabled={busy || !preferencesReady || (kind !== 'shot' && !prompt.trim()) || hasKey === false} onClick={() => void generate()}>{busy ? 'Working…' : draft || c.image ? 'Generate another image' : 'Generate image'}</button>
           {busy && !saving && <button className="btn" onClick={() => { controller.current?.abort(); controller.current = null; pending.current = false; setBusy(false); }}>Cancel request</button>}

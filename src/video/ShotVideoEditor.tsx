@@ -9,9 +9,10 @@ import { safeFileName } from '../storage/projectFile';
 import { aspectOf, effectiveShot } from '../shots/setup';
 import { setShotVideo, setShotVideoPrompt } from '../shots/commands';
 import { useBlobUrl } from '../images/useBlobUrl';
-import { COMFY_KEY_SETTING, downloadOutput, runSeconds, submitJob, uploadAsset, waitForJob, type ComfyJob } from '../comfy/client';
+import { COMFY_KEY_SETTING } from '../comfy/client';
+import { runWorkflow, type RunInput } from '../comfy/run';
 import { listWorkflows, type ComfyWorkflow } from '../comfy/settings';
-import { analyzeWorkflow, bindWorkflow, boundDuration, groupKey, randomSeed, slotKey, type AssetReference, type MediaKind, type MediaSlot, type ReferenceGroup } from '../comfy/workflow';
+import { analyzeWorkflow, bindWorkflow, boundDuration, groupKey, slotKey, type MediaKind, type MediaSlot, type ReferenceGroup } from '../comfy/workflow';
 import { estimateWorkflowCost, formatCost } from '../comfy/cost';
 import { defaultAssignments, defaultReferences, mediaOptions, referenceTags, optionData, PREVIS_CLIP, renderPrevisClip, videoPrompt, type MediaOption } from './shotVideo';
 
@@ -104,8 +105,7 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
       if (!key) { setHasKey(false); throw new Error('Add your Comfy Cloud API key in Settings first.'); }
       if (missing.length) throw new Error(`Choose media for ${missing.map((s) => s.title).join(', ')}.`);
       if (needsReference) throw new Error('Choose at least one reference image or video.');
-      const media = new Map<string, AssetReference>();
-      const refs = new Map<string, AssetReference[]>(analysis.groups.map((g) => [groupKey(g), []]));
+      const files: RunInput[] = [];
       let clip = previsClip;
       for (const [i, { slot, group, option }] of inputs.entries()) {
         if (option.id === PREVIS_CLIP && !clip) {
@@ -113,24 +113,10 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
           clip = await renderPrevisClip(project, shot.id, abort.signal);
           setPrevisClip(clip);
         }
-        const data = option.id === PREVIS_CLIP ? clip! : await optionData(option);
-        setStatus(`Uploading ${option.label}…`);
-        const ref = await uploadAsset(key, data, uniqueName(option, i), abort.signal);
-        if (slot) media.set(slotKey(slot), ref);
-        else if (group) refs.get(groupKey(group))!.push(ref);
+        files.push({ slot, group, label: option.label, fileName: uniqueName(option, i), data: option.id === PREVIS_CLIP ? clip! : await optionData(option) });
       }
-      const graph = bindWorkflow(workflow.graph, analysis, {
-        media, references: refs, prompt: full, promptTarget: workflow.promptTarget, durationSec: eff.durationSec, seed: randomSeed(),
-        aspect: matchAspect ? aspectOf(project) : undefined,
-      });
-      setStatus('Submitting…');
-      const job = await submitJob(key, graph, abort.signal);
-      const done = await waitForJob(key, job, { signal: abort.signal, onUpdate: (j) => setStatus(describeJob(j)) });
-      const output = done.outputs.find((o) => o.type === 'video') ?? done.outputs.find((o) => o.content_type.startsWith('video/'));
-      if (!output) throw new Error('The workflow finished without a video output. Check that it ends in a Save Video node.');
-      setStatus('Downloading video…');
-      const blob = await downloadOutput(key, output.id, abort.signal);
-      if (!abort.signal.aborted) setDraft({ blob: new Blob([blob], { type: blob.type.startsWith('video/') ? blob.type : 'video/mp4' }), prompt: full, workflow: workflow.name, seconds: runSeconds(done) });
+      const { blob, seconds } = await runWorkflow({ key, workflow, inputs: files, prompt: full, durationSec: eff.durationSec, aspect: matchAspect ? aspectOf(project) : undefined, output: 'video', signal: abort.signal, onStatus: setStatus });
+      if (!abort.signal.aborted) setDraft({ blob: new Blob([blob], { type: blob.type.startsWith('video/') ? blob.type : 'video/mp4' }), prompt: full, workflow: workflow.name, seconds });
       setStatus('');
     } catch (e) {
       if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : String(e)); setStatus(''); }
@@ -270,11 +256,4 @@ function ReferencePicker({ group, options, chosen, disabled, onChange }: { group
     })}
     {!options.length && <p className="small muted">No {noun} in this shot yet{group.kind === 'audio' ? '. Generate dialogue voices first' : ''}.</p>}
   </fieldset>;
-}
-
-function describeJob(job: ComfyJob): string {
-  if (job.status === 'queued') return job.queue_position != null ? `Queued (position ${job.queue_position})…` : 'Queued…';
-  if (job.status === 'canceling') return 'Canceling…';
-  const pct = job.progress ? ` ${Math.round(job.progress.value * 100)}%` : '';
-  return `Generating${pct}${job.progress?.message ? ` · ${job.progress.message}` : ''}… This can take several minutes. Keep this page open.`;
 }
