@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { charactersInFrame, greyscalePixels, shotReferences, shotImagePrompt } from '../src/images/shotImages';
+import { SHOT_COMPOSITION_GUIDANCE, charactersInFrame, greyscalePixels, shotReferences, shotImagePrompt } from '../src/images/shotImages';
 import { generateShotImage } from '../src/images/generate';
 import { createProject } from '../src/state/schema';
 import { newCharacter } from '../src/characters/commands';
@@ -52,6 +52,11 @@ describe('shot image references', () => {
     expect(prompt).toContain('rough greyscale previs approximation'); expect(prompt).toContain('take precedence over the previs for poses'); expect(prompt).toContain('highest priority for modifications to pose and action'); expect(prompt).toContain('Image 2 is the stage'); expect(prompt).toContain('Image 3 is the character');
     expect(prompt).toContain('Warm cafe interior.'); expect(prompt).toContain('red shirt'); expect(prompt).toContain('Rainy evening'); expect(prompt).toContain('2.00 seconds');
     expect(prompt).not.toContain('Offscreen');
+    expect(prompt).toContain(SHOT_COMPOSITION_GUIDANCE);
+    expect(prompt).toContain(`Preview aspect ratio: ${p.aspect}.`);
+    expect(SHOT_COMPOSITION_GUIDANCE).toContain('Do not introduce objects, windows, doors');
+    expect(SHOT_COMPOSITION_GUIDANCE).toContain('off-screen windows or fixtures');
+    expect(SHOT_COMPOSITION_GUIDANCE).not.toContain('overhead lights on the left');
     p.characters[0].image!.blob='missing-reference';
     await expect(shotReferences(p,p.shots[0],['ben'])).rejects.toThrow(/Ben.*missing/);
   });

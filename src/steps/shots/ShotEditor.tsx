@@ -1,3 +1,5 @@
+import { useBlobUrl } from '../../images/useBlobUrl';
+import { ZoomableImage } from '../../images/ImagePreview';
 import { ShotImagePanel } from './ShotImagePanel';
 import type { ShotCapture } from '../../images/shotImages';
 import { useCallback } from 'react';
@@ -30,7 +32,11 @@ export function ShotEditor({ shotId }: { shotId: string }) {
 
   const [capture, setCapture] = useState<(() => Promise<ShotCapture>) | null>(null);
   const onCaptureReady = useCallback((fn: (() => Promise<ShotCapture>) | null) => setCapture(() => fn), []);
+  const artwork = useBlobUrl(shot.image?.blob);
+  const [showPrevis, setShowPrevis] = useState(false);
   const [mode, setMode] = useState<Mode>('blocking');
+  useEffect(() => { setShowPrevis(false); }, [mode, shotId, shot.image?.blob]);
+  const showingArtwork = mode === 'image' && Boolean(artwork) && !showPrevis;
   const [view, setView] = useState<'shot' | 'free'>('shot');
   const [editKey, setEditKey] = useState<'start' | 'end'>('start');
   const [playing, setPlaying] = useState(false);
@@ -91,7 +97,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
     <div className="shot-editor">
       <div className="frame-wrap">
         <div className="frame" style={{ aspectRatio: String(aspect), width: `min(100%, calc(40dvh * ${aspect}))` }}>
-          <ShotCanvas
+          <div className={`stage-render-layer${showingArtwork ? ' covered' : ''}`}><ShotCanvas
             onCaptureReady={onCaptureReady}
             project={project}
             shotId={shotId}
@@ -110,7 +116,9 @@ export function ShotEditor({ shotId }: { shotId: string }) {
             onSelect={setSelected}
             gizmo={gizmo}
             onGizmoEnd={onGizmoEnd}
-          />
+          /></div>
+          {showingArtwork && <ZoomableImage className="character-artwork" src={artwork!} alt={`Artwork for shot ${shot.number}`} />}
+          {mode === 'image' && artwork && <div className="frame-tools"><button className="btn small-btn" onClick={() => setShowPrevis((value) => !value)}>{showingArtwork ? 'Previs' : 'Shot image'}</button></div>}
           {mode === 'camera' && !playing && (
             <CameraPad
               base={keyCamera}
@@ -125,7 +133,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
               }}
             />
           )}
-          {caption && (
+          {caption && !showingArtwork && (
             <div className="caption">
               {caption.speaker && <span className="caption-speaker">{caption.speaker}</span>}
               <span>{caption.text}</span>
@@ -133,7 +141,8 @@ export function ShotEditor({ shotId }: { shotId: string }) {
           )}
           <div className="frame-badges">
             <span className="badge">{shot.number}</span>
-            {!playing && (blocking || camMoving) && <span className="badge key">{editKey === 'start' ? 'Start' : 'End'}</span>}
+            {showingArtwork && <span className="badge key">Image</span>}
+            {!showingArtwork && !playing && (blocking || camMoving) && <span className="badge key">{editKey === 'start' ? 'Start' : 'End'}</span>}
           </div>
           {blocking && !playing && (
             <div className="frame-tools">

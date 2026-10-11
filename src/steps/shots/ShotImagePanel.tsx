@@ -5,13 +5,10 @@ import { setShotImagePrompt } from '../../shots/commands';
 import { aspectOf } from '../../shots/setup';
 import { ConceptImageEditor } from '../../images/ConceptImageEditor';
 import { shotImagePrompt, shotReferences, type ShotCapture, type ShotReference } from '../../images/shotImages';
-import { useBlobUrl } from '../../images/useBlobUrl';
-import { ZoomableImage } from '../../images/ImagePreview';
 
 type Bundle = {capture:ShotCapture; references:ShotReference[]; project:Project; shot:Shot};
 export function ShotImagePanel({ project, shot, capture }: {project:Project;shot:Shot;capture: (() => Promise<ShotCapture>) | null}) {
   const dispatch = useProjectStore((s) => s.dispatch);
-  const artwork = useBlobUrl(shot.image?.blob);
   const [bundle, setBundle] = useState<Bundle>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -29,7 +26,6 @@ export function ShotImagePanel({ project, shot, capture }: {project:Project;shot
   };
   const changePrompt = (value:string) => dispatch(setShotImagePrompt(shot.id,value));
   return <div className="inspector shot-image-panel">
-    {artwork && <ZoomableImage src={artwork} alt={`Artwork for shot ${shot.number}`} />}
     <label className="field"><span>Additional prompt</span><textarea rows={5} maxLength={32000} value={shot.imagePrompt ?? ''} placeholder="Style, lighting, expression, or other direction for this shot…" onChange={(e) => changePrompt(e.target.value)} /></label>
     <p className="small muted">Saved with this shot for future image or video rendering.</p>
     <button className="btn primary" disabled={!capture || busy} onClick={() => void prepare()}>{busy ? 'Preparing references…' : shot.image ? 'View / generate shot image' : 'Generate shot image'}</button>
