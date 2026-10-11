@@ -17,7 +17,7 @@ afterEach(async () => {
   host?.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   await useProjectStore.getState().close();
 });
-it.each(['character', 'stage', 'prop'] as const)('opens an accessible %s editor and saves only on Use image', async (kind) => {
+it.each(['character', 'stage', 'prop', 'shot'] as const)('opens an accessible %s editor and saves only on Use image', async (kind) => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', ''); } });
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() });
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({data:[{b64_json:'AQID'}]}))));
@@ -27,11 +27,12 @@ it.each(['character', 'stage', 'prop'] as const)('opens an accessible %s editor 
   const p = createProject('Image UI'); p.characters.push(newCharacter('Ben', [], 'ben'));
   p.stages.push({id: 'stage', name: 'Cafe', sceneLineIds: [], objects: []});
   p.props.push({id: 'prop', name: 'Mug', source: {kind:'library', item:'mug'}, defaultScale:1});
+  p.shots.push({id:'shot',number:'1.1',lineIds:['line']});
   const reference = new Blob(['snapshot'], {type:'image/png'});
   useProjectStore.getState().open(p);
   host=document.createElement('div'); document.body.append(host); root=createRoot(host);
   const onClose=vi.fn();
-  await act(async () => root.render(<MemoryRouter>{kind === 'character' ? <CharacterImageEditor character={p.characters[0]} onClose={onClose} /> : <ConceptImageEditor subject={kind === 'prop' ? p.props[0] : p.stages[0]} kind={kind} defaultPrompt={kind === 'prop' ? 'Blue mug' : 'Warm cafe'} reference={reference} onClose={onClose} />}</MemoryRouter>));
+  await act(async () => root.render(<MemoryRouter>{kind === 'character' ? <CharacterImageEditor character={p.characters[0]} onClose={onClose} /> : <ConceptImageEditor subject={kind === 'shot' ? {id:'shot',name:'Shot 1.1'} : kind === 'prop' ? p.props[0] : p.stages[0]} kind={kind} defaultPrompt={kind === 'shot' ? '' : kind === 'prop' ? 'Blue mug' : 'Warm cafe'} buildPrompt={kind === 'shot' ? (extra) => `Shot composition. ${extra}` : undefined} imageContext={kind === 'shot' ? {frameProgress:0.5,aspect:9/16} : undefined} reference={reference} onClose={onClose} />}</MemoryRouter>));
   const dialog=document.querySelector('dialog')!;
   expect(dialog.open).toBe(true);
   expect(dialog.getAttribute('aria-labelledby')).toBe('character-image-title');
@@ -56,10 +57,11 @@ it.each(['character', 'stage', 'prop'] as const)('opens an accessible %s editor 
   await act(async () => preview.querySelector<HTMLButtonElement>('[aria-label="Close image preview"]')!.click());
   expect(document.querySelector('.image-preview-dialog')).toBeNull();
   expect(dialog.open).toBe(true);
-  expect(useProjectStore.getState().project![kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image).toBeUndefined();
+  expect(useProjectStore.getState().project![kind === 'shot' ? 'shots' : kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image).toBeUndefined();
   await act(async () => { button('Use image').click(); await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce()); });
-  const image=useProjectStore.getState().project![kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image!;
-  expect(image.prompt).toContain(kind === 'stage' ? 'Warm cafe' : kind === 'prop' ? 'Blue mug' : 'Ben');
+  const image=useProjectStore.getState().project![kind === 'shot' ? 'shots' : kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'][0].image!;
+  expect(image.prompt).toContain(kind === 'shot' ? 'Shot composition.' : kind === 'stage' ? 'Warm cafe' : kind === 'prop' ? 'Blue mug' : 'Ben');
+  if (kind === 'shot') { expect(image.frameProgress).toBe(0.5); expect(image.aspect).toBe(9/16); expect(image.additionalPrompt).toBe(''); }
   if (kind !== 'character') expect(await getBlob(image.guidanceBlob!)).toBeDefined();
   expect(await getBlob(image.blob)).toBeDefined();
   expect(onClose).toHaveBeenCalledOnce();

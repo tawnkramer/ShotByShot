@@ -93,7 +93,16 @@ export const stageObjectSchema = z.object({
 });
 export type StageObject = z.infer<typeof stageObjectSchema>;
 
-const conceptImageSchema = z.object({ blob: z.string(), prompt: z.string(), model: z.string(), createdAt: z.number(), guidanceBlob: z.string().optional() });
+const conceptImageSchema = z.object({
+  blob: z.string(), prompt: z.string(), model: z.string(), createdAt: z.number(),
+  guidanceBlob: z.string().optional(),
+  referenceImages: z.array(z.object({
+    blob: z.string(), name: z.string(), kind: z.enum(['stage', 'character']), characterId: z.string().optional(),
+  })).optional(),
+  frameProgress: z.number().min(0).max(1).optional(),
+  aspect: z.number().positive().optional(),
+  additionalPrompt: z.string().optional(),
+});
 
 export const stageSchema = z.object({
   id: z.string(),
@@ -218,6 +227,8 @@ export type Keyframed<T> = { mode: 'static' | 'moving'; start: T; end?: T; easin
  * (see shots/setup.ts).
  */
 export const shotSchema = z.looseObject({
+  image: conceptImageSchema.optional(),
+  imagePrompt: z.string().max(32000).optional(),
   id: z.string(),
   number: z.string(),
   lineIds: z.array(z.string()).min(1),

@@ -205,3 +205,15 @@ export function resetCamera(shotId: string): Command {
     },
   };
 }
+
+export function setShotImagePrompt(shotId: string, prompt: string): Command {
+  return {label:'Edit shot image prompt',mergeKey:`image-prompt:${shotId}`,apply:(d) => {
+    const shot = d.shots.find((s) => s.id === shotId); if (shot) shot.imagePrompt = prompt;
+  }};
+}
+
+export function setShotImage(shotId: string, image: Shot['image']): Command {
+  return {label:'Save shot image',apply:(d) => {
+    const shot = d.shots.find((s) => s.id === shotId); if (shot) { if (image) shot.image = image; else delete shot.image; }
+  }};
+}

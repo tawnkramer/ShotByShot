@@ -64,7 +64,7 @@ export function SettingsPage() {
           <section className="panel">
             <h2>OpenAI API key</h2>
             <p className="muted small">
-              The assistant, character, stage, and prop images, and dialogue voices use your own OpenAI account. The key is stored only in this browser,
+              The assistant, character, stage, prop, and shot images, and dialogue voices use your own OpenAI account. The key is stored only in this browser,
               is sent only to api.openai.com, and is never included in project files.
             </p>
             {savedKey ? (

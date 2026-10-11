@@ -5,9 +5,11 @@ import { Grid, OrbitControls, TransformControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { CameraState, Project } from '../../state/schema';
 import { ShotRig, type RigId } from '../../three/shotRig';
+import { charactersInFrame, greyscaleSnapshot, type ShotCapture } from '../../images/shotImages';
 import { applyCamera, cameraPosition } from '../../three/camera';
 
 export interface ShotCanvasProps {
+  onCaptureReady?: (capture: (() => Promise<ShotCapture>) | null) => void;
   project: Project;
   shotId: string;
   rig: ShotRig;
@@ -66,7 +68,8 @@ export function ShotCanvas(props: ShotCanvasProps) {
 
 const THROTTLE_MS = 60;
 
-function RigScene({ project, shotId, rig, aspect, timeRef, timeVersion, playing, durationSec, onTick, onEnded, view, liveCamera, selectable, selected, onSelect, gizmo, onGizmoEnd }: ShotCanvasProps) {
+function RigScene({ onCaptureReady, project, shotId, rig, aspect, timeRef, timeVersion, playing, durationSec, onTick, onEnded, view, liveCamera, selectable, selected, onSelect, gizmo, onGizmoEnd }: ShotCanvasProps) {
+  const { gl, scene } = useThree();
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree((s) => s.controls) as unknown as OrbitControlsImpl | null;
@@ -132,6 +135,28 @@ function RigScene({ project, shotId, rig, aspect, timeRef, timeVersion, playing,
     helper.update();
     if (view === 'shot') applyCamera(camera, cam, aspect);
   });
+
+  useEffect(() => {
+    onCaptureReady?.(async () => {
+      if (view !== 'shot') throw new Error('Switch to the shot camera before generating.');
+      await rig.ready();
+      const progress = timeRef.current;
+      const state = rig.setTime(progress);
+      if (!state) throw new Error('This shot is no longer open.');
+      applyCamera(camera, liveCamera ?? state, aspect);
+      scene.updateMatrixWorld(true);
+      camera.updateMatrixWorld(true);
+      const characterIds = charactersInFrame(rig.root, camera);
+      const framing = characterIds.map((characterId) => {
+        const center = new THREE.Box3().setFromObject(rig.object(`actor:${characterId}`)!).getCenter(new THREE.Vector3()).project(camera);
+        return {characterId,screenX:(center.x + 1) / 2,screenY:(1 - center.y) / 2};
+      });
+      gl.render(scene, camera);
+      const blob = await greyscaleSnapshot(gl.domElement);
+      return { blob, characterIds, progress, framing };
+    });
+    return () => onCaptureReady?.(null);
+  }, [onCaptureReady, rig, camera, scene, gl, aspect, view, liveCamera, timeRef]);
 
   const target = selected && selectable ? rig.object(selected) : undefined;
   const isActor = selected?.startsWith('actor:');
