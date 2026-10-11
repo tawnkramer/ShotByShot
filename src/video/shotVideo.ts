@@ -101,6 +101,7 @@ export function videoPrompt(project: Project, shot: Shot, inputs: { tag: string;
     `camera:\n${cameraDescription(eff.camera)}`,
     `action:\n${shotLines(project, shot).filter((l) => l.type !== 'dialogue' && l.type !== 'character').map((l) => l.text).join('\n') || 'Follow the story context.'}`,
     captions.some((c) => c.speaker) ? `dialogue:\n${captions.filter((c) => c.speaker).map((c) => `${c.inSec.toFixed(1)}–${c.outSec.toFixed(1)} s, ${c.speaker}: "${c.text}"`).join('\n')}` : '',
+    'audio:\nVoices and natural sound effects only. No music, no score, no soundtrack.',
     additional.trim() ? `additional direction (highest priority):\n${additional.trim()}` : '',
   ].filter(Boolean).join('\n\n');
 }
