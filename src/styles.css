@@ -681,3 +681,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 
 .frame > .character-artwork { position: absolute; inset: 0; }
 .shot-thumb.artwork img { object-fit: contain; }
+
+.generated-image-prompt { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 10px; }
+.generated-image-prompt summary { padding: 12px; cursor: pointer; }
+.generated-image-prompt pre { margin: 0; padding: 12px; max-height: 45dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; border-top: 1px solid var(--border); }
