@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useProjectStore } from '../state/store';
 import { STEPS, type Step } from '../state/schema';
 import { loadProject } from '../storage/db';
 import { Header } from './Header';
 import { ChatBar } from './ChatBar';
-import { StepView } from '../steps/StepView';
+import { StepView, ShotEditorView } from '../steps/StepView';
 
 export function ProjectLayout() {
-  const { projectId = '', step = '' } = useParams();
+  const { projectId = '', step = '', sub } = useParams();
+  const [search] = useSearchParams();
   const navigate = useNavigate();
   const project = useProjectStore((s) => s.project);
   const open = useProjectStore((s) => s.open);
@@ -46,11 +47,18 @@ export function ProjectLayout() {
   const current = step as Step;
   const goTo = (s: Step) => navigate(`/p/${projectId}/${s}`);
 
+  // The shot editor lives at /p/:id/shots/:shotId. Done (and back) return to
+  // where it was opened from: the shot list, or Previs at the same time.
+  const editingShot = current === 'shots' && sub ? sub : null;
+  if (editingShot && !project.shots.some((s) => s.id === editingShot)) return <Navigate to={`/p/${projectId}/shots`} replace />;
+  const from = search.get('from');
+  const leaveEditor = () => navigate(from === 'previs' ? `/p/${projectId}/previs?t=${search.get('t') ?? 0}` : `/p/${projectId}/shots#${editingShot}`);
+
   return (
     <div className="app">
-      <Header step={current} onStep={goTo} />
-      <main className="body" key={current}>
-        <StepView step={current} />
+      <Header step={current} onStep={goTo} primary={editingShot ? { label: 'Done', onClick: leaveEditor } : undefined} onBack={editingShot ? leaveEditor : undefined} />
+      <main className="body" key={editingShot ?? current}>
+        {editingShot ? <ShotEditorView shotId={editingShot} /> : <StepView step={current} />}
       </main>
       <ChatBar step={current} projectId={projectId} />
     </div>

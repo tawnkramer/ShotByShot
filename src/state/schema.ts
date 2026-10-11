@@ -144,11 +144,81 @@ export type Prop = z.infer<typeof propSchema>;
 export const BREAKDOWN_MODES = ['line', 'pair', 'mixed'] as const;
 export type BreakdownMode = (typeof BREAKDOWN_MODES)[number];
 
-/** A shot covers a contiguous run of script lines. Later milestones add setup, camera and timing. */
+/** Where something is in a shot: on the floor plane, turned about Y (degrees; 0 faces +Z). */
+export const placementSchema = z.object({ position: vec3, yaw: z.number() });
+export const actorKeySchema = placementSchema.extend({ pose: z.enum(POSES) });
+export type Placement = z.infer<typeof placementSchema>;
+export type ActorKey = z.infer<typeof actorKeySchema>;
+
+export const EASINGS = ['linear', 'easeInOut'] as const;
+function keyframed<T extends z.ZodType>(key: T) {
+  return z.object({
+    /** 'static' holds `start` for the whole shot; 'moving' goes from `start` to `end`. */
+    mode: z.enum(['static', 'moving']),
+    start: key,
+    end: key.optional(),
+    easing: z.enum(EASINGS),
+  });
+}
+
+/**
+ * Shot camera, orbiting a target point. Azimuth 0 puts the camera on the +Z
+ * side looking toward -Z; positive elevation is above the target. Lens is a
+ * full-frame (36 mm wide) focal length.
+ */
+export const cameraStateSchema = z.object({
+  target: vec3,
+  azimuth: z.number(),
+  elevation: z.number().min(-89).max(89),
+  distance: z.number().positive(),
+  lens: z.number().min(8).max(400),
+  roll: z.number(),
+});
+export type CameraState = z.infer<typeof cameraStateSchema>;
+
+export const shotActorSchema = z.object({
+  characterId: z.string(),
+  motion: keyframed(actorKeySchema),
+});
+export const shotPropSchema = z.object({
+  id: z.string(),
+  propId: z.string(),
+  motion: keyframed(placementSchema),
+});
+export const stageOverrideSchema = z.object({
+  position: vec3.optional(),
+  rotation: quat.optional(),
+  scale: vec3.optional(),
+  hidden: z.boolean().optional(),
+});
+export const shotSetupSchema = z.object({
+  actors: z.array(shotActorSchema),
+  props: z.array(shotPropSchema),
+  /** Per-shot changes to stage objects, keyed by stage object id. */
+  stageOverrides: z.record(z.string(), stageOverrideSchema),
+});
+export type ShotActor = z.infer<typeof shotActorSchema>;
+export type ShotProp = z.infer<typeof shotPropSchema>;
+export type StageOverride = z.infer<typeof stageOverrideSchema>;
+export type ShotSetup = z.infer<typeof shotSetupSchema>;
+export type ShotCamera = z.infer<ReturnType<typeof keyframed<typeof cameraStateSchema>>>;
+export type Keyframed<T> = { mode: 'static' | 'moving'; start: T; end?: T; easing: (typeof EASINGS)[number] };
+
+/**
+ * A shot covers a contiguous run of script lines. Setup, camera and duration
+ * are filled in the first time the shot is edited; until then they're derived
+ * (see shots/setup.ts).
+ */
 export const shotSchema = z.looseObject({
   id: z.string(),
   number: z.string(),
   lineIds: z.array(z.string()).min(1),
+  stageId: z.string().optional(),
+  setup: shotSetupSchema.optional(),
+  camera: keyframed(cameraStateSchema).optional(),
+  durationSec: z.number().positive().optional(),
+  /** Set when the duration was typed in, so it isn't re-estimated. */
+  durationLocked: z.boolean().optional(),
 });
 
 export const projectSchema = z.object({

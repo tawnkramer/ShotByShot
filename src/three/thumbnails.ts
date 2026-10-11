@@ -88,3 +88,44 @@ export function useThumbnail(key: string, build: () => THREE.Object3D | Promise<
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return url;
 }
+
+/**
+ * Renders a prepared scene through its own camera (for shot thumbnails), then
+ * cleans up. Returns an object URL, cached by `key`.
+ */
+export function renderView(
+  key: string,
+  prepare: () => Promise<{ object: THREE.Object3D; camera: THREE.PerspectiveCamera; cleanup: () => void }>,
+  size: { width: number; height: number },
+): Promise<string | null> {
+  const hit = cache.get(key);
+  if (hit) return Promise.resolve(hit);
+  const job = queue.then(async () => {
+    if (!setup() || !renderer) return null;
+    const { object, camera: cam, cleanup } = await prepare();
+    scene.add(object);
+    renderer.setPixelRatio(1);
+    renderer.setSize(size.width, size.height, false);
+    renderer.render(scene, cam);
+    scene.remove(object);
+    cleanup();
+    const blob = await new Promise<Blob | null>((resolve) => renderer!.domElement.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    cache.set(key, url);
+    return url;
+  });
+  queue = job.catch(() => null);
+  return job;
+}
+
+/** Short stable hash for cache keys. */
+export function hashKey(s: string): string {
+  let h1 = 0x811c9dc5, h2 = 0x1b873593;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619);
+    h2 = Math.imul(h2 ^ c, 2246822507);
+  }
+  return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}${s.length.toString(36)}`;
+}

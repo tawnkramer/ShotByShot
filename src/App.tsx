@@ -10,7 +10,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<ProjectsHome />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/p/:projectId/:step" element={<ProjectLayout />} />
+        <Route path="/p/:projectId/:step/:sub?" element={<ProjectLayout />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>

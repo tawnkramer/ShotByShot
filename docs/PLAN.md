@@ -678,6 +678,29 @@ AI tools only depend on M1.
   from. The **composite** format (a list of boxes, cylinders, spheres, cones
   and tori) is in the schema and renderer, ready for the assistant to model
   props in M5.
+- **M4 done:** Shots.
+  - **List:** one large card per shot with a thumbnail through the shot camera
+    (rendered lazily, one at a time, by the shared offscreen renderer), stage,
+    cast, duration, camera type and first line. Long-press to merge with the
+    shot below or split (cuts suggested before each new speaker).
+  - **Defaults:** until a shot is edited, its stage comes from its scene, its
+    cast from its speakers and characters named in action, placed clear of
+    set pieces; characters carry over from the previous shot on the same
+    stage; the camera frames a lone speaker from in front (slightly off-axis)
+    or the whole group; duration is estimated from the lines. The first edit
+    saves these defaults with the change.
+  - **Editor** (`/p/:id/shots/:shotId`, **Done** in the header): shot view or
+    free view (with a camera marker); Blocking tab to place, turn and pose
+    characters and props, add/remove them, and hide or move set pieces for
+    this shot only; Start/End keyframes (editing End makes things move,
+    with a walk cycle when they cover ground); Camera tab with the whole frame
+    as a gesture pad (drag to orbit and tilt, pinch to dolly, two fingers to
+    pan), Fixed/Moving, shot sizes (EWS…ECU) on everyone or one character,
+    and sliders for lens (mm), distance, orbit, tilt, height and roll;
+    timeline with play, scrub, and length (typed lengths lock; Auto unlocks);
+    lower-third captions timed across the shot.
+  - `ShotRig` builds and poses a shot at any moment; the editor, thumbnails,
+    and later Previs and Export all use it.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker

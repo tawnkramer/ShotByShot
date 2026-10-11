@@ -270,3 +270,27 @@ function baseMarker(tint: string, p: Proportions): THREE.Group {
   g.position.y = 0.004;
   return g;
 }
+
+/**
+ * A simple walk: legs and arms swing in opposition, the back knee bends.
+ * `phase` runs 0..1 over one full cycle (two steps).
+ */
+export function applyWalkCycle(root: THREE.Object3D, c: Pick<Character, 'heightCm' | 'sex' | 'build'>, phase: number): void {
+  applyPose(root, c, 'standing');
+  const s = Math.sin(phase * Math.PI * 2);
+  const set = (name: Joint, x: number) => {
+    const j = root.getObjectByName(name);
+    if (j) j.rotation.x = deg(x);
+  };
+  set('hipL', -26 * s);
+  set('hipR', 26 * s);
+  set('kneeL', 32 * Math.max(0, s) + 6);
+  set('kneeR', 32 * Math.max(0, -s) + 6);
+  set('shoulderL', 20 * s);
+  set('shoulderR', -20 * s);
+  set('elbowL', -12);
+  set('elbowR', -12);
+  // A little bob: the body is lowest mid-stride.
+  const pelvis = root.getObjectByName('pelvis');
+  if (pelvis) pelvis.position.y -= Math.abs(s) * 0.012 * (c.heightCm / 100);
+}

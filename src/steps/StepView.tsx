@@ -8,8 +8,18 @@ import { lazy, Suspense } from 'react';
 const StagingStep = lazy(() => import('./staging/StagingStep').then((m) => ({ default: m.StagingStep })));
 const CharactersStep = lazy(() => import('./characters/CharactersStep').then((m) => ({ default: m.CharactersStep })));
 const PropsStep = lazy(() => import('./props/PropsStep').then((m) => ({ default: m.PropsStep })));
+const ShotsStep = lazy(() => import('./shots/ShotsStep').then((m) => ({ default: m.ShotsStep })));
+const ShotEditor = lazy(() => import('./shots/ShotEditor').then((m) => ({ default: m.ShotEditor })));
 
-const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep, props: PropsStep };
+export function ShotEditorView({ shotId }: { shotId: string }) {
+  return (
+    <Suspense fallback={<div className="page muted">Loading 3D…</div>}>
+      <ShotEditor shotId={shotId} />
+    </Suspense>
+  );
+}
+
+const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep, props: PropsStep, shots: ShotsStep };
 
 const COMING: Record<Step, { summary: string; milestone: string }> = {
   story: { summary: 'Import a text script, label each line, and break it into shots.', milestone: 'M1' },

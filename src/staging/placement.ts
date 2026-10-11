@@ -48,13 +48,19 @@ const STEP = 0.5;
  */
 export function freeSpot(stage: Stage, source: ObjectSource): Transform['position'] {
   if (isContainer(source)) return [0, 0, 0];
-  const obstacles = stage.objects.filter((o) => !isContainer(o.source)).map(worldRect);
-  const { hx, hz } = footprint(source);
+  return freeSpotFor(stage, footprint(source));
+}
+
+export type Rect = ReturnType<typeof worldRect>;
+
+/** A clear spot for a footprint of half-size hx × hz, searching outward from `center`. */
+export function freeSpotFor(stage: Stage | undefined, { hx, hz }: Extent, center: [number, number] = [0, 0], extra: Rect[] = []): Transform['position'] {
+  const obstacles = [...(stage?.objects ?? []).filter((o) => !isContainer(o.source)).map(worldRect), ...extra];
   for (let ring = 0; ring <= 20; ring++) {
     for (let i = -ring; i <= ring; i++) {
       for (let j = -ring; j <= ring; j++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== ring) continue;
-        const x = i * STEP, z = j * STEP;
+        const x = center[0] + i * STEP, z = center[1] + j * STEP;
         const clear = obstacles.every(
           (r) => x + hx + GAP <= r.minX || x - hx - GAP >= r.maxX || z + hz + GAP <= r.minZ || z - hz - GAP >= r.maxZ,
         );
@@ -62,5 +68,5 @@ export function freeSpot(stage: Stage, source: ObjectSource): Transform['positio
       }
     }
   }
-  return [0, 0, 0];
+  return [center[0], 0, center[1]];
 }

@@ -10,9 +10,11 @@ interface Props {
   onStep: (step: Step) => void;
   /** Replaces Next, e.g. Done in the shot editor. */
   primary?: { label: string; onClick: () => void };
+  /** Replaces the back chevron's default (previous step). */
+  onBack?: () => void;
 }
 
-export function Header({ step, onStep, primary }: Props) {
+export function Header({ step, onStep, primary, onBack }: Props) {
   const navigate = useNavigate();
   const project = useProjectStore((s) => s.project)!;
   const canUndo = useProjectStore((s) => s.history.past.length > 0);
@@ -36,7 +38,7 @@ export function Header({ step, onStep, primary }: Props) {
         <button
           className="btn ghost icon"
           aria-label={prev ? `Back to ${STEP_LABELS[prev]}` : 'All projects'}
-          onClick={() => (prev ? onStep(prev) : navigate('/'))}
+          onClick={() => (onBack ? onBack() : prev ? onStep(prev) : navigate('/'))}
         >
           ‹
         </button>
