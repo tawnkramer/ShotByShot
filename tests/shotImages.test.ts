@@ -49,7 +49,7 @@ describe('shot image references', () => {
     const refs = await shotReferences(p,p.shots[0],['ben','ben']);
     expect(refs.map(r=>r.blob)).toEqual(['stage-art','ben-art']);
     const prompt=shotImagePrompt(p,p.shots[0],{blob:new Blob(),characterIds:['ben'],progress:0.5},refs,'Rainy evening');
-    expect(prompt).toContain('Image 1 is the greyscale'); expect(prompt).toContain('Image 2 is the stage'); expect(prompt).toContain('Image 3 is the character');
+    expect(prompt).toContain('rough greyscale previs approximation'); expect(prompt).toContain('take precedence over the previs for poses'); expect(prompt).toContain('highest priority for modifications to pose and action'); expect(prompt).toContain('Image 2 is the stage'); expect(prompt).toContain('Image 3 is the character');
     expect(prompt).toContain('Warm cafe interior.'); expect(prompt).toContain('red shirt'); expect(prompt).toContain('Rainy evening'); expect(prompt).toContain('2.00 seconds');
     expect(prompt).not.toContain('Offscreen');
     p.characters[0].image!.blob='missing-reference';

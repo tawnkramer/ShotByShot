@@ -65,14 +65,14 @@ export function shotImagePrompt(project: Project, shot: Shot, capture: ShotCaptu
   const characters = capture.characterIds.map((id) => project.characters.find((c) => c.id === id)).filter((c): c is Character => Boolean(c));
   return [
     `Create a cinematic illustrated frame for shot ${shot.number}.`,
-    'Image 1 is the greyscale shot preview: preserve its camera framing, perspective, character placement, pose, and spatial composition. Replace mannequins with the referenced characters. Do not copy neutral reference backgrounds into the scene. No labels, captions, text, grid lines, or editing handles. The descriptions below are appearance notes: ignore their original generation instructions about neutral backgrounds, standing poses, or excluding people.',
+    'Image 1 is a rough greyscale previs approximation for camera framing, perspective, and composition, not an exact depiction of the final pose or action. Use its spatial layout as a guide. Replace mannequins with the referenced characters and interpret their anatomy and movement naturally. Written story context and additional direction take precedence over the previs for poses, gestures, expressions, interactions, and on-screen actions. Apply requested changes even when they differ from the mannequin blocking; retain the camera framing and composition where compatible with those changes. Do not copy neutral reference backgrounds into the scene. No labels, captions, text, grid lines, or editing handles. The descriptions below are appearance notes: ignore their original generation instructions about neutral backgrounds, standing poses, or excluding people.',
     ...references.map((r, i) => `Image ${i + 2} is the ${r.kind} appearance reference for ${r.name}. Use it for ${r.kind === 'stage' ? 'set design, materials, colors, lighting, and atmosphere' : 'identity, face, hair, clothing, and proportions'}.`),
     stage?.image?.prompt ? `Stage description (${stage.name}): ${stage.image.prompt}` : stage ? `Location: ${stage.name}.` : '',
     ...(capture.framing ?? []).map((f) => `${characters.find((c) => c.id === f.characterId)?.name ?? f.characterId} is centered approximately ${Math.round(f.screenX * 100)}% from the left and ${Math.round(f.screenY * 100)}% from the top of Image 1.`),
     ...characters.map((c) => `Character description (${c.name}): ${c.image?.prompt ?? characterImagePrompt(c)}`),
     `Story context: ${shotLines(project, shot).map((l) => l.text).join('\n')}`,
     `Moment: ${(capture.progress * eff.durationSec).toFixed(2)} seconds into a ${eff.durationSec.toFixed(2)} second shot.`,
-    additional.trim() ? `Additional direction: ${additional.trim()}` : '',
+    additional.trim() ? `Additional direction (highest priority for modifications to pose and action): ${additional.trim()}` : '',
   ].filter(Boolean).join('\n\n');
 }
 

@@ -33,7 +33,7 @@ export function ShotImagePanel({ project, shot, capture }: {project:Project;shot
     <label className="field"><span>Additional prompt</span><textarea rows={5} maxLength={32000} value={shot.imagePrompt ?? ''} placeholder="Style, lighting, expression, or other direction for this shot…" onChange={(e) => changePrompt(e.target.value)} /></label>
     <p className="small muted">Saved with this shot for future image or video rendering.</p>
     <button className="btn primary" disabled={!capture || busy} onClick={() => void prepare()}>{busy ? 'Preparing references…' : shot.image ? 'View / generate shot image' : 'Generate shot image'}</button>
-    <p className="small muted">Uses the current timeline frame through the shot camera, the saved stage image, and available references for characters in frame. Characters without images use their descriptions.</p>
+    <p className="small muted">Uses the current timeline frame through the shot camera, the saved stage image, and available references for characters in frame. The previs guides framing and composition; your prompt controls pose and action. Characters without images use their descriptions.</p>
     {error && <p className="error small" role="alert">{error}</p>}
     {bundle && <ConceptImageEditor subject={{id:shot.id,name:`Shot ${shot.number}`,image:shot.image}} kind="shot" defaultPrompt={shot.imagePrompt ?? ''} reference={bundle.capture.blob} references={bundle.references} imageContext={{frameProgress:bundle.capture.progress,aspect:aspectOf(bundle.project)}} buildPrompt={(extra) => shotImagePrompt(bundle.project,bundle.shot,bundle.capture,bundle.references,extra)} onPromptChange={changePrompt} onClose={() => setBundle(undefined)} />}
   </div>;
