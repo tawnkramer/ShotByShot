@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    # Deploy runs the same checks on the default branch.
+    branches-ignore: [main, claude/shot-breakdown-previs-app-ccpmdl]
 
 jobs:
   check:
