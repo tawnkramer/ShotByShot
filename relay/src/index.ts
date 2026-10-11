@@ -49,12 +49,22 @@ export default {
       if (value && !(name === 'authorization' && !CREDENTIAL_ORIGINS.includes(target.origin))) headers.set(name, value);
     }
     const hasBody = !['GET', 'HEAD'].includes(request.method);
-    const upstream = await fetchImpl(target.toString(), { method: request.method, headers, body: hasBody ? request.body : undefined, redirect: 'follow', ...(hasBody ? { duplex: 'half' } : {}) } as RequestInit);
+    // Buffer the body: a streamed one can't be replayed if the service answers with a redirect.
+    const body = hasBody ? await request.arrayBuffer() : undefined;
+    let upstream: Response;
+    try {
+      upstream = await fetchImpl(target.toString(), { method: request.method, headers, body, redirect: 'follow' });
+    } catch (e) {
+      // Answer with CORS headers so the app can show what went wrong instead of a bare network error.
+      return text(`The relay couldn't reach ${target.host}: ${e instanceof Error ? e.message : String(e)}`, 502, origin);
+    }
     const out = new Headers(upstream.headers);
     // The body is already decoded here, so drop headers that describe the encoded one.
     for (const name of ['set-cookie', 'content-encoding', 'content-length']) out.delete(name);
     for (const [k, v] of Object.entries(corsBase(origin))) out.set(k, v);
-    return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: out });
+    // Statuses like 204 must not carry a body, even an empty stream.
+    const empty = [101, 204, 205, 304].includes(upstream.status) || request.method === 'HEAD';
+    return new Response(empty ? null : upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: out });
   },
 };
 
