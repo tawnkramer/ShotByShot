@@ -100,7 +100,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     };
   }, []);
   useEffect(() => {
-    if (!draft) return;
+    if (!draft) { setDraftUrl(undefined); return; }
     const url = URL.createObjectURL(draft.blob);
     setDraftUrl(url); setPreview(true);
     return () => URL.revokeObjectURL(url);
@@ -208,7 +208,8 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
         </div>
       </div>
     </dialog>
-    {preview && draftUrl && <ImagePreview src={draftUrl} alt={`Concept artwork for ${c.name}`} onClose={() => setPreview(false)} />}
+    {preview && draftUrl && <ImagePreview src={draftUrl} alt={`Concept artwork for ${c.name}`} onClose={() => setPreview(false)}
+      draft={{ onUse: () => { setPreview(false); void save(); }, onDiscard: () => { setPreview(false); setDraft(undefined); } }} />}
   </Overlay>;
 }
 

@@ -248,7 +248,8 @@ export function ShotVideoEditor({ project, shot, previsFrame, onClose }: { proje
         </div>
       </div>
     </dialog>
-    {fullScreen && draftUrl && <VideoPreview src={draftUrl} label={`Shot ${shot.number} video`} fileName={`Shot ${shot.number}`} onClose={() => setFullScreen(false)} />}
+    {fullScreen && draftUrl && <VideoPreview src={draftUrl} label={`Shot ${shot.number} video`} fileName={`Shot ${shot.number}`} onClose={() => setFullScreen(false)}
+      draft={{ onUse: () => { setFullScreen(false); void save(); }, onDiscard: () => { setFullScreen(false); setDraft(undefined); } }} />}
   </Overlay>;
 }
 

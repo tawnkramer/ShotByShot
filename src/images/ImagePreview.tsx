@@ -15,13 +15,19 @@ export async function downloadPreview(src: string, name: string, fallbackType: s
   await saveFile(blob, `${safeFileName(name)}.${EXTENSION[type] ?? fallbackType.split('/')[1]}`, type);
 }
 
-/** Header shared by the full-screen viewers: a hint, then Download and Close. */
-function PreviewHeader({ hint, label, onDownload, onClose }: { hint: string; label: string; onDownload: () => Promise<void>; onClose: () => void }) {
+/** A fresh render's choices: Use saves it, Discard throws it away. Both close the viewer. */
+export interface DraftActions { onUse: () => void; onDiscard: () => void }
+
+/** Header shared by the full-screen viewers: a hint, then Download and Close, or Discard and Use for a fresh render. */
+function PreviewHeader({ hint, label, onDownload, onClose, draft }: { hint: string; label: string; onDownload: () => Promise<void>; onClose: () => void; draft?: DraftActions }) {
   const [error, setError] = useState('');
   return <header className="image-preview-header">
     <span className="small muted grow">{error ? <span className="error" role="alert">{error}</span> : hint}</span>
     <button className="btn" onClick={() => { setError(''); void onDownload().catch((e) => setError(e instanceof Error ? e.message : String(e))); }}>Download</button>
-    <button className="btn" autoFocus onClick={onClose} aria-label={`Close ${label} preview`}>Close</button>
+    {draft ? <>
+      <button className="btn" onClick={draft.onDiscard} aria-label={`Discard this ${label}`}>Discard</button>
+      <button className="btn primary" autoFocus onClick={draft.onUse} aria-label={`Use this ${label}`}>Use</button>
+    </> : <button className="btn" autoFocus onClick={onClose} aria-label={`Close ${label} preview`}>Close</button>}
   </header>;
 }
 
@@ -40,7 +46,7 @@ function useFullScreen(dialog: RefObject<HTMLDialogElement | null>) {
 }
 
 /** A full-screen image viewer shared by generated artwork and reference snapshots. */
-export function ImagePreview({ src, alt, fileName, onClose }: { src: string; alt: string; fileName?: string; onClose: () => void }) {
+export function ImagePreview({ src, alt, fileName, onClose, draft }: { src: string; alt: string; fileName?: string; onClose: () => void; draft?: DraftActions }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>(FIT);
@@ -89,7 +95,7 @@ export function ImagePreview({ src, alt, fileName, onClose }: { src: string; alt
     } else apply({ ...v, x: v.x + next[0].x - old[0].x, y: v.y + next[0].y - old[0].y });
   };
   return <Overlay><dialog ref={dialog} className="image-preview-dialog" aria-label={alt} onCancel={(e) => { e.preventDefault(); onClose(); }}>
-    <PreviewHeader hint="Pinch to zoom · drag to pan" label="image" onDownload={() => downloadPreview(src, fileName ?? alt, 'image/png')} onClose={onClose} />
+    <PreviewHeader hint="Pinch to zoom · drag to pan" label="image" onDownload={() => downloadPreview(src, fileName ?? alt, 'image/png')} onClose={onClose} draft={draft} />
     <div ref={surface} className="image-preview-surface" tabIndex={0} aria-label="Zoomable image" onKeyDown={(e) => {
       if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(1.5); }
       else if (e.key === '-') { e.preventDefault(); zoom(1 / 1.5); }
@@ -107,12 +113,12 @@ export function ZoomableImage({ src, alt, fileName, className = '' }: { src: str
   return <><button className={`image-preview-trigger ${className}`} aria-label={`Enlarge ${alt}`} onClick={() => setOpen(true)}><img src={src} alt={alt} /></button>{open && <ImagePreview src={src} alt={alt} fileName={fileName} onClose={() => setOpen(false)} />}</>;
 }
 
-/** A full-screen video player with Download and Close. */
-export function VideoPreview({ src, label, fileName, onClose }: { src: string; label: string; fileName: string; onClose: () => void }) {
+/** A full-screen video player with Download and Close, or Discard and Use for a fresh render. */
+export function VideoPreview({ src, label, fileName, onClose, draft }: { src: string; label: string; fileName: string; onClose: () => void; draft?: DraftActions }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useFullScreen(dialog);
   return <Overlay><dialog ref={dialog} className="image-preview-dialog" aria-label={label} onCancel={(e) => { e.preventDefault(); onClose(); }}>
-    <PreviewHeader hint={label} label="video" onDownload={() => downloadPreview(src, fileName, 'video/mp4')} onClose={onClose} />
+    <PreviewHeader hint={label} label="video" onDownload={() => downloadPreview(src, fileName, 'video/mp4')} onClose={onClose} draft={draft} />
     <div className="image-preview-surface video-preview-surface"><video src={src} controls autoPlay playsInline loop aria-label={label} /></div>
   </dialog></Overlay>;
 }
