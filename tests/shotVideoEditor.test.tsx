@@ -135,3 +135,32 @@ it('defaults to Seedance 2.5, sends every chosen reference and shows its price',
   expect(submitted[node['model.reference_images.image_1'][0]]).toMatchObject({ class_type: 'LoadImage', inputs: { image: { info: { id: 'shot-1.png' } } } });
   expect(node['model.prompt']).toContain('Image 1 is the illustrated start frame');
 });
+
+it('offers Seedance on OpenArt once signed in and shows OpenArt’s quote', async () => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', ''); } });
+  URL.createObjectURL = vi.fn(() => 'blob:test'); URL.revokeObjectURL = vi.fn();
+  const { OPENART_TOKEN_SETTING } = await import('../src/openart/auth');
+  const { COMFY_RELAY_SETTING } = await import('../src/comfy/client');
+  await setSetting(COMFY_RELAY_SETTING, 'https://relay.example');
+  await setSetting(OPENART_TOKEN_SETTING, { access: 't' });
+  await setSetting(VIDEO_WORKFLOW_SETTING, 'openart:byte-plus-seedance-2-5');
+  await putBlob('shot-art', new Blob(['art'], { type: 'image/png' }));
+  const p = createProject('OpenArt UI');
+  p.script.push({ id: 'line', index: 0, type: 'action', text: 'The door opens.' });
+  p.shots.push({ id: 'shot', number: '3', lineIds: ['line'], image: { blob: 'shot-art', prompt: 'p', model: 'm', createdAt: 1 } });
+  useProjectStore.getState().open(p);
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(init.body as string) as { id?: number; method: string; params?: { name: string } };
+    const result = body.params?.name === 'openart_model_cost' ? { structuredContent: { balance: 4000, items: [{ totalCredits: 420, affordable: true }] } } : {};
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }), { headers: { 'Content-Type': 'application/json' } });
+  }));
+  host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+  await act(async () => root.render(<MemoryRouter><ShotVideoEditor project={p} shot={p.shots[0]} onClose={vi.fn()} /></MemoryRouter>));
+  await vi.waitFor(async () => { await settle(); expect(document.querySelector('select')?.value).toBe('openart:byte-plus-seedance-2-5'); });
+  const dialog = document.querySelector('dialog')!;
+  expect([...dialog.querySelectorAll('optgroup')].map((g) => g.label)).toContain('OpenArt (your credits)');
+  expect(dialog.querySelector('legend')?.textContent).toContain('Reference images · 1 of up to 9');
+  await vi.waitFor(async () => { await settle(); expect(dialog.textContent).toContain('Cost: 420 OpenArt credits'); });
+  expect(dialog.textContent).toContain('Your balance: 4000 credits');
+  expect(dialog.textContent).not.toContain('Add Comfy key');
+});

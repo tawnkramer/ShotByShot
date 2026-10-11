@@ -63,6 +63,15 @@ export class OpenArtMcp {
     await this.connect();
     return this.request('tools/call', { name, arguments: args });
   }
+
+  /** Calls a tool and returns its structured result, throwing the tool's own message when it reports an error. */
+  async tool<T>(name: string, args: Record<string, unknown>): Promise<T> {
+    const result = await this.callTool(name, args) as { isError?: boolean; structuredContent?: unknown; content?: { type: string; text?: string }[] } | undefined;
+    const text = result?.content?.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n').trim() ?? '';
+    if (result?.isError) throw new Error(`OpenArt: ${text || `${name} failed`}`);
+    if (result?.structuredContent !== undefined) return result.structuredContent as T;
+    try { return JSON.parse(text) as T; } catch { throw new Error(`OpenArt returned an unexpected answer from ${name}.`); }
+  }
 }
 
 /** Reads one JSON-RPC message from a JSON body or an event stream. */
