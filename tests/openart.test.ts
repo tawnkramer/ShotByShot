@@ -93,3 +93,19 @@ describe('OpenArt MCP client', () => {
     expect((fetchImpl.mock.calls[2][1].headers as Record<string, string>).Authorization).toBe('Bearer t');
   });
 });
+
+it('calls the global fetch without binding it to the client', async () => {
+  const { OpenArtMcp } = await import('../src/openart/mcp');
+  const { OPENART_TOKEN_SETTING } = await import('../src/openart/auth');
+  const { COMFY_RELAY_SETTING } = await import('../src/comfy/client');
+  const { setSetting } = await import('../src/storage/db');
+  await setSetting(COMFY_RELAY_SETTING, 'https://relay.example');
+  await setSetting(OPENART_TOKEN_SETTING, { access: 't' });
+  const strict = vi.fn(function (this: unknown) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+    return Promise.resolve(new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { tools: [] } }), { headers: { 'Content-Type': 'application/json' } }));
+  });
+  vi.stubGlobal('fetch', strict);
+  await expect(new OpenArtMcp().listTools()).resolves.toEqual([]);
+  vi.unstubAllGlobals();
+});
