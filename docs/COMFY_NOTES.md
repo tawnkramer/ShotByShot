@@ -25,3 +25,8 @@ transport that calls MCP tools over JSON-RPC (Streamable HTTP) without the assis
 `upload_file`, `submit_workflow`, `get_job_status`/`wait_for_job`, `get_output` (signed URL),
 `cancel_job`, `get_billing_status`. Still unverified: how `upload_file` accepts bytes, and
 whether the signed output URL's storage host allows CORS.
+- `/mcp` requires auth even for `initialize` (401 JSON-RPC error -32001, with CORS headers).
+  OAuth is also offered: `/mcp/.well-known/oauth-protected-resource` → authorization server
+  https://cloud.comfy.org (`/oauth/authorize`, `/oauth/token`, `/oauth/register`, PKCE S256),
+  scopes `comfy-mcp:tools:read`, `comfy-mcp:tools:call`. A browser "Sign in with Comfy" may be
+  possible later; use the API key for now.
