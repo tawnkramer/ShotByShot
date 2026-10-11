@@ -98,7 +98,7 @@ export function shotImagePrompt(project: Project, shot: Shot, capture: ShotCaptu
     stage?.image?.prompt ? `Stage description (${stage.name}): ${stage.image.prompt.replace(/(?:^|\n)Stage objects:[^\n]*/g, '').trim()}` : stage ? `Location: ${stage.name}.` : '',
     stage && capture.stageObjectIds?.length ? `Stage objects visible in this frame: ${stage.objects.filter((o) => capture.stageObjectIds!.includes(o.id)).map((o) => o.name).join(', ')}.` : '',
     ...(capture.framing ?? []).map((f) => `${characters.find((c) => c.id === f.characterId)?.name ?? f.characterId} is centered approximately ${Math.round(f.screenX * 100)}% from the left and ${Math.round(f.screenY * 100)}% from the top of Image 1.`),
-    ...characters.map((c) => `Character description (${c.name}): ${(c.image?.prompt ?? characterImagePrompt(c)).replaceAll(CHARACTER_IMAGE_PRESENTATION, '').trim()}`),
+    ...characters.map((c) => `Character description (${c.name}): ${(c.image?.prompt ?? characterImagePrompt(c)).replaceAll(CHARACTER_IMAGE_PRESENTATION, '').replaceAll(`Create a full-body character concept illustration of ${c.name}.`, '').trim()}`),
     `Story context: ${shotLines(project, shot).map((l) => l.text).join('\n')}`,
     `Moment: ${(capture.progress * eff.durationSec).toFixed(2)} seconds into a ${eff.durationSec.toFixed(2)} second shot.`,
     additional.trim() ? `Additional direction (highest priority for modifications to pose and action): ${additional.trim()}` : '',
