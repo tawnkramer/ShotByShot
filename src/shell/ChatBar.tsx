@@ -138,6 +138,16 @@ export function ChatBar({ step, projectId, shotId }: Props) {
     setMessages((list) => list.map((x) => (x.id === m.id ? updated : x)));
   };
 
+  // Requests from buttons elsewhere (Plan blocking / Plan the camera) go through the same path as typing.
+  const pending = useChatUI((s) => s.pending);
+  useEffect(() => {
+    // Wait until we know whether there's a key, or send would go to Settings.
+    if (!pending || controller.current || hasKey === null) return;
+    useChatUI.setState({ pending: null });
+    void send(pending);
+  });
+  useEffect(() => useChatUI.getState().setRunning(!!live), [live]);
+
   const suggestions = useMemo(() => suggestionsFor(step, project, !!shotId), [step, project, shotId]);
   const running = !!live;
   const grouped = groupByStep(messages);
