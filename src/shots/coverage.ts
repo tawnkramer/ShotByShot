@@ -4,6 +4,7 @@ import { speakerOf } from '../story/classify';
 import { aspectOf, effectiveShots, poseHeight, sceneLineOf, shotLines, type EffectiveShot } from './setup';
 import { keyOf } from './timing';
 import { LIBRARY, resolveParams } from '../three/library';
+import { seatLift } from './seats';
 
 /**
  * Checks a scene's coverage against the measurable rules of film grammar
@@ -157,10 +158,12 @@ interface Person {
 }
 
 function people(project: Project, eff: EffectiveShot): Person[] {
+  const stage = project.stages.find((s) => s.id === eff.stageId);
   return eff.setup.actors.map((a) => {
     const c = project.characters.find((x) => x.id === a.characterId);
     const k = a.motion.start;
-    return { id: a.characterId, start: k.position as Vec, end: keyOf(a.motion, 'end').position as Vec, height: poseHeight(c?.heightCm, k.pose) };
+    const y = k.position[1] + seatLift(stage, eff.setup.stageOverrides, c, k);
+    return { id: a.characterId, start: [k.position[0], y, k.position[2]], end: keyOf(a.motion, 'end').position as Vec, height: poseHeight(c?.heightCm, k.pose) };
   });
 }
 
@@ -202,7 +205,7 @@ export function classifyShot(project: Project, shot: Shot, eff: EffectiveShot, l
   const cam = eff.camera.start;
   const pos = cameraPos(cam);
   const ps = people(project, eff);
-  const visible = ps.filter((p) => [0.92, 0.65].some((f) => inFrame(cam, aspect, [p.start[0], p.height * f, p.start[2]]))).map((p) => p.id);
+  const visible = ps.filter((p) => [0.92, 0.65].some((f) => inFrame(cam, aspect, [p.start[0], p.start[1] + p.height * f, p.start[2]]))).map((p) => p.id);
   const target = cam.target as Vec;
   const tv = Math.tan(((lensToVFov(cam.lens, aspect) * Math.PI) / 180) / 2);
   const fromAim = (p: Person) => Math.hypot(p.start[0] - target[0], p.start[2] - target[2]);
@@ -213,7 +216,7 @@ export function classifyShot(project: Project, shot: Shot, eff: EffectiveShot, l
   let size: ShotSize;
   let bearing: number;
   if (subj) {
-    const head: Vec = [subj.start[0], subj.height * 0.8, subj.start[2]];
+    const head: Vec = [subj.start[0], subj.start[1] + subj.height * 0.8, subj.start[2]];
     const d = Math.max(0.2, dot(sub(head, pos), norm(sub(target, pos))));
     size = sizeFor((2 * d * tv) / subj.height);
     bearing = deg(Math.atan2(pos[0] - subj.start[0], pos[2] - subj.start[2]));

@@ -26,7 +26,7 @@ export function CameraPanel({ project, shot, eff, editKey, current }: Props) {
   const mk = (name: string) => `cam:${shot.id}:${key}:${name}`;
 
   const frame = (size: ShotSize) => {
-    const subjects = subjectsFor(project, eff.setup, subject ? [subject] : undefined);
+    const subjects = subjectsFor(project, eff.setup, subject ? [subject] : undefined, eff.stageId);
     // Keep the current angle so changing size feels like zooming, not jumping.
     dispatch(setCamera(shot.id, key, frameSubjects(subjects, size, aspectOf(project), { azimuth: current.azimuth, elevation: current.elevation, lens: current.lens })));
   };

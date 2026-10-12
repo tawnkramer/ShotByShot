@@ -102,6 +102,8 @@ export function frameSubjects(subjects: Subject[], size: ShotSize, aspect: numbe
   const def = SHOT_SIZES[size];
   if (!subjects.length) return { target: [0, 1.2, 0], azimuth: opts.azimuth ?? 0, elevation: 15, distance: 7, lens: 24, roll: 0 };
   const h = Math.max(...subjects.map((s) => s.height));
+  // People raised off the floor (on a bar stool) are framed from where they are.
+  const base = Math.max(...subjects.map((s) => s.position[1]));
   const xs = subjects.map((s) => s.position[0]);
   const zs = subjects.map((s) => s.position[2]);
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
@@ -115,7 +117,7 @@ export function frameSubjects(subjects: Subject[], size: ShotSize, aspect: numbe
   const needV = (def.extent * h) / 2 / Math.tan(vfov / 2);
   const needH = spread / 2 / (Math.tan(vfov / 2) * aspect);
   return {
-    target: [cx, def.center * h, cz],
+    target: [cx, base + def.center * h, cz],
     azimuth,
     elevation,
     distance: Math.max(0.3, needV, size === 'CU' || size === 'ECU' ? 0 : needH),

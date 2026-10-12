@@ -74,7 +74,7 @@ export function describeContext(project: Project, step: Step, opts: { shotId?: s
       out.push('Characters in shot: ' + (eff.setup.actors.map((a) => {
         const c = project.characters.find((x) => x.id === a.characterId);
         const s = a.motion.start, e = a.motion.mode === 'moving' ? keyOf(a.motion, 'end') : null;
-        const fmt = (k: typeof s) => `x=${r(k.position[0])} z=${r(k.position[2])} yaw=${Math.round(k.yaw)} ${k.pose}`;
+        const fmt = (k: typeof s) => `x=${r(k.position[0])} z=${r(k.position[2])}${k.position[1] ? ` y=${r(k.position[1])}` : ''} yaw=${Math.round(k.yaw)} ${k.pose}`;
         return `${c?.name}: start ${fmt(s)}${e ? `; end ${fmt(e)}` : ''}`;
       }).join('; ') || 'none') + '.');
       if (eff.setup.props.length) out.push('Props in shot: ' + eff.setup.props.map((p) => `${project.props.find((x) => x.id === p.propId)?.name} at x=${r(p.motion.start.position[0])} y=${r(p.motion.start.position[1])} z=${r(p.motion.start.position[2])}`).join('; ') + '.');
@@ -150,7 +150,7 @@ export function describeScene(project: Project, opts: { shotId?: string }): stri
       const who = speakers.get(l.id);
       out.push(`  ${who ? `${who}: ` : `[${l.type}] `}${l.text.slice(0, 140)}`);
     }
-    const fmt = (k: { position: [number, number, number]; yaw: number; pose: string }) => `x=${r(k.position[0])} z=${r(k.position[2])} yaw=${Math.round(k.yaw)} ${k.pose}`;
+    const fmt = (k: { position: [number, number, number]; yaw: number; pose: string }) => `x=${r(k.position[0])} z=${r(k.position[2])}${k.position[1] ? ` y=${r(k.position[1])}` : ''} yaw=${Math.round(k.yaw)} ${k.pose}`;
     out.push('  Blocking: ' + (e.setup.actors.map((a) => {
       const end = a.motion.mode === 'moving' ? keyOf(a.motion, 'end') : null;
       return `${names.get(a.characterId) ?? '?'} ${fmt(a.motion.start)}${end ? ` → ${fmt(end)}` : ''}`;
