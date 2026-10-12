@@ -20,7 +20,7 @@ export function suggestionsFor(step: Step, project: Project, inShotEditor: boole
             a ? `Have ${a} walk to the bar during the shot.` : 'Make the camera slowly push in.',
             'Make this a slow push-in.',
           ]
-        : ['Voice all the dialogue.', 'Which shots feel too short? Merge them.'];
+        : ['Block the scene.', 'Voice all the dialogue.', 'Which shots feel too short? Merge them.'];
     default:
       return ['Which shots run long?', 'Open the first shot of scene 2.'];
   }

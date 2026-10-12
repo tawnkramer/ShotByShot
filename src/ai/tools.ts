@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Command } from '../state/commands';
 import {
   AGE_BANDS, BUILDS, BREAKDOWN_MODES, COMPOSITE_SHAPES, LIBRARY_ITEMS, LINE_TYPES, POSES, PRIMITIVE_SHAPES, PROP_ITEMS, SEXES, STEPS,
-  newId, type CameraState, type ObjectSource, type Project, type Shot, type Stage, type Step,
+  newId, type ActorKey, type CameraState, type ObjectSource, type Project, type Shot, type Stage, type Step,
 } from '../state/schema';
 import { applyBreakdown, editLineText, setLineTypes } from '../story/commands';
 import { isFrontMatter, numberShots } from '../story/breakdown';
@@ -10,8 +10,11 @@ import { addObject, createStage, quatFromDegrees, eulerDegrees, removeObject, up
 import { addCharacters, updateCharacter, type CharacterPatch } from '../characters/commands';
 import { OPENAI_VOICES } from '../audio/voices';
 import { addProp, updateProp } from '../props/commands';
-import { addActor, addShotProp, mergeWithNext, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
-import { aspectOf, effectiveShot, subjectsFor } from '../shots/setup';
+import { addActor, addShotProp, mergeWithNext, setBlocking, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
+import { aspectOf, effectiveShot, effectiveShots, shotLines, subjectsFor } from '../shots/setup';
+import { isContainer, worldRect, type Rect } from '../staging/placement';
+import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
+import { skillById, skillsFor } from './skills';
 import { frameSubjects, moveCamera, SHOT_SIZES, turnCamera, type ShotSize } from '../three/camera';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
@@ -32,6 +35,10 @@ export interface ToolContext {
   snapshot: () => Promise<string | null>;
   /** Images to show the model after this round of tool calls. */
   attachImage: (dataUrl: string, caption: string) => void;
+  /** Loads a skill for the rest of the turn. */
+  setSkill?: (id: string) => void;
+  /** Renders shots offscreen into one contact sheet (JPEG data URL): a row per shot, a column per moment. */
+  renderSheet?: (shotIds: string[], moments: SheetMoment[], view: SheetView) => Promise<string | null>;
 }
 
 export interface Tool {
@@ -528,6 +535,250 @@ const voiceTool = tool('voice_dialogue', "Generate spoken audio for every dialog
   return `Started voicing ${lines.length} lines; progress shows in the Dialogue audio panel.`;
 });
 
+
+// ---------- skills ----------
+
+function useSkillTool(step: Step): Tool | null {
+  const skills = skillsFor(step);
+  if (!skills.length) return null;
+  return tool(
+    'use_skill',
+    `Load a skill's instructions (and the context it needs) for the rest of this reply. Skills: ${skills.map((s) => `${s.id}: ${s.description}`).join(' ')}`,
+    z.object({ id: z.enum(skills.map((s) => s.id) as [string, ...string[]]) }),
+    (a, ctx) => {
+      const skill = skillById(a.id)!;
+      ctx.setSkill?.(skill.id);
+      return `Loaded ${skill.title}. Its instructions and the scene detail are now in the system prompt; follow them.`;
+    },
+  );
+}
+
+// ---------- whole-scene shots ----------
+
+const keySpec = z.object({
+  x: num.optional(),
+  z: num.optional(),
+  yaw: num.optional().describe(yawDesc),
+  face: z.string().optional().describe('Turn toward a character in this shot, a stage object, or a prop in the shot, by name. Overrides yaw.'),
+  pose: z.enum(POSES).optional(),
+});
+
+/** Things on the stage in this shot, with overrides (moved or hidden objects) applied. */
+function obstaclesOf(stage: Stage | undefined, overrides: Record<string, { position?: [number, number, number]; hidden?: boolean }>) {
+  return (stage?.objects ?? [])
+    .filter((o) => !overrides[o.id]?.hidden)
+    .map((o) => ({ o, rect: worldRect({ source: o.source, transform: { ...o.transform, position: overrides[o.id]?.position ?? o.transform.position } }) }));
+}
+
+const SEATS = new Set(['chair', 'stool']);
+const isSeat = (o: Stage['objects'][number]) => o.source.kind === 'library' && SEATS.has(o.source.item);
+const inside = (x: number, z: number, r: Rect, pad = 0) => x > r.minX - pad && x < r.maxX + pad && z > r.minZ - pad && z < r.maxZ + pad;
+const BODY = 0.15;
+const SEAT_REACH = 0.6;
+const CONTINUITY_M = 0.5;
+/** Action that moves someone during the shot. ("Sits" is left out: it usually describes a state.) */
+const MOVES = /\b(walks?|walking|enters?|arrives?|leaves?|exits?|stands up|stands(?=[,.])|gets up|rises|retreats?|hurries|hurry|runs?|crosses|steps?|approach(?:es)?|drops into|sits down|turns away|goes)\b/i;
+
+/** Action sentences that move someone the blocking leaves still. */
+function movementProblems(p: Project, shot: Shot, actors: { characterId: string; motion: { mode: string } }[]): string[] {
+  const out: string[] = [];
+  const sentences = shotLines(p, shot).filter((l) => l.type === 'action').flatMap((l) => l.text.match(/[^.!?]+[.!?]*/g) ?? []).map((t) => t.trim());
+  for (const text of sentences) {
+    if (!MOVES.test(text)) continue;
+    const quote = `"${text.length > 70 ? `${text.slice(0, 67)}…` : text}"`;
+    const named = p.characters.filter((c) => new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
+    if (!named.length) {
+      if (!actors.some((a) => a.motion.mode === 'moving')) out.push(`${quote} but nobody moves.`);
+      continue;
+    }
+    for (const c of named) {
+      const a = actors.find((x) => x.characterId === c.id);
+      if (a && a.motion.mode !== 'moving') out.push(`${quote} but ${c.name} doesn't move (give them an end key).`);
+    }
+  }
+  return out;
+}
+
+/** Problems with a character's key on this stage: inside furniture, outside the room, sitting on nothing. */
+function keyProblems(name: string, k: { position: [number, number, number]; pose: string }, obstacles: ReturnType<typeof obstaclesOf>): string[] {
+  const [x, , z] = k.position;
+  const out: string[] = [];
+  const at = `(x=${Math.round(x * 100) / 100} z=${Math.round(z * 100) / 100})`;
+  for (const { o, rect } of obstacles) {
+    if (isContainer(o.source)) {
+      if (o.source.kind === 'library' && o.source.item === 'room' && !inside(x, z, rect)) out.push(`${name} is outside ${o.name} ${at}.`);
+      continue;
+    }
+    // Seats are for sitting in, and doorways are for walking through.
+    if ((k.pose === 'sitting' && isSeat(o)) || (o.source.kind === 'library' && o.source.item === 'door')) continue;
+    if (inside(x, z, rect, k.pose === 'sitting' || k.pose === 'lying' ? 0 : BODY)) out.push(`${name} is inside ${o.name} ${at}.`);
+  }
+  if (k.pose === 'sitting') {
+    const seats = obstacles.filter(({ o }) => isSeat(o));
+    if (seats.length && !seats.some(({ rect }) => inside(x, z, rect, SEAT_REACH))) out.push(`${name} sits ${at} with no chair or stool there.`);
+  }
+  return out;
+}
+
+const blockShots = tool(
+  'block_shots',
+  'Block several shots at once (no shot needs to be open). For each shot, list EVERYONE in it with a start key, and an end key only if they move during the shot; anyone not listed is taken out of that shot. Missing x/z/pose in an end key come from the start. Returns warnings to check.',
+  z.object({
+    shots: z.array(z.object({
+      number: z.string(),
+      stage: z.string().optional().describe('Switch this shot to another stage, by name.'),
+      actors: z.array(z.object({ name: z.string(), start: keySpec, end: keySpec.optional() })),
+      props: z.array(z.object({
+        prop: z.string(), x: num, z: num, y: num.optional().describe('Height, e.g. 0.75 on a table.'), yaw: num.optional(),
+        end: z.object({ x: num.optional(), z: num.optional(), y: num.optional(), yaw: num.optional() }).optional(),
+      })).optional().describe('Props to place; props not listed stay as they are.'),
+    })).min(1),
+  }),
+  (a, ctx) => {
+    const p0 = ctx.project();
+    // Check every name before changing anything.
+    const plan = a.shots.map((s) => {
+      const shot = shotByNumber(p0, s.number);
+      const stage = s.stage ? currentStage(ctx, s.stage) : undefined;
+      const actors = s.actors.map((x) => {
+        const c = byName(p0.characters, x.name);
+        if (!c) throw new Error(`No character named "${x.name}". Characters: ${p0.characters.map((y) => y.name).join(', ')}.`);
+        return { c, spec: x };
+      });
+      const props = (s.props ?? []).map((x) => {
+        const prop = byName(p0.props, x.prop);
+        if (!prop) throw new Error(`No prop named "${x.prop}". Props: ${p0.props.map((y) => y.name).join(', ') || 'none'}.`);
+        return { prop, spec: x };
+      });
+      return { shot, stage, actors, props };
+    });
+    // Facing targets too: characters in the shot, things on its stage, props in it.
+    const eff0 = effectiveShots(p0);
+    const listedProps = new Set<string>();
+    for (const { shot, stage, actors, props } of plan) {
+      for (const x of props) listedProps.add(x.prop.id);
+      const e = eff0.get(shot.id)!;
+      const objects = (stage ?? p0.stages.find((x) => x.id === e.stageId))?.objects ?? [];
+      const propNames = p0.props.filter((x) => listedProps.has(x.id) || e.setup.props.some((y) => y.propId === x.id)).map((x) => x.name);
+      const names = [...actors.map((x) => x.c.name), ...objects.map((o) => o.name), ...propNames];
+      for (const { spec } of actors) {
+        for (const face of [spec.start.face, spec.end?.face]) {
+          if (face && !names.some((n) => n.toLowerCase() === face.trim().toLowerCase())) throw new Error(`Shot ${shot.number}: can't find "${face}" to face. Nothing was changed. Choose from: ${names.join(', ')}.`);
+        }
+      }
+    }
+
+    for (const { shot, stage, actors, props } of plan) {
+      if (stage) ctx.dispatch(setShotStage(shot.id, stage.id));
+      const eff = effectiveShot(ctx.project(), shot.id)!;
+      const st = ctx.project().stages.find((x) => x.id === eff.stageId);
+      const prev = (id: string) => eff.setup.actors.find((x) => x.characterId === id)?.motion.start;
+      const keys = actors.map(({ c, spec }) => {
+        const before = prev(c.id);
+        const start: ActorKey = {
+          position: [spec.start.x ?? before?.position[0] ?? 0, 0, spec.start.z ?? before?.position[2] ?? 0],
+          yaw: spec.start.yaw ?? before?.yaw ?? 0,
+          pose: spec.start.pose ?? before?.pose ?? 'standing',
+        };
+        const end: ActorKey | undefined = spec.end && {
+          position: [spec.end.x ?? start.position[0], 0, spec.end.z ?? start.position[2]],
+          yaw: spec.end.yaw ?? start.yaw,
+          pose: spec.end.pose ?? start.pose,
+        };
+        return { c, spec, start, end };
+      });
+      for (const { prop, spec } of props) {
+        const placed = effectiveShot(ctx.project(), shot.id)!.setup.props.find((x) => x.propId === prop.id);
+        const start = { position: [spec.x, spec.y ?? 0, spec.z] as [number, number, number], yaw: spec.yaw ?? 0 };
+        if (placed) ctx.dispatch(setShotPropKey(shot.id, placed.id, 'start', start));
+        else ctx.dispatch(addShotProp(shot.id, prop.id, start));
+        if (spec.end) {
+          const id = effectiveShot(ctx.project(), shot.id)!.setup.props.find((x) => x.propId === prop.id)!.id;
+          ctx.dispatch(setShotPropKey(shot.id, id, 'end', { position: [spec.end.x ?? spec.x, spec.end.y ?? spec.y ?? 0, spec.end.z ?? spec.z], yaw: spec.end.yaw ?? start.yaw }));
+        }
+      }
+      // Facing resolves against this shot's new positions, then the stage, then its props.
+      const target = (name: string, which: 'start' | 'end'): [number, number, number] => {
+        const other = keys.find((k) => k.c.name.toLowerCase() === name.trim().toLowerCase());
+        if (other) return (which === 'end' ? other.end ?? other.start : other.start).position;
+        const o = st && byName(st.objects, name);
+        if (o) return eff.setup.stageOverrides[o.id]?.position ?? o.transform.position;
+        const prop = byName(ctx.project().props, name);
+        const placed = prop && effectiveShot(ctx.project(), shot.id)!.setup.props.find((x) => x.propId === prop.id);
+        if (placed) return keyOf(placed.motion, which).position;
+        throw new Error(`Shot ${shot.number}: can't find "${name}" to face.`);
+      };
+      for (const k of keys) {
+        if (k.spec.start.face) k.start.yaw = yawToward(k.start.position, target(k.spec.start.face, 'start'));
+        if (k.end && k.spec.end?.face) k.end.yaw = yawToward(k.end.position, target(k.spec.end.face, 'end'));
+      }
+      ctx.dispatch(setBlocking(shot.id, keys.map((k) => ({ characterId: k.c.id, start: k.start, end: k.end }))));
+    }
+
+    // Check the result, including continuity with the shot before on the same stage.
+    const p = ctx.project();
+    const all = effectiveShots(p);
+    const warnings: string[] = [];
+    for (const { shot } of plan) {
+      const eff = all.get(shot.id)!;
+      const stage = p.stages.find((x) => x.id === eff.stageId);
+      const obstacles = obstaclesOf(stage, eff.setup.stageOverrides);
+      const idx = p.shots.findIndex((x) => x.id === shot.id);
+      const before = p.shots.slice(0, idx).reverse().find((x) => all.get(x.id)!.stageId === eff.stageId);
+      const prevActors = before ? all.get(before.id)!.setup.actors : [];
+      const name = (id: string) => p.characters.find((c) => c.id === id)?.name ?? '?';
+      const problems: string[] = [];
+      for (const actor of eff.setup.actors) {
+        const n = name(actor.characterId);
+        problems.push(...keyProblems(n, actor.motion.start, obstacles));
+        if (actor.motion.mode === 'moving' && actor.motion.end) problems.push(...keyProblems(`${n} (end)`, actor.motion.end, obstacles));
+        const was = prevActors.find((x) => x.characterId === actor.characterId);
+        if (was) {
+          const last = keyOf(was.motion, 'end');
+          const d = Math.hypot(last.position[0] - actor.motion.start.position[0], last.position[2] - actor.motion.start.position[2]);
+          // Walking into a shot standing (or the reverse) isn't a jump; sitting down off screen is.
+          const posture = (pose: string) => (pose === 'walking' ? 'standing' : pose);
+          if (d > CONTINUITY_M || posture(last.pose) !== posture(actor.motion.start.pose)) problems.push(`${n} starts ${d.toFixed(1)} m${last.pose !== actor.motion.start.pose ? `, ${actor.motion.start.pose} not ${last.pose},` : ''} from where shot ${before!.number} left them; fine only if the script moves them between shots.`);
+        }
+      }
+      problems.push(...movementProblems(p, shot, eff.setup.actors));
+      for (const [i, x] of eff.setup.actors.entries()) {
+        for (const y of eff.setup.actors.slice(i + 1)) {
+          const [ax, , az] = x.motion.start.position, [bx, , bz] = y.motion.start.position;
+          if (Math.hypot(ax - bx, az - bz) < 0.45) problems.push(`${name(x.characterId)} and ${name(y.characterId)} overlap.`);
+        }
+      }
+      if (problems.length) warnings.push(`Shot ${shot.number}: ${problems.join(' ')}`);
+    }
+    const done = `Blocked shots ${plan.map((x) => x.shot.number).join(', ')}.`;
+    return warnings.length ? `${done}\nWarnings:\n${warnings.join('\n')}` : `${done} No problems found.`;
+  },
+);
+
+export const MAX_SHEET_SHOTS = 6;
+
+const renderShots = tool(
+  'render_shots',
+  `Render shots through their cameras into one contact sheet and look at it: a row per shot, a column per moment (start, middle, end). At most ${MAX_SHEET_SHOTS} shots per call; render in batches after a pass, not after every change.`,
+  z.object({
+    shots: z.array(z.string()).min(1).max(MAX_SHEET_SHOTS),
+    at: z.enum(['start', 'middle', 'end', 'all']).optional().describe('Which moments; default all. "end" is enough for shots where nobody moves.'),
+    view: z.enum(['camera', 'overhead']).optional().describe('"camera" (default) looks through each shot\'s camera; "overhead" looks down on the whole set from the front, best for checking blocking.'),
+  }),
+  async (a, ctx) => {
+    if (!ctx.renderSheet) return 'Rendering is not available here.';
+    const p = ctx.project();
+    const shots = a.shots.map((n) => shotByNumber(p, n));
+    const moments: SheetMoment[] = !a.at || a.at === 'all' ? [...SHEET_MOMENTS] : [a.at];
+    const view = a.view ?? 'camera';
+    const img = await ctx.renderSheet(shots.map((s) => s.id), moments, view);
+    if (!img) return 'Could not render (no WebGL).';
+    const numbers = shots.map((s) => s.number).join(', ');
+    ctx.attachImage(img, `Contact sheet${view === 'overhead' ? ', overhead view from the front of the set (+Z at the bottom, -X on the left)' : ''}. Rows: shots ${numbers} (top to bottom, number in the corner). Columns: ${moments.join(', ')}.`);
+    return `Rendered shots ${numbers}; the sheet follows as an image.`;
+  },
+);
+
 // ---------- per step ----------
 
 const SHARED = [goToStep, openShot];
@@ -544,9 +795,13 @@ export function toolsFor(step: Step, inShotEditor: boolean): Tool[] {
     case 'props':
       return [...SHARED, addPropsTool, modelProp];
     case 'shots':
-      return inShotEditor
-        ? [...SHARED, placeCharacters, removeCharacters, placeShotProps, frameCamera, setCameraTool, cameraMode, durationTool, shotStage, voiceTool, snapshot]
-        : [...SHARED, ...SHOT_LIST];
+      return [
+        ...SHARED,
+        ...(inShotEditor ? [placeCharacters, removeCharacters, placeShotProps, frameCamera, setCameraTool, cameraMode, durationTool, shotStage, voiceTool, snapshot] : SHOT_LIST),
+        ...[useSkillTool(step)].filter((t): t is Tool => !!t),
+        blockShots,
+        renderShots,
+      ];
     default:
       return [...SHARED, ...SHOT_LIST];
   }

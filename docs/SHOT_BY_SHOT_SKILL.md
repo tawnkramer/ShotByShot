@@ -1,6 +1,7 @@
 # Plan: the "Shot by Shot" skill for the in-browser agent
 
-Status: **planned, not started.** Written 2026-10-12 so a fresh session can pick it up.
+Status: **milestone 1 done** (skills, scene context, `block_shots`, `render_shots`). Milestones 2–3 not started.
+Written 2026-10-12 so a fresh session can pick it up.
 
 ## Goal
 
@@ -204,6 +205,26 @@ Keep it compact. Cap the number of lines.
 1. Skills mechanism + whole-scene context + `block_shots` + `render_shots`, with tests. PR.
 2. `check_coverage` + `cover_shots` + camera procedure in the skill, with tests. PR.
 3. Live run on Cold Coffee, then tune the skill text from what the agent gets wrong. PR(s).
+
+## Milestone 1 notes (what was built, what live runs showed)
+- `src/ai/skills/`: registry + `shotByShot.ts` (blocking rules B1–B6, blocking procedure, camera rules for
+  reference). A request matching the trigger ("block the scene") loads the skill up front; the model can also
+  call `use_skill`. While a skill is active: 24 rounds, and `describeScene` adds every shot's lines, blocking and
+  camera plus each stage's footprints.
+- `block_shots` checks all names and face targets before changing anything (a mid-call error used to leave a
+  half-blocked scene that the model then reported as done). Warnings: inside furniture (seats and doors exempt),
+  outside the room, sitting with no seat, overlaps, continuity with the previous shot on the stage
+  (walking↔standing is fine), and action sentences with a movement verb whose character doesn't move.
+- `render_shots` has `view: "overhead"` (4:3 frames from high at the front, fitted to furniture and people),
+  because unplanned auto cameras often show only someone's back.
+- A pass is one undo step already: everything in one assistant reply shares a tag (`undoTag`).
+- Live harness: `tests/live/sheet.html` renders with the app's own renderer in headless Chromium, driven from
+  node by `tests/live/browser.ts` (Vite dev server + the global Playwright). `tests/render.live.test.ts`
+  (`LIVE_RENDER=1`) and `tests/agent.live.test.ts` (`LIVE_AGENT=1` + `OPENAI_API_KEY`) write sheets and a log to
+  `live-output/`. The fixture `tests/fixtures/coldCoffee.ts` furnishes the cafe and adds a Street stage.
+- Live runs (gpt-5-mini, ~100–150 s, 2–5 tool rounds): with the warnings above the model fixes everything it is
+  told about and the blocking reads (Ben enters and sits, barista serves and retreats, Ben exits, Nora alone).
+  Still weak, for milestone 3: it often renders a sample instead of every shot, and its summary can overstate.
 
 ## Open questions
 - Scope of "the scene": the current scene heading only, or a range of shots the user names? (Plan:

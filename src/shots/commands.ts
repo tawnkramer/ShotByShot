@@ -69,6 +69,19 @@ export function setActorKey(shotId: string, characterId: string, which: Which, p
   }, mergeKey);
 }
 
+/**
+ * Sets everyone in a shot at once: the listed characters with their start
+ * (and end, if they move); anyone else is taken out of the shot.
+ */
+export function setBlocking(shotId: string, actors: { characterId: string; start: ActorKey; end?: ActorKey }[]): Command {
+  return shotCommand('Block shot', shotId, (s) => {
+    s.setup!.actors = actors.map((a) => {
+      const easing = s.setup!.actors.find((x) => x.characterId === a.characterId)?.motion.easing ?? 'easeInOut';
+      return { characterId: a.characterId, motion: a.end ? { mode: 'moving', start: a.start, end: a.end, easing } : { mode: 'static', start: a.start, easing } };
+    });
+  });
+}
+
 export function setActorStill(shotId: string, characterId: string): Command {
   return shotCommand('Stop character moving', shotId, (s) => {
     const a = s.setup!.actors.find((x) => x.characterId === characterId);
