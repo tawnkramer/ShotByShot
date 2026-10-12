@@ -11,6 +11,7 @@ import { dialogueSplitPoints, mergeWithNext, splitShot } from '../../shots/comma
 import { useLongPress } from '../../shell/useLongPress';
 import { aspectOf } from '../../shots/setup';
 import { AudioPanel } from '../common/AudioPanel';
+import { useChatUI } from '../../shell/chatUI';
 
 export function ShotsStep() {
   const project = useProjectStore((s) => s.project)!;
@@ -18,6 +19,9 @@ export function ShotsStep() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
   const eff = useMemo(() => effectiveShots(project), [project]);
+  // Ask the assistant to stage or shoot the whole scene, as if typed in the chat.
+  const submit = useChatUI((s) => s.submit);
+  const running = useChatUI((s) => s.running);
   const totalSec = useMemo(() => [...eff.values()].reduce((a, e) => a + e.durationSec, 0), [eff]);
 
   // Coming back from the editor: scroll the edited shot into view.
@@ -43,6 +47,14 @@ export function ShotsStep() {
       <p className="muted small">
         {project.shots.length} shots · {formatTime(totalSec)} · Tap a shot to edit it. Press and hold to merge or split.
       </p>
+      <div className="row plan-row">
+        <button className="btn" disabled={running} onClick={() => submit('Plan the blocking.')}>
+          Plan blocking
+        </button>
+        <button className="btn" disabled={running} onClick={() => submit('Plan the camera.')}>
+          Plan cameras
+        </button>
+      </div>
       <AudioPanel project={project} />
       <ol className="shot-list">
         {project.shots.map((shot) => (
