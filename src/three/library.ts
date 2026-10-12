@@ -213,7 +213,7 @@ export const LIBRARY: Record<LibraryItem, ItemDef> = {
     category: 'prop',
     params: [P('length', 'Length', 4.2, 3, 5.5, 0.1), P('width', 'Width', 1.8, 1.5, 2.1), P('height', 'Height', 1.5, 1.2, 2)],
     build: ({ length: l, width: w, height: h }) => {
-      // A grey-box hatchback, nose toward +Z: wheels, body, then a glass cabin under a roof so the driver shows.
+      // A grey-box hatchback, nose toward +Z (a short hood): wheels, body, then a glass cabin under a roof so the driver shows.
       const r = 0.32, clear = 0.16, body = h * 0.42;
       const cabin = h - clear - body - 0.05;
       const wheels = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => {
@@ -226,8 +226,8 @@ export const LIBRARY: Record<LibraryItem, ItemDef> = {
       return group(
         ...wheels,
         box(w - 0.16, body, l, 0.7, 0, clear),
-        glass(box(w * 0.86, cabin, l * 0.52, 0.9, 0, clear + body, -l * 0.06)),
-        box(w * 0.88, 0.05, l * 0.5, 0.72, 0, clear + body + cabin, -l * 0.07),
+        glass(box(w * 0.86, cabin, l * 0.58, 0.9, 0, clear + body, l * 0.01)),
+        box(w * 0.88, 0.05, l * 0.56, 0.72, 0, clear + body + cabin, 0),
         ...lights,
       );
     },
