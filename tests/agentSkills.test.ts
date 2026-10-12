@@ -171,6 +171,12 @@ describe('block_shots', () => {
     expect(ok).not.toMatch(/doesn't move/);
   });
 
+  it('warns when two props are put in the same spot', async () => {
+    const h = harness(coldCoffee());
+    const r = await runTool(toolsFor('shots', false), 'block_shots', JSON.stringify({ shots: [{ number: '1.9', actors: [{ name: 'Nora', start: { x: -1.5, z: -1.85, pose: 'sitting' } }], props: [{ prop: 'Envelope', x: -1.5, z: -1.3, y: 0.75 }, { prop: "Nora's mug", x: -1.48, z: -1.32, y: 0.75 }] }] }), h.ctx);
+    expect(r).toMatch(/Envelope and Nora's mug are in the same spot/);
+  });
+
   it('checks every name before changing anything', async () => {
     const h = harness(coldCoffee());
     const before = h.get();
@@ -270,6 +276,21 @@ describe('agent loop with a skill', () => {
     expect(bodies).toHaveLength(rounds);
     expect(bodies[0].instructions).toMatch(/SKILL: SHOT BY SHOT[\s\S]*Scene detail/);
     expect(actorsOf(h.get(), '1.2').Ben.mode).toBe('moving');
+  });
+
+  it('replies with the final summary, not the announcement before the tools', async () => {
+    const replies = [
+      { content: "I'll block the opening.", tool_calls: [{ id: 'c1', function: { name: 'block_shots', arguments: JSON.stringify(OPENING) } }] },
+      { content: 'Blocked 1.1 and 1.2.' },
+    ];
+    vi.stubGlobal('fetch', async () => responseStream(replies.shift()!));
+    const h = harness(coldCoffee());
+    const reply = await runTurn({
+      text: 'Block the opening shots.', history: [], step: 'shots', getProject: h.ctx.project, dispatch: h.ctx.dispatch, stageId: h.ctx.stageId,
+      setStage: h.ctx.setStage, navigate: h.ctx.navigate, snapshot: h.ctx.snapshot, apiKey: 'sk-test',
+    });
+    vi.unstubAllGlobals();
+    expect(reply).toBe('Blocked 1.1 and 1.2.');
   });
 
   it('loads a skill the model asks for in the same turn', async () => {

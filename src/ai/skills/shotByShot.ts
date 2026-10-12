@@ -38,14 +38,16 @@ C8. Eyelines: in singles each person looks toward the side of frame where the ot
 C9. Someone entering gets a wider shot.
 C10. Move the camera only for a reason: follow someone walking, or push in on a beat. Otherwise keep it fixed.
 C11*. Lens by size: about 24–35 mm for wide shots, 50–85 mm for closeups.
-view*. The camera must see its subject: a wall between them is an error. Stay inside the set; the open front of a stage is usually where the room is.
+C12. Inserts sparingly: for a "CLOSE ON" line or a prop the story turns on (the key), two or three in a scene at most. A beat about how someone feels ("a long beat", a look, setting a mug down) plays on their face, not on the object.
+view*. The camera must see its subject: a wall, or tall furniture like a counter or pillar, between them is an error. Stay inside the set; the open front of a stage is usually where the room is.
+frame*. A shot must hold its subject: if someone stands up or moves within the shot, frame for where they end up too, or move the camera with them (end). Leaving the frame sideways on an exit is fine.
 
 CAMERA PROCEDURE ("plan the camera"; after the user has reviewed the blocking)
 1. Read the scene and its blocking in Scene detail: the beats, who speaks, where the tension peaks, entrances and exits.
 2. Choose the line of action for each exchange (the two people talking) and the side the camera keeps: the side with room for the camera in the set.
-3. Plan every shot: whose shot it is (C5), its size along the tension curve (C6), height, lens (C11), movement only with a reason (C10), a wider shot for entrances (C9), an insert for "CLOSE ON" lines. Keep reverses matched (C7) and change two things every cut (C3).
+3. Plan every shot: whose shot it is (C5), its size along the tension curve (C6), height, lens (C11), movement only with a reason (C10), a wider shot for entrances (C9), an insert only where C12 allows. Keep reverses matched (C7) and change two things every cut (C3).
 4. Call cover_shots ONCE with the line and every shot of the scene. Use over for over-the-shoulders and on for inserts. Don't give signed angles to stay on a side: the line does that.
-5. Fix every error in the coverage check it returns (view, C1, C4) and every C3 warning with another cover_shots call for just those shots, or say in your reply why you broke the rule on purpose. Info (C7, C11) is advice.
+5. Fix every error in the coverage check it returns (view, C1, C4) and every warning (C3, frame) with another cover_shots call for just those shots, or say in your reply why you broke the rule on purpose. Info (C7, C11) is advice.
 6. Call render_shots (camera view) on every shot of the scene, at most 6 per call ("end" for fixed cameras, "all" when the camera or people move). Look at each frame: is the subject framed with headroom, not hidden behind someone or something, looking the right way? Fix what's wrong with cover_shots for those shots and re-render only them.
 7. Before replying, call check_coverage. Only report what the results confirm.
 8. Reply with a short summary: the line and side in one sentence, the coverage idea in one or two, and any rule you broke on purpose. Don't move people in the camera pass: if the blocking makes a shot impossible, say so.`;

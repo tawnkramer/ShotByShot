@@ -5,6 +5,8 @@ import { runTool, toolsFor, type ToolContext } from '../src/ai/tools';
 import { checkCoverage, lineSide, viewBlocker } from '../src/shots/coverage';
 import { effectiveShot } from '../src/shots/setup';
 import { cameraPosition } from '../src/three/camera';
+import { addObject, quatFromDegrees } from '../src/staging/commands';
+import { setCamera } from '../src/shots/commands';
 import { coldCoffee } from './fixtures/coldCoffee';
 import { CAFE_BLOCKING, CAFE_COVERAGE } from './fixtures/cafePlan';
 
@@ -124,5 +126,28 @@ describe('cover_shots and check_coverage on the cafe', () => {
     expect(await h.call('cover_shots', { shots: [{ number: '1.4', subjects: ['Ben'], size: 'CU' }, { number: '1.1', subjects: ['Ben'], size: 'CU' }] })).toMatch(/^Error: Shot 1\.1: "Ben" isn't in the shot/);
     expect(await h.call('cover_shots', { shots: [{ number: '1.10', subjects: [], size: 'CU' }] })).toMatch(/give subjects, or "on" for an insert/);
     expect(h.get()).toBe(before);
+  });
+
+  it('flags a subject hidden behind tall furniture (view)', async () => {
+    const h = await planned();
+    // The cafe plan plus a pillar between Ben and a camera off to his side.
+    const p0 = h.get();
+    const [p1] = runCommand(p0, emptyHistory(), addObject(p0.stages[0].id, { kind: 'primitive', shape: 'cylinder', params: { radius: 0.3, height: 3 } }, { position: [0.3, 0, 0], rotation: quatFromDegrees([0, 0, 0]), scale: [1, 1, 1] }, undefined, 'Pillar'));
+    const shot = p1.shots.find((s) => s.number === '1.4')!;
+    // Looking at Ben (-1.5, -0.55) from +X, straight through the pillar.
+    const [p2] = runCommand(p1, emptyHistory(), setCamera(shot.id, 'start', { target: [-1.5, 1.2, -0.55], azimuth: 75, elevation: 0, distance: 4, lens: 50, roll: 0 }));
+    expect(checkCoverage(p2, [shot.id]).findings).toContainEqual(expect.objectContaining({ at: '1.4', rule: 'view', message: expect.stringMatching(/^the Pillar is between/) }));
+    // The table in front of seated Nora in a wide shot doesn't hide her.
+    expect(opening(h.get()).findings.filter((f) => f.rule === 'view')).toEqual([]);
+  });
+
+  it('flags a head that leaves the top of the frame when someone stands up (frame)', async () => {
+    const h = await planned();
+    await h.call('block_shots', { shots: [{ number: '1.4', actors: [{ name: 'Nora', start: { x: -1.5, z: -1.85, pose: 'sitting', face: 'Ben' } }, { name: 'Ben', start: { x: -1.5, z: -0.55, pose: 'sitting', face: 'Nora' }, end: { pose: 'standing' } }] }] });
+    await recover(h, { number: '1.4', subjects: ['Ben'], size: 'MCU', angle: 35 });
+    expect(opening(h.get()).findings).toContainEqual(expect.objectContaining({ at: '1.4', rule: 'frame', severity: 'warning' }));
+    // Following him up with the camera fixes it.
+    await recover(h, { number: '1.4', subjects: ['Ben'], size: 'MCU', angle: 35, end: { size: 'MCU' } });
+    expect(opening(h.get()).findings.filter((f) => f.rule === 'frame')).toEqual([]);
   });
 });
