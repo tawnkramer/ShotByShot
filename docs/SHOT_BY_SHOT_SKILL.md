@@ -1,6 +1,6 @@
 # Plan: the "Shot by Shot" skill for the in-browser agent
 
-Status: **milestone 1 done** (skills, scene context, `block_shots`, `render_shots`). Milestones 2–3 not started.
+Status: **milestones 1 and 2 done** (blocking and camera passes, checker, renders). Milestone 3 (tuning from live runs) not started.
 Written 2026-10-12 so a fresh session can pick it up.
 
 ## Goal
@@ -226,9 +226,26 @@ Keep it compact. Cap the number of lines.
   told about and the blocking reads (Ben enters and sits, barista serves and retreats, Ben exits, Nora alone).
   Still weak, for milestone 3: it often renders a sample instead of every shot, and its summary can overstate.
 
+## Milestone 2 notes
+- The assistant now uses the OpenAI **Responses API** (`src/ai/chat.ts`; stateless, `store: false`, encrypted reasoning
+  carried between tool rounds). gpt-6.x models only take tools there. Default model **gpt-5.5**; the automatic pick is
+  cached apart from the user's choice (old auto-saved picks are treated as automatic once); Settings has a dropdown.
+- `src/shots/coverage.ts` (pure): classifies each shot (subject, single / over-the-shoulder / group / insert, size from
+  the frame height at the subject, bearing, height class, lens, movement, side of the line) and checks C1/C2 (side held
+  from the last shot that set it; bridges: on the line, an insert, a lead moving > 0.75 m, a camera move that crosses),
+  C3 (angle = bearing around the same subject, or the camera's turn for a new subject), C4, C7 (pairs of the same kind
+  within one size step), C11, and `view` (a room wall or wall between camera and aim point).
+- `cover_shots` takes the line of action plus a side instead of signed angles (the tool picks the sign per shot, so
+  reverses can't cross by accident); `over` for over-the-shoulders, `on` for inserts sized to the object, `end` for a
+  move. Cameras that would sit behind a wall are pulled in with a wider lens. A line may end at an object for a walk.
+- Fixed on the way: seated heads are at 79% of standing height (was 72%, so seated closeups in the app cut the head).
+- Live (both passes, all 18 shots, one run each): gpt-5.5 129 s, matched reverses, a couple of weak frames;
+  gpt-6.1-sol 44 s, more varied coverage, reverses deliberately unmatched. Both end with only C7 advice.
+- For milestone 3: occlusion by tall furniture (the counter) isn't checked; inserts can repeat; a closer look at exits.
+
 ## Open questions
-- Scope of "the scene": the current scene heading only, or a range of shots the user names? (Plan:
-  default to the scene of the open/selected shot; accept "shots 1.1–1.12".)
+- Scope of "the scene": settled in the skill text: the shots the user names, else the open shot's scene, else every
+  scene listed.
 - Should a pass be one undo step? (Plan: yes, if the store supports grouping cheaply.)
 - Cost guard: show the user a rough token estimate before a full-scene pass?
 

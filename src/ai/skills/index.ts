@@ -21,8 +21,8 @@ export const SKILLS: Skill[] = [
   {
     id: 'shot_by_shot',
     title: 'Shot by Shot',
-    description: 'Block a whole scene (place and move every character in every shot) following directing rules. Use for "block the scene", "stage this scene", or blocking several shots at once.',
-    triggers: /\b(block|stage)\b.*\b(scene|shots)\b/i,
+    description: 'Stage and shoot a whole scene following directing rules: the blocking pass (place and move every character in every shot) and the camera pass (cover every shot, keeping the line of action). Use for "block the scene", "plan the camera", "cover the scene", or blocking or framing several shots at once.',
+    triggers: /\b(block|stage)\b.*\b(scene|shots)\b|\b(plan|cover|shoot)\b.*\b(cameras?|scene|shots|coverage)\b|\bcoverage\b/i,
     steps: ['shots'],
     text: SHOT_BY_SHOT,
     maxRounds: 24,

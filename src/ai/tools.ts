@@ -11,11 +11,12 @@ import { addCharacters, updateCharacter, type CharacterPatch } from '../characte
 import { OPENAI_VOICES } from '../audio/voices';
 import { addProp, updateProp } from '../props/commands';
 import { addActor, addShotProp, mergeWithNext, setBlocking, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
-import { aspectOf, effectiveShot, effectiveShots, shotLines, subjectsFor } from '../shots/setup';
-import { isContainer, worldRect, type Rect } from '../staging/placement';
+import { aspectOf, effectiveShot, effectiveShots, poseHeight, sceneLineOf, shotLines, subjectsFor, type EffectiveShot } from '../shots/setup';
+import { isContainer, objectExtent, worldRect, type Rect } from '../staging/placement';
 import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
 import { skillById, skillsFor } from './skills';
-import { frameSubjects, moveCamera, SHOT_SIZES, turnCamera, type ShotSize } from '../three/camera';
+import { cameraPosition, frameSubjects, lensToVFov, moveCamera, SHOT_SIZES, turnCamera, type ShotSize, type Subject } from '../three/camera';
+import { checkCoverage, describeCoverage, formatFindings, lineSide, viewBlocker } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
 import { useAudioJob } from '../audio/job';
@@ -755,6 +756,189 @@ const blockShots = tool(
   },
 );
 
+// ---------- whole-scene camera ----------
+
+const sizeEnum = z.enum(Object.keys(SHOT_SIZES) as [ShotSize, ...ShotSize[]]);
+const heightEnum = z.enum(['eye', 'high', 'low']);
+const lineSpec = z.object({
+  from: z.string().describe('A character; or, for a walk, a character or the thing they walk to or from.'),
+  to: z.string(),
+  side: z.enum(['left', 'right']).describe('Which side of the line the camera stays on, as seen standing at "from" looking at "to".'),
+});
+const framingSpec = {
+  subjects: z.array(z.string()).describe('Characters the shot is on, main one first. Empty for an insert (then give "on").'),
+  on: z.string().optional().describe('For an insert: a prop in the shot or a stage object to frame.'),
+  over: z.string().optional().describe('Over-the-shoulder: the character in the foreground, seen from behind.'),
+  size: sizeEnum,
+  angle: num.optional().describe('Degrees off straight-on, toward the line side (singles default 20; over-the-shoulder 15; two-shots 0 = square to the line).'),
+  height: heightEnum.optional(),
+  lens: z.number().min(12).max(200).optional().describe('mm; default 28 for WS/EWS, 50 otherwise.'),
+};
+
+/** Where characters are at a keyframe of the shot, as framing subjects. */
+function subjectsAt(p: Project, eff: EffectiveShot, ids: string[], which: 'start' | 'end'): Subject[] {
+  return ids.map((id) => {
+    const a = eff.setup.actors.find((x) => x.characterId === id)!;
+    const k = keyOf(a.motion, which);
+    return { position: k.position, yaw: k.yaw, height: poseHeight(p.characters.find((c) => c.id === id)?.heightCm, k.pose) };
+  });
+}
+
+const bearing = (from: [number, number, number], to: [number, number, number]) => (Math.atan2(to[0] - from[0], to[2] - from[2]) * 180) / Math.PI;
+/** How much of the frame an insert's object fills, by size. */
+const INSERT_FILL: Record<ShotSize, number> = { ECU: 0.8, CU: 0.45, MCU: 0.3, MS: 0.18, WS: 0.07, EWS: 0.03 };
+
+type Framing = { subjects: string[]; on?: string; over?: string; size: ShotSize; angle?: number; height?: 'eye' | 'high' | 'low'; lens?: number };
+
+/**
+ * Brings a camera that would sit behind a wall in front of it, widening the
+ * lens to keep the framing. Gives up below 16 mm.
+ */
+function clearWalls(p: Project, eff: EffectiveShot, cam: CameraState): CameraState {
+  if (!viewBlocker(p, eff, cam)) return cam;
+  for (let d = cam.distance - 0.1; d >= 0.4; d -= 0.1) {
+    const lens = (cam.lens * d) / cam.distance;
+    if (lens < 16) break;
+    const next = { ...cam, distance: d, lens };
+    if (!viewBlocker(p, eff, next)) return next;
+  }
+  return cam;
+}
+
+/** A camera for one framing at one keyframe, kept on the chosen side of the line and inside the set. */
+function frameShot(p: Project, eff: EffectiveShot, shotNumber: string, f: Framing, which: 'start' | 'end', line?: { from: string; to: string; side: 'left' | 'right' }): CameraState {
+  return clearWalls(p, eff, frameUnclipped(p, eff, shotNumber, f, which, line));
+}
+
+function frameUnclipped(p: Project, eff: EffectiveShot, shotNumber: string, f: Framing, which: 'start' | 'end', line?: { from: string; to: string; side: 'left' | 'right' }): CameraState {
+  const aspect = aspectOf(p);
+  const charId = (n: string) => {
+    const c = byName(p.characters, n);
+    if (!c || !eff.setup.actors.some((a) => a.characterId === c.id)) throw new Error(`Shot ${shotNumber}: "${n}" isn't in the shot. Block them first.`);
+    return c.id;
+  };
+  const ids = f.subjects.map(charId);
+  const subjects = subjectsAt(p, eff, ids, which);
+  // The line runs between two characters in the shot, or a character and a thing (a door, a prop) for a walk.
+  const lineEnd = (n: string): [number, number, number] | undefined => {
+    const c = byName(p.characters, n);
+    if (c) return eff.setup.actors.some((a) => a.characterId === c.id) ? subjectsAt(p, eff, [c.id], which)[0].position : undefined;
+    const prop = byName(p.props, n);
+    const placed = prop && eff.setup.props.find((x) => x.propId === prop.id);
+    if (placed) return keyOf(placed.motion, which).position;
+    const o = byName(p.stages.find((x) => x.id === eff.stageId)?.objects ?? [], n);
+    if (o) return eff.setup.stageOverrides[o.id]?.position ?? o.transform.position;
+    if (!prop) throw new Error(`Shot ${shotNumber}: the line names "${n}", which isn't a character, prop or object on this stage.`);
+    return undefined;
+  };
+  const ends = line && [lineEnd(line.from), lineEnd(line.to)];
+  // It applies when both ends are in the shot.
+  const linePts = ends?.every(Boolean) ? (ends as [[number, number, number], [number, number, number]]) : undefined;
+  const want = line?.side === 'left' ? 1 : -1;
+  // Of two candidate cameras, the one on the chosen side (or the first without a line).
+  const pick = (a: CameraState, b: CameraState) => {
+    if (!linePts) return a;
+    const sa = lineSide(linePts[0], linePts[1], cameraPosition(a).toArray() as [number, number, number]);
+    const sb = lineSide(linePts[0], linePts[1], cameraPosition(b).toArray() as [number, number, number]);
+    return sa * want >= sb * want ? a : b;
+  };
+  const elevation = f.height === 'high' ? 25 : f.height === 'low' ? -12 : undefined;
+
+  if (!subjects.length) {
+    if (!f.on) throw new Error(`Shot ${shotNumber}: give subjects, or "on" for an insert.`);
+    const prop = byName(p.props, f.on);
+    const placed = prop && eff.setup.props.find((x) => x.propId === prop.id);
+    const stage = p.stages.find((x) => x.id === eff.stageId);
+    const o = stage && byName(stage.objects, f.on);
+    const at = placed ? keyOf(placed.motion, which).position : o ? eff.setup.stageOverrides[o.id]?.position ?? o.transform.position : null;
+    if (!at) throw new Error(`Shot ${shotNumber}: can't find "${f.on}" to frame. Place the prop in the shot first.`);
+    // Size the frame to the object as seen: its width against the frame's width, its height (tilted) against the frame's height.
+    const ext = objectExtent(placed ? prop!.source : o!.source);
+    const scale = placed ? prop!.defaultScale : o!.transform.scale[0];
+    const across = Math.max(2 * ext.hx, 2 * ext.hz) * scale, tall = ext.h * scale;
+    const elevation = f.height === 'eye' ? 10 : f.height === 'low' ? 0 : 35;
+    const el = (elevation * Math.PI) / 180;
+    const lens = f.lens ?? 50;
+    const tanV = Math.tan(((lensToVFov(lens, aspect) * Math.PI) / 180) / 2);
+    const fill = INSERT_FILL[f.size];
+    const distance = Math.max(0.15, across / fill / (2 * tanV * aspect), (across * Math.sin(el) + tall * Math.cos(el)) / fill / (2 * tanV));
+    const base = linePts ? bearing(linePts[0], linePts[1]) + 90 : 0;
+    const make = (az: number): CameraState => ({ target: [at[0], at[1] + tall / 2, at[2]], azimuth: az + (f.angle ?? 0), elevation, distance, lens, roll: 0 });
+    return pick(make(base), make(base + 180));
+  }
+
+  const opts = { elevation, lens: f.lens };
+  const main = subjects[0];
+  if (f.over) {
+    const fg = subjectsAt(p, eff, [charId(f.over)], which)[0];
+    const base = bearing(main.position, fg.position);
+    const off = f.angle ?? 15;
+    const make = (az: number) => {
+      const cam = frameSubjects([main], f.size, aspect, { ...opts, azimuth: az });
+      // Stay behind the foreground shoulder: back off and lengthen the lens to keep the size.
+      const behind = Math.hypot(fg.position[0] - main.position[0], fg.position[2] - main.position[2]) + 0.6;
+      return cam.distance >= behind ? cam : { ...cam, distance: behind, lens: Math.min(135, cam.lens * (behind / cam.distance)) };
+    };
+    return pick(make(base + off), make(base - off));
+  }
+  if (subjects.length === 1) {
+    const off = f.angle ?? 20;
+    return pick(frameSubjects(subjects, f.size, aspect, { ...opts, azimuth: main.yaw + off }), frameSubjects(subjects, f.size, aspect, { ...opts, azimuth: main.yaw - off }));
+  }
+  const base = linePts ? bearing(linePts[0], linePts[1]) + 90 : 0;
+  const make = (az: number) => frameSubjects(subjects, f.size, aspect, { ...opts, azimuth: az + (f.angle ?? 0) });
+  return pick(make(base), make(base + 180));
+}
+
+/** The coverage report for the scenes of the given shots. */
+function coverageReport(p: Project, shots: Shot[], focus?: Set<string>): string {
+  const scenes = new Set(shots.map((s) => sceneLineOf(p, s)?.id));
+  const inScenes = p.shots.filter((s) => scenes.has(sceneLineOf(p, s)?.id));
+  const { shots: cov, findings } = checkCoverage(p, inScenes.map((s) => s.id));
+  const lines = cov.filter((c) => !focus || focus.has(c.shotId)).map((c) => `${c.number}: ${describeCoverage(p, c)}`);
+  const numbers = new Set(p.shots.filter((s) => focus?.has(s.id)).map((s) => s.number));
+  const relevant = findings.filter((f) => !focus || f.at.split(/[→/]/).some((n) => numbers.has(n)));
+  return `${lines.join('\n')}\n${relevant.length ? `Coverage check:\n${formatFindings(relevant)}` : 'Coverage check: no problems.'}`;
+}
+
+const coverShots = tool(
+  'cover_shots',
+  'Set the camera of several shots at once (no shot needs to be open). Give the line of action and the side the camera keeps; angles then always lean toward that side, so the camera never crosses by accident. "end" makes the camera move to a second framing during the shot (people are framed where they are at the end). Returns what each shot shows and a coverage check (line, two-element rule, jump cuts, matched reverses, lenses).',
+  z.object({
+    line: lineSpec.optional().describe('The line of action for every shot in this call (override per shot).'),
+    shots: z.array(z.object({ number: z.string(), line: lineSpec.optional(), ...framingSpec, end: z.object(framingSpec).partial().optional() })).min(1),
+  }),
+  (a, ctx) => {
+    const p = ctx.project();
+    // Work everything out before changing anything.
+    const cams = a.shots.map((s) => {
+      const shot = shotByNumber(p, s.number);
+      const eff = effectiveShot(p, shot.id)!;
+      const line = s.line ?? a.line;
+      const start = frameShot(p, eff, shot.number, s, 'start', line);
+      const end = s.end && frameShot(p, eff, shot.number, { ...s, ...s.end, subjects: s.end.subjects ?? s.subjects }, 'end', line);
+      return { shot, start, end };
+    });
+    for (const c of cams) {
+      ctx.dispatch(setCamera(c.shot.id, 'start', c.start));
+      if (c.end) ctx.dispatch(setCamera(c.shot.id, 'end', c.end));
+      else ctx.dispatch(setCameraFixed(c.shot.id));
+    }
+    return `Covered shots ${cams.map((c) => c.shot.number).join(', ')}.\n${coverageReport(ctx.project(), cams.map((c) => c.shot), new Set(cams.map((c) => c.shot.id)))}`;
+  },
+);
+
+const checkCoverageTool = tool(
+  'check_coverage',
+  'Check the cameras of a scene against film grammar: line of action (C1), at least two changes per cut (C3), jump cuts (C4), matched reverses (C7), lens by size (C11). Also says what each shot shows. Default: every shot.',
+  z.object({ shots: z.array(z.string()).optional().describe('Shot numbers; their whole scenes are checked.') }),
+  (a, ctx) => {
+    const p = ctx.project();
+    const shots = a.shots?.length ? a.shots.map((n) => shotByNumber(p, n)) : p.shots;
+    return coverageReport(p, shots);
+  },
+);
+
 export const MAX_SHEET_SHOTS = 6;
 
 const renderShots = tool(
@@ -800,6 +984,8 @@ export function toolsFor(step: Step, inShotEditor: boolean): Tool[] {
         ...(inShotEditor ? [placeCharacters, removeCharacters, placeShotProps, frameCamera, setCameraTool, cameraMode, durationTool, shotStage, voiceTool, snapshot] : SHOT_LIST),
         ...[useSkillTool(step)].filter((t): t is Tool => !!t),
         blockShots,
+        coverShots,
+        checkCoverageTool,
         renderShots,
       ];
     default:

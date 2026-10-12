@@ -4,6 +4,7 @@ import { buildSequence } from '../shots/sequence';
 import { effectiveShots, sceneLineOf, shotLines, summaryLine } from '../shots/setup';
 import { speakerOf } from '../story/classify';
 import { skillById } from './skills';
+import { checkCoverage, describeCoverage } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { eulerDegrees } from '../staging/commands';
 import { worldRect } from '../staging/placement';
@@ -20,7 +21,7 @@ export const STEP_GUIDE: Record<Step, string> = {
   staging: 'The user is building grey-box sets. Lay out realistic rooms with real dimensions (a bar counter ~1.05 m high, tables ~0.75 m, doors ~2.1 m). Keep walkways clear. If given a photo or sketch, estimate the room size first, then place objects in room coordinates. Check your work with snapshot when placing many things.',
   characters: 'The user is defining characters: sex, height, build, age, notes, and voice. Choose voices that fit each character, and describe a speaking style when useful.',
   props: 'The user is making props. To model a prop, build it from simple shapes with model_prop at real-world size, front facing +Z, resting on the floor; combine several parts for recognizable silhouettes.',
-  shots: 'The user is working on shots. In the shot editor, block characters (place_characters), frame the camera (frame_camera / set_camera), and make things move by setting an "end" keyframe. Keep characters out of furniture: check the stage objects and their footprints. For blocking a whole scene or several shots at once, load the Shot by Shot skill (use_skill) and use block_shots; check the result with render_shots.',
+  shots: 'The user is working on shots. In the shot editor, block characters (place_characters), frame the camera (frame_camera / set_camera), and make things move by setting an "end" keyframe. Keep characters out of furniture: check the stage objects and their footprints. For blocking or covering a whole scene or several shots at once, load the Shot by Shot skill (use_skill) and use block_shots or cover_shots; check the result with render_shots.',
   previs: 'The user is watching the whole film in sequence. Offer to adjust shots (open_shot) or the breakdown.',
   export: 'The user is exporting the film. Help with settings questions; open shots to fix problems they notice.',
 };
@@ -128,6 +129,7 @@ export function describeScene(project: Project, opts: { shotId?: string }): stri
   const openScene = open ? sceneLineOf(project, open) : undefined;
   const first = openScene ? project.shots.findIndex((s) => sceneLineOf(project, s) === openScene) : 0;
   const shots = project.shots.slice(Math.max(0, first), Math.max(0, first) + MAX_SCENE_SHOTS);
+  const coverage = new Map(checkCoverage(project, shots.map((s) => s.id)).shots.map((c) => [c.shotId, c]));
   const out: string[] = ['--- Scene detail ---'];
   out.push('Positions are x, z in meters; yaw in degrees. "edited" marks shots the user or you set; others carry over from the previous shot on the same stage.');
   const stageIds = new Set<string>();
@@ -155,7 +157,7 @@ export function describeScene(project: Project, opts: { shotId?: string }): stri
     }).join('; ') || 'nobody'));
     if (e.setup.props.length) out.push('  Props: ' + e.setup.props.map((p) => `${project.props.find((x) => x.id === p.propId)?.name} x=${r(p.motion.start.position[0])} z=${r(p.motion.start.position[2])}${p.motion.start.position[1] ? ` y=${r(p.motion.start.position[1])}` : ''}`).join('; '));
     const cam = (k: typeof e.camera.start) => `target [${k.target.map(r).join(', ')}] arc ${Math.round(k.azimuth)}° angle ${Math.round(k.elevation)}° ${r(k.distance)} m ${Math.round(k.lens)} mm`;
-    out.push(`  Camera${e.camera.mode === 'moving' ? ' (moving)' : ''}: ${cam(e.camera.start)}${e.camera.mode === 'moving' && e.camera.end ? ` → ${cam(e.camera.end)}` : ''}`);
+    out.push(`  Camera: ${describeCoverage(project, coverage.get(shot.id)!)}; ${cam(e.camera.start)}${e.camera.mode === 'moving' && e.camera.end ? ` → ${cam(e.camera.end)}` : ''}`);
   }
   const rest = project.shots.length - Math.max(0, first) - shots.length;
   if (rest > 0) out.push(`… ${rest} more shots not shown.`);

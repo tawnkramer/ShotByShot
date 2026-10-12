@@ -6,20 +6,26 @@ import { disposeObject } from '../three/materials';
 /** Half-width (x) and half-depth (z) of an object's footprint, before rotation. */
 type Extent = { hx: number; hz: number };
 
-const cache = new Map<string, Extent>();
+const cache = new Map<string, Extent & { h: number }>();
 
-export function footprint(source: ObjectSource): Extent {
-  if (source.kind === 'asset') return { hx: 0.5, hz: 0.5 };
+/** Footprint plus height, before rotation and scale. */
+export function objectExtent(source: ObjectSource): Extent & { h: number } {
+  if (source.kind === 'asset') return { hx: 0.5, hz: 0.5, h: 1 };
   const key = JSON.stringify(source);
   let e = cache.get(key);
   if (!e) {
     const g = buildStatic(source);
     const box = new THREE.Box3().setFromObject(g);
     disposeObject(g);
-    e = { hx: Math.max(0.05, (box.max.x - box.min.x) / 2), hz: Math.max(0.05, (box.max.z - box.min.z) / 2) };
+    e = { hx: Math.max(0.05, (box.max.x - box.min.x) / 2), hz: Math.max(0.05, (box.max.z - box.min.z) / 2), h: Math.max(0.01, box.max.y) };
     cache.set(key, e);
   }
   return e;
+}
+
+export function footprint(source: ObjectSource): Extent {
+  const { hx, hz } = objectExtent(source);
+  return { hx, hz };
 }
 
 /** Rooms, walls and floors are things you place objects inside or against, not obstacles. */
