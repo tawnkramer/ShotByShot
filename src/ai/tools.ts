@@ -16,6 +16,7 @@ import { isContainer, objectExtent, worldRect, type Rect } from '../staging/plac
 import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
 import { skillById, skillsFor } from './skills';
 import { cameraPosition, frameSubjects, lensToVFov, moveCamera, SHOT_SIZES, turnCamera, type ShotSize, type Subject } from '../three/camera';
+import { seatedPosition } from '../shots/seats';
 import { checkCoverage, describeCoverage, formatFindings, lineSide, viewBlocker } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
@@ -55,6 +56,7 @@ function tool<S extends z.ZodType>(name: string, description: string, schema: S,
 
 const num = z.number();
 const yawDesc = 'Facing in degrees: 0 faces the front of the stage (+Z), 90 faces +X, -90 faces -X, 180 faces the back.';
+const liftDesc = 'Height of what they stand or sit on, in meters (default 0, the floor), e.g. 0.4 on a platform. Not needed for chairs and bar stools: sitting on one puts them at its seat height.';
 
 // ---------- helpers ----------
 
@@ -378,9 +380,9 @@ const at = z.enum(['start', 'end']).optional().describe('Keyframe. Placing at "e
 
 const placeCharacters = tool(
   'place_characters',
-  'Place characters in the open shot (adding them if needed). Use face to turn toward another character or object by name.',
+  'Place characters in the open shot (adding them if needed). Use face to turn toward another character or object by name. Someone sitting at a chair or bar stool is seated at its height automatically.',
   z.object({
-    placements: z.array(z.object({ name: z.string(), x: num.optional(), z: num.optional(), yaw: num.optional().describe(yawDesc), face: z.string().optional(), pose: z.enum(POSES).optional(), at })).min(1),
+    placements: z.array(z.object({ name: z.string(), x: num.optional(), z: num.optional(), y: num.optional().describe(liftDesc), yaw: num.optional().describe(yawDesc), face: z.string().optional(), pose: z.enum(POSES).optional(), at })).min(1),
   }),
   (a, ctx) => {
     const shot = editorShot(ctx);
@@ -391,7 +393,7 @@ const placeCharacters = tool(
       const eff = effectiveShot(ctx.project(), shot.id)!;
       if (!eff.setup.actors.some((x) => x.characterId === c.id)) ctx.dispatch(addActor(shot.id, c.id, { position: [pl.x ?? 0, 0, pl.z ?? 0], yaw: pl.yaw ?? 0 }));
       const cur = keyOf(effectiveShot(ctx.project(), shot.id)!.setup.actors.find((x) => x.characterId === c.id)!.motion, which);
-      const position: [number, number, number] = [pl.x ?? cur.position[0], 0, pl.z ?? cur.position[2]];
+      const position: [number, number, number] = [pl.x ?? cur.position[0], pl.y ?? cur.position[1], pl.z ?? cur.position[2]];
       let yaw = pl.yaw ?? cur.yaw;
       if (pl.face) {
         const target = positionOf(ctx.project(), shot, pl.face, which);
@@ -452,7 +454,7 @@ const frameCamera = tool(
       if (!c) throw new Error(`No character named "${n}".`);
       return c.id;
     });
-    const subjects = subjectsFor(p, eff.setup, ids);
+    const subjects = subjectsFor(p, eff.setup, ids, eff.stageId);
     if (!subjects.length) throw new Error('Nobody to frame: add characters to the shot first.');
     const elevation = a.height === 'high' ? 25 : a.height === 'low' ? -12 : undefined;
     const cam = frameSubjects(subjects, a.size, aspectOf(p), { azimuth: subjects[0].yaw + (a.angle ?? 0), elevation, lens: a.lens });
@@ -559,6 +561,7 @@ function useSkillTool(step: Step): Tool | null {
 const keySpec = z.object({
   x: num.optional(),
   z: num.optional(),
+  y: num.optional().describe(liftDesc),
   yaw: num.optional().describe(yawDesc),
   face: z.string().optional().describe('Turn toward a character in this shot, a stage object, or a prop in the shot, by name. Overrides yaw.'),
   pose: z.enum(POSES).optional(),
@@ -677,12 +680,12 @@ const blockShots = tool(
       const keys = actors.map(({ c, spec }) => {
         const before = prev(c.id);
         const start: ActorKey = {
-          position: [spec.start.x ?? before?.position[0] ?? 0, 0, spec.start.z ?? before?.position[2] ?? 0],
+          position: [spec.start.x ?? before?.position[0] ?? 0, spec.start.y ?? before?.position[1] ?? 0, spec.start.z ?? before?.position[2] ?? 0],
           yaw: spec.start.yaw ?? before?.yaw ?? 0,
           pose: spec.start.pose ?? before?.pose ?? 'standing',
         };
         const end: ActorKey | undefined = spec.end && {
-          position: [spec.end.x ?? start.position[0], 0, spec.end.z ?? start.position[2]],
+          position: [spec.end.x ?? start.position[0], spec.end.y ?? start.position[1], spec.end.z ?? start.position[2]],
           yaw: spec.end.yaw ?? start.yaw,
           pose: spec.end.pose ?? start.pose,
         };
@@ -780,7 +783,8 @@ function subjectsAt(p: Project, eff: EffectiveShot, ids: string[], which: 'start
   return ids.map((id) => {
     const a = eff.setup.actors.find((x) => x.characterId === id)!;
     const k = keyOf(a.motion, which);
-    return { position: k.position, yaw: k.yaw, height: poseHeight(p.characters.find((c) => c.id === id)?.heightCm, k.pose) };
+    const c = p.characters.find((x) => x.id === id);
+    return { position: seatedPosition(p.stages.find((s) => s.id === eff.stageId), eff.setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
   });
 }
 

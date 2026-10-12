@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { seatedPosition } from '../shots/seats';
 import type { CameraState, Project, StageObject } from '../state/schema';
 import { effectiveShot, type EffectiveShot } from '../shots/setup';
 import { lerpCamera, lerpPlacement, sample, sampleActor } from '../shots/timing';
@@ -112,12 +113,14 @@ export class ShotRig {
     const eff = this.eff;
     const project = this.project;
     if (!eff || !project) return null;
+    const stage = project.stages.find((s) => s.id === eff.stageId);
     for (const a of eff.setup.actors) {
       const item = this.items.get(`actor:${a.characterId}`);
       const c = project.characters.find((x) => x.id === a.characterId);
       if (!item || !c || hold === `actor:${a.characterId}`) continue;
       const f = sampleActor(a.motion, u);
-      item.object.position.set(...f.position);
+      // Someone sitting on a bar stool sits on it, at its height, not a chair's.
+      item.object.position.set(...seatedPosition(stage, eff.setup.stageOverrides, c, f));
       item.object.rotation.set(0, deg(f.yaw), 0);
       if (f.walkPhase !== undefined) {
         applyWalkCycle(item.object, c, f.walkPhase);

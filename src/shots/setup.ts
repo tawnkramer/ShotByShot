@@ -5,6 +5,7 @@ import { cueName, speakerOf } from '../story/classify';
 import { frameSubjects, type ShotSize, type Subject } from '../three/camera';
 import { autoDuration, shotCaptions, type Caption } from './timing';
 import { validClips } from '../audio/clips';
+import { seatedPosition } from './seats';
 
 export function aspectOf(project: Project): number {
   return ASPECT_RATIOS.find((a) => a.id === project.aspect)!.ratio;
@@ -114,26 +115,28 @@ export function poseHeight(heightCm: number | undefined, pose: string): number {
   return pose === 'sitting' ? h * 0.79 : pose === 'lying' ? 0.4 : h;
 }
 
-export function subjectsFor(project: Project, setup: ShotSetup, ids?: string[]): Subject[] {
+/** People to frame, at their start keys, raised onto whatever seat they sit on. */
+export function subjectsFor(project: Project, setup: ShotSetup, ids?: string[], stageId?: string): Subject[] {
+  const stage = project.stages.find((s) => s.id === stageId);
   return setup.actors
     .filter((a) => !ids || ids.includes(a.characterId))
     .map((a) => {
       const c = project.characters.find((x) => x.id === a.characterId);
       const k = a.motion.start;
-      return { position: k.position, yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
+      return { position: seatedPosition(stage, setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
     });
 }
 
 /** A sensible first camera: on the speaker if one person talks, otherwise everyone. */
-export function autoCamera(project: Project, shot: Shot, setup: ShotSetup): CameraState {
+export function autoCamera(project: Project, shot: Shot, setup: ShotSetup, stageId?: string): CameraState {
   const aspect = aspectOf(project);
   const speakers = speakersInShot(project, shot).filter((id) => setup.actors.some((a) => a.characterId === id));
   if (speakers.length === 1 && setup.actors.length > 1) {
-    const [s] = subjectsFor(project, setup, speakers);
+    const [s] = subjectsFor(project, setup, speakers, stageId);
     // Slightly off-axis so it reads as shot / reverse-shot.
     return frameSubjects([s], 'MCU', aspect, { azimuth: s.yaw + 25 });
   }
-  const all = subjectsFor(project, setup);
+  const all = subjectsFor(project, setup, undefined, stageId);
   if (!all.length) return frameSubjects([], 'EWS', aspect);
   const size: ShotSize = all.length === 1 ? 'MS' : 'WS';
   // Face the group from the stage's front (+Z) unless everyone is turned away.
@@ -181,7 +184,7 @@ export function effectiveShots(project: Project): Map<string, EffectiveShot> {
       setup = { ...base, actors: placeNew(base.actors, charactersInShot(project, shot), stage) };
     }
     if (stageId) lastOnStage.set(stageId, setup);
-    const camera: ShotCamera = shot.camera ?? { mode: 'static', start: autoCamera(project, shot, setup), easing: 'easeInOut' };
+    const camera: ShotCamera = shot.camera ?? { mode: 'static', start: autoCamera(project, shot, setup, stageId), easing: 'easeInOut' };
     const durationSec = shot.durationLocked && shot.durationSec ? shot.durationSec : autoDuration(shotLines(project, shot), clipsOf(project));
     map.set(shot.id, { stageId, setup, camera, durationSec });
   }
