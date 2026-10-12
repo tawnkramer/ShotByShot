@@ -17,6 +17,22 @@ describe('props', () => {
     expect(suggestProps(base).find((s) => s.item === 'envelope')!.mentions).toBe(2);
   });
 
+  it('has a car that builds at its size and is suggested by the script', async () => {
+    const THREE = await import('three');
+    const { LIBRARY } = await import('../src/three/library');
+    const { WRONG_CAR_SCRIPT } = await import('../src/story/sample');
+    const car = new THREE.Box3().setFromObject(buildStatic({ kind: 'library', item: 'car', params: { length: 4, width: 1.8, height: 1.5 } }));
+    expect(LIBRARY.car.category).toBe('prop');
+    expect(car.max.z - car.min.z).toBeCloseTo(4, 1);
+    expect(car.max.y).toBeCloseTo(1.5, 1);
+    expect(car.min.y).toBeCloseTo(0, 2);
+    const [wrongCar] = runCommand(createProject('T'), emptyHistory(), importScript(WRONG_CAR_SCRIPT));
+    expect(suggestProps(wrongCar).find((s) => s.item === 'car')?.mentions).toBe(4);
+    // A carrier isn't a car.
+    const [carrier] = runCommand(createProject('T'), emptyHistory(), importScript('INT. ROOM - DAY\n\nShe lifts the carrier.'));
+    expect(suggestProps(carrier).map((s) => s.item)).not.toContain('car');
+  });
+
   it('stops suggesting props that are already in the project', () => {
     const [p] = runCommand(base, emptyHistory(), addProp({ kind: 'library', item: 'envelope' }));
     expect(suggestProps(p).map((s) => s.item)).not.toContain('envelope');
