@@ -16,7 +16,7 @@ import { isContainer, objectExtent, worldRect, type Rect } from '../staging/plac
 import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
 import { skillById, skillsFor } from './skills';
 import { cameraPosition, frameSubjects, lensToVFov, moveCamera, SHOT_SIZES, turnCamera, type ShotSize, type Subject } from '../three/camera';
-import { seatLift } from '../shots/seats';
+import { seatedPosition } from '../shots/seats';
 import { checkCoverage, describeCoverage, formatFindings, lineSide, viewBlocker } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
@@ -784,8 +784,7 @@ function subjectsAt(p: Project, eff: EffectiveShot, ids: string[], which: 'start
     const a = eff.setup.actors.find((x) => x.characterId === id)!;
     const k = keyOf(a.motion, which);
     const c = p.characters.find((x) => x.id === id);
-    const y = k.position[1] + seatLift(p.stages.find((s) => s.id === eff.stageId), eff.setup.stageOverrides, c, k);
-    return { position: [k.position[0], y, k.position[2]], yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
+    return { position: seatedPosition(p.stages.find((s) => s.id === eff.stageId), eff.setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
   });
 }
 

@@ -4,7 +4,7 @@ import { speakerOf } from '../story/classify';
 import { aspectOf, effectiveShots, poseHeight, sceneLineOf, shotLines, type EffectiveShot } from './setup';
 import { keyOf } from './timing';
 import { LIBRARY, resolveParams } from '../three/library';
-import { seatLift } from './seats';
+import { seatedPosition } from './seats';
 
 /**
  * Checks a scene's coverage against the measurable rules of film grammar
@@ -162,8 +162,7 @@ function people(project: Project, eff: EffectiveShot): Person[] {
   return eff.setup.actors.map((a) => {
     const c = project.characters.find((x) => x.id === a.characterId);
     const k = a.motion.start;
-    const y = k.position[1] + seatLift(stage, eff.setup.stageOverrides, c, k);
-    return { id: a.characterId, start: [k.position[0], y, k.position[2]], end: keyOf(a.motion, 'end').position as Vec, height: poseHeight(c?.heightCm, k.pose) };
+    return { id: a.characterId, start: seatedPosition(stage, eff.setup.stageOverrides, c, k), end: keyOf(a.motion, 'end').position as Vec, height: poseHeight(c?.heightCm, k.pose) };
   });
 }
 
