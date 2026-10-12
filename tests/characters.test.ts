@@ -10,7 +10,7 @@ describe('characters', () => {
   const [p] = runCommand(createProject('T'), emptyHistory(), importScript(SAMPLE_SCRIPT));
 
   it('finds names in the script, most lines first', () => {
-    expect(namesFromScript(p)).toEqual(['Maya', 'Dex']);
+    expect(namesFromScript(p)).toEqual(['Dex', 'Maya']); // Dex has four lines to Maya's three
     expect(displayName("MR. O'BRIEN (V.O.)")).toBe("Mr. O'Brien");
   });
 

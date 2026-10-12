@@ -58,7 +58,7 @@ describe('film dialogue cues', () => {
     let p = run(createProject('T'), importScript(SAMPLE_SCRIPT), addCharacters(['Maya', 'Dex'], ['maya', 'dex']));
     p = run(p, setDialogueAudio(linesNeedingAudio(p).map((s) => ({ lineId: s.line.id, sig: s.sig, blob: `b-${s.line.id}`, durationSec: 1 }))));
     const cues = filmCues(p);
-    expect(cues).toHaveLength(6);
+    expect(cues).toHaveLength(7);
     const seq = buildSequence(p);
     expect(cues.every((c, i) => i === 0 || c.at > cues[i - 1].at)).toBe(true);
     expect(cues.at(-1)!.at).toBeLessThan(seq.total);

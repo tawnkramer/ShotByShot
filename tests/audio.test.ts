@@ -29,7 +29,7 @@ describe('spoken lines', () => {
   it('pairs dialogue with its character and folds parentheticals into delivery', () => {
     const { lines, unassigned } = spokenLines(project());
     expect(unassigned).toBe(0);
-    expect(lines.map((l) => l.character.name)).toEqual(['Maya', 'Dex', 'Maya', 'Dex', 'Dex', 'Maya']);
+    expect(lines.map((l) => l.character.name)).toEqual(['Maya', 'Dex', 'Maya', 'Dex', 'Dex', 'Maya', 'Dex']);
     const quiet = lines.find((l) => l.line.text.startsWith('They found the boat'))!;
     expect(quiet.instructions).toBe('Deliver this quietly.');
     expect(lines.some((l) => l.line.text === '(quietly)')).toBe(false);
@@ -37,14 +37,14 @@ describe('spoken lines', () => {
 
   it('counts lines whose speaker has no character', () => {
     const [p] = runCommand(createProject('T'), emptyHistory(), importScript(SAMPLE_SCRIPT));
-    expect(spokenLines(p).unassigned).toBe(6);
+    expect(spokenLines(p).unassigned).toBe(7);
   });
 
   it('marks clips stale when the voice or text changes', () => {
     let p = voiceAll(project());
     expect(linesNeedingAudio(p)).toHaveLength(0);
     p = run(p, updateCharacter('dex', { voice: { provider: 'openai', voiceId: 'onyx', speed: 1.2 } }));
-    expect(linesNeedingAudio(p).map((s) => s.character.name)).toEqual(['Dex', 'Dex', 'Dex']);
+    expect(linesNeedingAudio(p).map((s) => s.character.name)).toEqual(['Dex', 'Dex', 'Dex', 'Dex']);
     expect(validClips(p).size).toBe(3);
   });
 

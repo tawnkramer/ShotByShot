@@ -63,7 +63,7 @@ describe('breakdownScript', () => {
     expect(shots[0].number).toBe('1.1');
     expect(shots[1].number).toBe('1.2');
     expect(shots.some((s) => s.number === '2.1')).toBe(true);
-    expect(shots.at(-1)!.number).toBe('3.1');
+    expect(shots.at(-1)!.number).toBe('2.7');
   });
 
   it('numbers sequentially without scene headings', () => {
