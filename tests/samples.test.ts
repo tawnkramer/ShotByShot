@@ -4,6 +4,8 @@ import { createProject } from '../src/state/schema';
 import { importScript } from '../src/story/commands';
 import { SAMPLE_SCRIPTS, WRONG_CAR_SCRIPT } from '../src/story/sample';
 import { namesFromScript } from '../src/characters/commands';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const load = (text: string) => runCommand(createProject('T'), emptyHistory(), importScript(text))[0];
 
@@ -29,5 +31,9 @@ describe('sample scripts', () => {
     // The baby is a surprise: nothing mentions her before Jesse looks in the mirror.
     const reveal = p.script.findIndex((l) => l.text.startsWith('A baby carrier'));
     expect(p.script.slice(0, reveal).some((l) => /baby|lily|carrier|back seat/i.test(l.text) && !/sneeze/i.test(l.text))).toBe(false);
+  });
+
+  it('keeps samples/wrong_car.txt the same as the built-in sample', () => {
+    expect(readFileSync(resolve(process.cwd(), 'samples/wrong_car.txt'), 'utf8')).toBe(WRONG_CAR_SCRIPT);
   });
 });
