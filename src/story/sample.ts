@@ -57,16 +57,31 @@ EXT. GAS STATION - NIGHT
 
 A lone gas station glows under sodium lights. A silver hatchback pulls up by the door, engine running.
 
-DANA (20s, frazzled, in scrubs) jumps out and glances at the back seat. A baby carrier, buckled in. LILY (four months) is fast asleep.
+DANA (20s, frazzled, in scrubs) jumps out, phone pinned to her ear.
 
 DANA
-Two minutes. Mommy's getting milk.
+Two minutes. I'm grabbing milk, then I'm home.
 
 She leaves the engine running and hurries inside.
 
 Across the lot, JESSE (30s, white tank top, cigarette) leans against a pump. He watches the idling car. He looks around. Nobody.
 
 He strolls over, slides into the driver's seat, and pulls away.
+
+INT. SILVER HATCHBACK - MOVING
+
+Jesse drives one-handed, grinning, cigarette in his teeth. He turns the radio up and drums on the wheel.
+
+A tiny sneeze from the back seat.
+
+He freezes. Turns the radio down. Looks in the mirror.
+
+A baby carrier, buckled in. LILY (four months) blinks at him.
+
+JESSE
+No. No, no, no, no.
+
+He yanks the wheel.
 
 INT. GAS STATION - CONTINUOUS
 
@@ -75,25 +90,12 @@ Dana sets a gallon of milk on the counter. The CLERK (50s, unbothered) scans it.
 CLERK
 Cash or card?
 
-Through the window, the silver hatchback rolls out of the lot.
-
-Dana turns. Her face drains.
+Dana glances out the window. The parking space is empty.
 
 DANA
-That's my car. That's my baby!
+My car. My BABY!
 
 She bolts for the door.
-
-INT. SILVER HATCHBACK - MOVING
-
-Jesse drives one-handed, cigarette in his teeth. A tiny sneeze from the back seat.
-
-He looks in the mirror. Lily blinks at him.
-
-JESSE
-No. No, no, no, no.
-
-He yanks the wheel.
 
 EXT. GAS STATION - CONTINUOUS
 
