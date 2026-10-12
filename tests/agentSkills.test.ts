@@ -171,6 +171,21 @@ describe('block_shots', () => {
     expect(ok).not.toMatch(/doesn't move/);
   });
 
+  it('warns when a walk goes straight through furniture', async () => {
+    const h = harness(coldCoffee());
+    const tools = toolsFor('shots', false);
+    // From the window side of the table to the front: straight through the Table.
+    const through = await runTool(tools, 'block_shots', JSON.stringify({ shots: [{ number: '1.16', actors: [{ name: 'Ben', start: { x: -1.5, z: -2.2, pose: 'standing' }, end: { x: -1.5, z: 0.4, pose: 'walking' } }] }] }), h.ctx);
+    expect(through).toMatch(/Ben walks straight through Table/);
+    // Getting up from the front chair and walking to the door is clear.
+    const clear = await runTool(tools, 'block_shots', JSON.stringify({ shots: [{ number: '1.16', actors: [{ name: 'Ben', start: { x: -1.5, z: -0.55, pose: 'sitting' }, end: { x: 2.6, z: 1, pose: 'walking' } }] }] }), h.ctx);
+    expect(clear).not.toMatch(/walks straight through/);
+    // In the shot editor too.
+    const open = harness(h.get(), { shotId: h.get().shots.find((s) => s.number === '1.16')!.id });
+    const placed = await runTool(toolsFor('shots', true), 'place_characters', JSON.stringify({ placements: [{ name: 'Ben', x: -1.5, z: -2.2, pose: 'standing' }, { name: 'Ben', x: -1.5, z: 0.4, at: 'end' }] }), open.ctx);
+    expect(placed).toMatch(/Warning: Ben walks straight through Table/);
+  });
+
   it('warns when two props are put in the same spot', async () => {
     const h = harness(coldCoffee());
     const r = await runTool(toolsFor('shots', false), 'block_shots', JSON.stringify({ shots: [{ number: '1.9', actors: [{ name: 'Nora', start: { x: -1.5, z: -1.85, pose: 'sitting' } }], props: [{ prop: 'Envelope', x: -1.5, z: -1.3, y: 0.75 }, { prop: "Nora's mug", x: -1.48, z: -1.32, y: 0.75 }] }] }), h.ctx);

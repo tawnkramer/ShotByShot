@@ -402,7 +402,12 @@ const placeCharacters = tool(
       }
       ctx.dispatch(setActorKey(shot.id, c.id, which, { position, yaw, ...(pl.pose ? { pose: pl.pose } : {}) }));
     }
-    return `Placed ${a.placements.map((x) => x.name).join(', ')}.`;
+    // A walk that goes through furniture is worth knowing about straight away.
+    const eff = effectiveShot(ctx.project(), shot.id)!;
+    const obstacles = obstaclesOf(ctx.project().stages.find((x) => x.id === eff.stageId), eff.setup.stageOverrides);
+    const walks = eff.setup.actors.filter((x) => x.motion.mode === 'moving' && x.motion.end && a.placements.some((pl) => byName(ctx.project().characters, pl.name)?.id === x.characterId));
+    const warn = walks.flatMap((x) => pathProblems(ctx.project().characters.find((c) => c.id === x.characterId)!.name, x.motion.start, x.motion.end!, obstacles));
+    return `Placed ${a.placements.map((x) => x.name).join(', ')}.${warn.length ? `\nWarning: ${warn.join(' ')}` : ''}`;
   },
 );
 
@@ -604,6 +609,29 @@ function movementProblems(p: Project, shot: Shot, actors: { characterId: string;
 }
 
 /** Problems with a character's key on this stage: inside furniture, outside the room, sitting on nothing. */
+/**
+ * Furniture a walk passes through. Walks go in a straight line from the start
+ * to the end key, so the path is sampled; a seat the walk starts or ends in
+ * (getting up, sitting down) doesn't count.
+ */
+function pathProblems(name: string, from: { position: [number, number, number] }, to: { position: [number, number, number] }, obstacles: ReturnType<typeof obstaclesOf>): string[] {
+  const [ax, , az] = from.position, [bx, , bz] = to.position;
+  const hit = new Set<string>();
+  for (const { o, rect } of obstacles) {
+    if (isContainer(o.source) || isGround(o) || (o.source.kind === 'library' && o.source.item === 'door')) continue;
+    if (isSeat(o) && (inside(ax, az, rect, SEAT_REACH) || inside(bx, bz, rect, SEAT_REACH))) continue;
+    for (let i = 1; i < 24; i++) {
+      const u = i / 24;
+      // Leave the ends to keyProblems: only the way between.
+      if (inside(ax + (bx - ax) * u, az + (bz - az) * u, rect, BODY) && !inside(ax, az, rect, BODY) && !inside(bx, bz, rect, BODY)) {
+        hit.add(o.name);
+        break;
+      }
+    }
+  }
+  return hit.size ? [`${name} walks straight through ${[...hit].join(' and ')} (walks go in a straight line from start to end). Start from a spot with a clear path, or split the move across shots.`] : [];
+}
+
 function keyProblems(name: string, k: { position: [number, number, number]; pose: string }, obstacles: ReturnType<typeof obstaclesOf>): string[] {
   const [x, , z] = k.position;
   const out: string[] = [];
@@ -736,7 +764,10 @@ const blockShots = tool(
       for (const actor of eff.setup.actors) {
         const n = name(actor.characterId);
         problems.push(...keyProblems(n, actor.motion.start, obstacles));
-        if (actor.motion.mode === 'moving' && actor.motion.end) problems.push(...keyProblems(`${n} (end)`, actor.motion.end, obstacles));
+        if (actor.motion.mode === 'moving' && actor.motion.end) {
+          problems.push(...keyProblems(`${n} (end)`, actor.motion.end, obstacles));
+          problems.push(...pathProblems(n, actor.motion.start, actor.motion.end, obstacles));
+        }
         const was = prevActors.find((x) => x.characterId === actor.characterId);
         if (was) {
           const last = keyOf(was.motion, 'end');
