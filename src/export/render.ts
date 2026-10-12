@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Project } from '../state/schema';
+import type { CameraState, Project } from '../state/schema';
 import { ShotRig } from '../three/shotRig';
 import { applyCamera } from '../three/camera';
 import { buildSequence, locate, type Sequence } from '../shots/sequence';
@@ -18,6 +18,8 @@ export function frameSize(aspect: number, res: Resolution): { width: number; hei
 export interface Overlay {
   captions: boolean;
   shotNumbers: boolean;
+  /** Camera aspect when it differs from the project's (e.g. overhead review frames). */
+  aspect?: number;
 }
 
 /**
@@ -43,7 +45,7 @@ export class FilmRenderer {
     readonly height: number,
     private overlay: Overlay = { captions: true, shotNumbers: false },
   ) {
-    this.aspect = aspectOf(project);
+    this.aspect = overlay.aspect ?? aspectOf(project);
     this.seq = buildSequence(project);
     this.gl = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.gl.setPixelRatio(1);
@@ -78,14 +80,15 @@ export class FilmRenderer {
     await this.renderShot(item.shotId, u, u * item.duration);
   }
 
-  /** Draws one shot at progress u (0..1); `localSec` picks the caption. */
-  async renderShot(shotId: string, u: number, localSec = -1): Promise<void> {
+  /** Draws one shot at progress u (0..1); `localSec` picks the caption. `view` replaces the shot's camera. */
+  async renderShot(shotId: string, u: number, localSec = -1, view?: CameraState): Promise<void> {
     if (this.currentShot !== shotId) {
       this.rig.sync(this.project, shotId);
       await this.rig.ready();
       this.currentShot = shotId;
     }
-    const cam = this.rig.setTime(u);
+    const shotCam = this.rig.setTime(u);
+    const cam = view ?? shotCam;
     if (cam) applyCamera(this.camera, cam, this.aspect);
     this.gl.render(this.scene, this.camera);
     const c = this.ctx;

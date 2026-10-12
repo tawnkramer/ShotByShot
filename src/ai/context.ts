@@ -1,7 +1,10 @@
-import type { Project, Step } from '../state/schema';
+import type { Project, ScriptLine, Step } from '../state/schema';
 import { ASPECT_RATIOS, PROP_ITEMS, SET_ITEMS, PRIMITIVE_SHAPES } from '../state/schema';
 import { buildSequence } from '../shots/sequence';
-import { effectiveShots, shotLines, summaryLine } from '../shots/setup';
+import { effectiveShots, sceneLineOf, shotLines, summaryLine } from '../shots/setup';
+import { speakerOf } from '../story/classify';
+import { skillById } from './skills';
+import { checkCoverage, describeCoverage } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { eulerDegrees } from '../staging/commands';
 import { worldRect } from '../staging/placement';
@@ -10,13 +13,15 @@ import { spokenLines, linesNeedingAudio } from '../audio/clips';
 
 const r = (n: number) => Math.round(n * 100) / 100;
 const MAX_LINES = 600;
+/** Shots described in full when a skill needs the whole scene. */
+export const MAX_SCENE_SHOTS = 40;
 
 export const STEP_GUIDE: Record<Step, string> = {
   story: 'The user is labelling script lines and breaking the script into shots. Fix labels with set_line_types. For a breakdown, think like an editor: group quick dialogue exchanges, cut on speaker changes for weight, give action beats their own shots, start each scene with an establishing shot. Then call set_shot_breaks.',
   staging: 'The user is building grey-box sets. Lay out realistic rooms with real dimensions (a bar counter ~1.05 m high, tables ~0.75 m, doors ~2.1 m). Keep walkways clear. If given a photo or sketch, estimate the room size first, then place objects in room coordinates. Check your work with snapshot when placing many things.',
   characters: 'The user is defining characters: sex, height, build, age, notes, and voice. Choose voices that fit each character, and describe a speaking style when useful.',
   props: 'The user is making props. To model a prop, build it from simple shapes with model_prop at real-world size, front facing +Z, resting on the floor; combine several parts for recognizable silhouettes.',
-  shots: 'The user is working on shots. In the shot editor, block characters (place_characters), frame the camera (frame_camera / set_camera), and make things move by setting an "end" keyframe. Keep characters out of furniture: check the stage objects and their footprints.',
+  shots: 'The user is working on shots. In the shot editor, block characters (place_characters), frame the camera (frame_camera / set_camera), and make things move by setting an "end" keyframe. Keep characters out of furniture: check the stage objects and their footprints. For blocking or covering a whole scene or several shots at once, load the Shot by Shot skill (use_skill) and use block_shots or cover_shots; check the result with render_shots.',
   previs: 'The user is watching the whole film in sequence. Offer to adjust shots (open_shot) or the breakdown.',
   export: 'The user is exporting the film. Help with settings questions; open shots to fix problems they notice.',
 };
@@ -111,7 +116,67 @@ function libraryText(): string {
   ].join('\n');
 }
 
-export function systemPrompt(project: Project, step: Step, opts: { shotId?: string; stageId?: string }): string {
+/**
+ * Every shot of the scene in detail, for skills that stage a whole scene:
+ * lines with speakers, each character's start/end, and the camera. Starts at
+ * the open shot's scene when there is one.
+ */
+export function describeScene(project: Project, opts: { shotId?: string }): string {
+  const eff = effectiveShots(project);
+  const speakers = speakerOf(project.script);
+  const names = new Map(project.characters.map((c) => [c.id, c.name]));
+  const open = opts.shotId && project.shots.find((s) => s.id === opts.shotId);
+  const openScene = open ? sceneLineOf(project, open) : undefined;
+  const first = openScene ? project.shots.findIndex((s) => sceneLineOf(project, s) === openScene) : 0;
+  const shots = project.shots.slice(Math.max(0, first), Math.max(0, first) + MAX_SCENE_SHOTS);
+  const coverage = new Map(checkCoverage(project, shots.map((s) => s.id)).shots.map((c) => [c.shotId, c]));
+  const out: string[] = ['--- Scene detail ---'];
+  out.push('Positions are x, z in meters; yaw in degrees. "edited" marks shots the user or you set; others carry over from the previous shot on the same stage.');
+  const stageIds = new Set<string>();
+  let scene: ScriptLine | undefined;
+  for (const shot of shots) {
+    const e = eff.get(shot.id)!;
+    const heading = sceneLineOf(project, shot);
+    if (heading !== scene) {
+      scene = heading;
+      out.push(`\nSCENE: ${heading?.text ?? '(no heading)'}`);
+    }
+    if (e.stageId) stageIds.add(e.stageId);
+    const stage = project.stages.find((s) => s.id === e.stageId)?.name ?? 'no stage';
+    const edited = shot.setup || shot.camera ? ', edited' : '';
+    out.push(`Shot ${shot.number} [${stage}, ${e.durationSec.toFixed(1)} s${edited}]${shot.id === opts.shotId ? ' (open)' : ''}`);
+    for (const l of shotLines(project, shot)) {
+      if (l.type === 'character') continue;
+      const who = speakers.get(l.id);
+      out.push(`  ${who ? `${who}: ` : `[${l.type}] `}${l.text.slice(0, 140)}`);
+    }
+    const fmt = (k: { position: [number, number, number]; yaw: number; pose: string }) => `x=${r(k.position[0])} z=${r(k.position[2])} yaw=${Math.round(k.yaw)} ${k.pose}`;
+    out.push('  Blocking: ' + (e.setup.actors.map((a) => {
+      const end = a.motion.mode === 'moving' ? keyOf(a.motion, 'end') : null;
+      return `${names.get(a.characterId) ?? '?'} ${fmt(a.motion.start)}${end ? ` → ${fmt(end)}` : ''}`;
+    }).join('; ') || 'nobody'));
+    if (e.setup.props.length) out.push('  Props: ' + e.setup.props.map((p) => `${project.props.find((x) => x.id === p.propId)?.name} x=${r(p.motion.start.position[0])} z=${r(p.motion.start.position[2])}${p.motion.start.position[1] ? ` y=${r(p.motion.start.position[1])}` : ''}`).join('; '));
+    const cam = (k: typeof e.camera.start) => `target [${k.target.map(r).join(', ')}] arc ${Math.round(k.azimuth)}° angle ${Math.round(k.elevation)}° ${r(k.distance)} m ${Math.round(k.lens)} mm`;
+    out.push(`  Camera: ${describeCoverage(project, coverage.get(shot.id)!)}; ${cam(e.camera.start)}${e.camera.mode === 'moving' && e.camera.end ? ` → ${cam(e.camera.end)}` : ''}`);
+  }
+  const rest = project.shots.length - Math.max(0, first) - shots.length;
+  if (rest > 0) out.push(`… ${rest} more shots not shown.`);
+  for (const id of stageIds) {
+    const stage = project.stages.find((s) => s.id === id);
+    if (stage) out.push(describeStage(stage));
+  }
+  return out.join('\n');
+}
+
+export interface PromptOptions {
+  shotId?: string;
+  stageId?: string;
+  /** The skill loaded for this turn. */
+  skill?: string;
+}
+
+export function systemPrompt(project: Project, step: Step, opts: PromptOptions): string {
+  const skill = opts.skill ? skillById(opts.skill) : undefined;
   return [
     'You are the assistant inside ShotByShot, a mobile app for shot breakdown and previs: script → stages (grey-box sets) → characters → props → shots → previs → export.',
     'You change the project only with the tools given. Every change can be undone by the user. Prefer one tool call with many items over many calls. If a tool returns an error, fix the arguments and try again.',
@@ -119,7 +184,9 @@ export function systemPrompt(project: Project, step: Step, opts: { shotId?: stri
     'Refer to lines by number, shots by their shot number exactly as listed, and everything else by its exact name.',
     "After acting, reply in one or two short sentences saying what you did. If the request needs another step's tools, use go_to_step or open_shot and say so. Don't invent features the app lacks.",
     STEP_GUIDE[step],
+    ...(skill ? [skill.text] : []),
     '--- Current state ---',
     describeContext(project, step, opts),
+    ...(skill?.sceneContext ? [describeScene(project, opts)] : []),
   ].join('\n\n');
 }

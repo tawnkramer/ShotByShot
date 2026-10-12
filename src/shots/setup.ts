@@ -108,14 +108,19 @@ function carryOver(setup: ShotSetup): ShotSetup {
   };
 }
 
+/** How tall someone is in a pose (top of the head, meters). Matches the mannequin: seated heads are at 79%. */
+export function poseHeight(heightCm: number | undefined, pose: string): number {
+  const h = (heightCm ?? 172) / 100;
+  return pose === 'sitting' ? h * 0.79 : pose === 'lying' ? 0.4 : h;
+}
+
 export function subjectsFor(project: Project, setup: ShotSetup, ids?: string[]): Subject[] {
   return setup.actors
     .filter((a) => !ids || ids.includes(a.characterId))
     .map((a) => {
       const c = project.characters.find((x) => x.id === a.characterId);
       const k = a.motion.start;
-      const h = (c?.heightCm ?? 172) / 100;
-      return { position: k.position, yaw: k.yaw, height: k.pose === 'sitting' ? h * 0.72 : k.pose === 'lying' ? 0.4 : h };
+      return { position: k.position, yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
     });
 }
 
