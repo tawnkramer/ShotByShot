@@ -443,7 +443,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 
 /* Shots list */
 .shots-page { gap: 12px; }
-.plan-row { gap: 8px; flex-wrap: wrap; }
+.plan-row, .sample-row { gap: 8px; flex-wrap: wrap; }
 .shot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .shot-card {
   width: 100%;

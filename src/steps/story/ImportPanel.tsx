@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useProjectStore } from '../../state/store';
 import { importScript } from '../../story/commands';
-import { SAMPLE_SCRIPT } from '../../story/sample';
+import { SAMPLE_SCRIPTS } from '../../story/sample';
 import { pickFile } from '../../shell/download';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -52,9 +52,16 @@ export function ImportPanel({ onDone }: { onDone?: () => void }) {
           Use this text
         </button>
       </section>
-      <button className="btn ghost" onClick={() => use(SAMPLE_SCRIPT)}>
-        Try the sample script
-      </button>
+      <section className="panel">
+        <h2>Or try a sample</h2>
+        <div className="row sample-row">
+          {SAMPLE_SCRIPTS.map((s) => (
+            <button key={s.title} className="btn" onClick={() => use(s.text)}>
+              {s.title}
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

@@ -48,3 +48,100 @@ We all miss him.
 
 Maya turns, and they hug.
 `;
+
+/** A comedy in a gas station parking lot, loosely after a news story, all names invented. */
+export const WRONG_CAR_SCRIPT = `Title: Wrong Car
+Author: ShotByShot sample
+
+EXT. GAS STATION - NIGHT
+
+A lone gas station glows under sodium lights. A silver hatchback pulls up by the door, engine running.
+
+DANA (20s, frazzled, in scrubs) jumps out and glances at the back seat. A baby carrier, buckled in. LILY (four months) is fast asleep.
+
+DANA
+Two minutes. Mommy's getting milk.
+
+She leaves the engine running and hurries inside.
+
+Across the lot, JESSE (30s, white tank top, cigarette) leans against a pump. He watches the idling car. He looks around. Nobody.
+
+He strolls over, slides into the driver's seat, and pulls away.
+
+INT. GAS STATION - CONTINUOUS
+
+Dana sets a gallon of milk on the counter. The CLERK (50s, unbothered) scans it.
+
+CLERK
+Cash or card?
+
+Through the window, the silver hatchback rolls out of the lot.
+
+Dana turns. Her face drains.
+
+DANA
+That's my car. That's my baby!
+
+She bolts for the door.
+
+INT. SILVER HATCHBACK - MOVING
+
+Jesse drives one-handed, cigarette in his teeth. A tiny sneeze from the back seat.
+
+He looks in the mirror. Lily blinks at him.
+
+JESSE
+No. No, no, no, no.
+
+He yanks the wheel.
+
+EXT. GAS STATION - CONTINUOUS
+
+Dana stands in the empty parking space, phone shaking in her hand. The clerk watches from the doorway.
+
+Headlights. The hatchback swings back into the lot and stops beside her.
+
+Jesse gets out, unbuckles the carrier, and marches it inside. Dana runs after him.
+
+INT. GAS STATION - CONTINUOUS
+
+Jesse sets the carrier down on the floor by the counter. Lily sleeps on.
+
+JESSE
+(pointing at Dana)
+You left a baby in a running car.
+
+DANA
+You stole the car!
+
+JESSE
+And anybody could've stolen it. With a baby in it! Think about that.
+
+The clerk looks from one to the other.
+
+CLERK
+He's not wrong.
+
+DANA
+He's a car thief!
+
+JESSE
+A car thief with standards.
+
+He takes a long drag, nods at Lily, and walks out.
+
+EXT. GAS STATION - CONTINUOUS
+
+Jesse climbs back into the silver hatchback and drives off into the night.
+
+Dana watches it go, the carrier in her arms. The clerk joins her in the doorway.
+
+CLERK
+So, cash or card?
+`;
+
+/** The samples offered on the Story step, first is the default. */
+export const SAMPLE_SCRIPTS = [
+  { title: 'Last Call', text: SAMPLE_SCRIPT },
+  { title: 'Wrong Car', text: WRONG_CAR_SCRIPT },
+];
