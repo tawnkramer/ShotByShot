@@ -78,7 +78,8 @@ export async function runTurn(o: TurnOptions): Promise<string> {
     const res = await streamChat({ apiKey: key, model, messages, tools: specs, signal: o.signal, onText: o.onText });
     if (res.content) replies.push(res.content);
     messages.push({ role: 'assistant', content: res.content || null, tool_calls: res.toolCalls.length ? res.toolCalls : undefined, reasoning: res.reasoning.length ? res.reasoning : undefined });
-    if (!res.toolCalls.length) return replies.join('\n\n').trim();
+    // The last answer is the summary; earlier text ("I'll block the scene…") was streamed as it happened.
+    if (!res.toolCalls.length) return res.content.trim() || replies.join('\n\n').trim();
     for (const call of res.toolCalls) {
       const result = await runTool(tools, call.function.name, call.function.arguments, ctx);
       o.onTool?.(call.function.name, call.function.arguments, result);

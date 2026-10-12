@@ -1,6 +1,6 @@
 # Plan: the "Shot by Shot" skill for the in-browser agent
 
-Status: **milestones 1 and 2 done** (blocking and camera passes, checker, renders). Milestone 3 (tuning from live runs) not started.
+Status: **milestones 1–3 done**: blocking and camera passes, checker, renders, tuned from live runs on Cold Coffee.
 Written 2026-10-12 so a fresh session can pick it up.
 
 ## Goal
@@ -241,7 +241,26 @@ Keep it compact. Cap the number of lines.
 - Fixed on the way: seated heads are at 79% of standing height (was 72%, so seated closeups in the app cut the head).
 - Live (both passes, all 18 shots, one run each): gpt-5.5 129 s, matched reverses, a couple of weak frames;
   gpt-6.1-sol 44 s, more varied coverage, reverses deliberately unmatched. Both end with only C7 advice.
-- For milestone 3: occlusion by tall furniture (the counter) isn't checked; inserts can repeat; a closer look at exits.
+- Milestone 3 handled furniture occlusion, inserts and exits (below).
+
+## Milestone 3 notes (tuning from live runs)
+Seven live runs of both passes on Cold Coffee (gpt-5.5 ×4, gpt-6.1-sol ×3); every run blocked and covered all 18
+shots and ended with only C7 advice. What the runs showed, and what changed:
+- Furniture hiding the subject (the counter in 1.12): `view` now also checks tall furniture (≥ 0.3 m, not doors or
+  windows) on the line to the subject's head, leaving out the last 35 cm so their own chair or table doesn't count.
+- Heads cut off when someone stands up in a fixed shot (Ben's exit): new `frame` warning when the subject's head
+  ends above the frame while still across it (walking out sideways is fine).
+- Over-the-shoulders crowded by the foreground head: the camera stands 1 m behind the foreground person and swings
+  until their head sits about two thirds of the way to the frame's edge.
+- Too many inserts (gpt-5.5 used 4–5 of 16 shots; 2–3 after): new rule C12, inserts only for "CLOSE ON" lines and
+  props the story turns on; feelings play on faces.
+- Props put in the same spot (the mug on the envelope): `block_shots` warns.
+- The saved reply is the model's final summary, not its announcement plus the summary.
+- Seats and platforms (#32, #33): people sit on stools at the seat's height with their weight over it, and stand on
+  boxes, cylinders and planes.
+
+Model notes: gpt-6.1-sol was faster in every run (about 90–105 s for both passes, against 120–190 s for gpt-5.5) and
+followed C12 most closely; gpt-5.5 matched reverses more often. Both are good choices; the default stays gpt-5.5.
 
 ## Open questions
 - Scope of "the scene": settled in the skill text: the shots the user names, else the open shot's scene, else every

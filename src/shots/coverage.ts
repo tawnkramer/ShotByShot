@@ -4,6 +4,7 @@ import { speakerOf } from '../story/classify';
 import { aspectOf, effectiveShots, poseHeight, sceneLineOf, shotLines, type EffectiveShot } from './setup';
 import { keyOf } from './timing';
 import { LIBRARY, resolveParams } from '../three/library';
+import { isContainer, objectExtent, worldRect } from '../staging/placement';
 import { bodyPosition } from './body';
 
 /**
@@ -33,7 +34,7 @@ export type Severity = 'error' | 'warning' | 'info';
 export interface Finding {
   /** "1.4→1.5" for a cut, "1.4/1.7" for a pair of reverses, or "1.4" for one shot. */
   at: string;
-  rule: 'view' | 'C1' | 'C3' | 'C4' | 'C7' | 'C11';
+  rule: 'view' | 'frame' | 'C1' | 'C3' | 'C4' | 'C7' | 'C11';
   severity: Severity;
   message: string;
 }
@@ -62,8 +63,10 @@ export interface ShotCoverage {
   endSide?: number;
   /** The two leads, when both are in the shot. */
   line?: [string, string];
-  /** A wall between the camera and what it aims at. */
+  /** A wall or tall furniture between the camera and what it aims at. */
   blockedBy?: string;
+  /** The subject's head leaves the top of the frame during the shot (they stand up, or the camera ends too low). */
+  headCut?: boolean;
 }
 
 type Vec = [number, number, number];
@@ -83,6 +86,19 @@ const norm = (a: Vec): Vec => {
 const deg = (r: number) => (r * 180) / Math.PI;
 /** Smallest difference between two bearings, 0–180. */
 export const angleDiff = (a: number, b: number) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
+
+/** Where a point lands in the frame: x and y from -1 to 1 across it, or undefined behind the camera. */
+export function project2d(cam: CameraState, aspect: number, p: Vec): [number, number] | undefined {
+  const pos = cameraPos(cam);
+  const f = norm(sub(cam.target as Vec, pos));
+  const r = norm(cross(f, [0, 1, 0]));
+  const u = cross(r, f);
+  const v = sub(p, pos);
+  const z = dot(v, f);
+  if (z < 0.1) return undefined;
+  const tv = Math.tan(((lensToVFov(cam.lens, aspect) * Math.PI) / 180) / 2);
+  return [dot(v, r) / z / (tv * aspect), dot(v, u) / z / tv];
+}
 
 /** Whether a point is in the camera's frame (with a small margin). */
 function inFrame(cam: CameraState, aspect: number, p: Vec): boolean {
@@ -136,7 +152,7 @@ function walls(project: Project, eff: EffectiveShot): { name: string; local: (p:
   return out;
 }
 
-/** What blocks the camera's view of its aim point, if anything ("the back wall of Cafe"). */
+/** A wall between the camera and its aim point, if any ("the back wall of Cafe"). */
 export function viewBlocker(project: Project, eff: EffectiveShot, cam: CameraState): string | undefined {
   const from = cameraPos(cam), to = cam.target as Vec;
   for (const w of walls(project, eff)) {
@@ -150,19 +166,46 @@ export function viewBlocker(project: Project, eff: EffectiveShot, cam: CameraSta
   return undefined;
 }
 
+/**
+ * Tall furniture (a counter, a pillar) between the camera and a point, such
+ * as the subject's head. The last 35 cm are left out, so their own chair or
+ * table doesn't count.
+ */
+export function furnitureBlocker(project: Project, eff: EffectiveShot, cam: CameraState, to: Vec): string | undefined {
+  const from = cameraPos(cam);
+  const len = Math.hypot(...sub(to, from));
+  const stage = project.stages.find((s) => s.id === eff.stageId);
+  for (const o of stage?.objects ?? []) {
+    if (isContainer(o.source) || o.propId || eff.setup.stageOverrides[o.id]?.hidden) continue;
+    if (o.source.kind === 'library' && (o.source.item === 'door' || o.source.item === 'window')) continue;
+    const pos = (eff.setup.stageOverrides[o.id]?.position ?? o.transform.position) as Vec;
+    const h = objectExtent(o.source).h * o.transform.scale[1];
+    if (h < 0.3) continue;
+    const r = worldRect({ source: o.source, transform: { ...o.transform, position: pos } });
+    const stop = Math.max(0, 1 - 0.35 / len);
+    for (let i = 0; i <= 32; i++) {
+      const u = (i / 32) * stop;
+      const p = [from[0] + (to[0] - from[0]) * u, from[1] + (to[1] - from[1]) * u, from[2] + (to[2] - from[2]) * u];
+      if (p[0] > r.minX && p[0] < r.maxX && p[2] > r.minZ && p[2] < r.maxZ && p[1] > pos[1] && p[1] < pos[1] + h) return `the ${o.name}`;
+    }
+  }
+  return undefined;
+}
+
 interface Person {
   id: string;
   start: Vec;
   end: Vec;
   height: number;
+  endHeight: number;
 }
 
 function people(project: Project, eff: EffectiveShot): Person[] {
   const stage = project.stages.find((s) => s.id === eff.stageId);
   return eff.setup.actors.map((a) => {
     const c = project.characters.find((x) => x.id === a.characterId);
-    const k = a.motion.start;
-    return { id: a.characterId, start: bodyPosition(stage, eff.setup.stageOverrides, c, k), end: keyOf(a.motion, 'end').position as Vec, height: poseHeight(c?.heightCm, k.pose) };
+    const k = a.motion.start, e = keyOf(a.motion, 'end');
+    return { id: a.characterId, start: bodyPosition(stage, eff.setup.stageOverrides, c, k), end: bodyPosition(stage, eff.setup.stageOverrides, c, e), height: poseHeight(c?.heightCm, k.pose), endHeight: poseHeight(c?.heightCm, e.pose) };
   });
 }
 
@@ -231,8 +274,15 @@ export function classifyShot(project: Project, shot: Shot, eff: EffectiveShot, l
     shotId: shot.id, number: shot.number, visible, subject: subj?.id, kind, azimuth: ((cam.azimuth % 360) + 360) % 360, size, bearing: ((bearing % 360) + 360) % 360,
     elevation: cam.elevation, height: cam.elevation > 10 ? 'high' : cam.elevation < -5 ? 'low' : 'eye',
     lens: cam.lens, moving: eff.camera.mode === 'moving' && !!eff.camera.end,
-    blockedBy: viewBlocker(project, eff, cam) ?? (eff.camera.mode === 'moving' && eff.camera.end ? viewBlocker(project, eff, eff.camera.end) : undefined),
+    blockedBy: viewBlocker(project, eff, cam) ?? (eff.camera.mode === 'moving' && eff.camera.end ? viewBlocker(project, eff, eff.camera.end) : undefined)
+      ?? (subj ? furnitureBlocker(project, eff, cam, [subj.start[0], subj.start[1] + subj.height * 0.92, subj.start[2]]) : undefined),
   };
+  if (subj) {
+    // Where the subject's head is at the end, through the camera at the end: cut off at the top while still across the frame?
+    const endCam = out.moving ? eff.camera.end! : cam;
+    const at = project2d(endCam, aspect, [subj.end[0], subj.end[1] + subj.endHeight * 0.97, subj.end[2]]);
+    out.headCut = !!at && Math.abs(at[0]) < 0.9 && at[1] > 1.05;
+  }
   const a = leads && ps.find((p) => p.id === leads[0]), b = leads && ps.find((p) => p.id === leads[1]);
   if (a && b) {
     out.line = leads;
@@ -278,7 +328,8 @@ export function checkCoverage(project: Project, shotIds?: string[]): { shots: Sh
   const sceneOf = new Map(list.map(({ shot, scene }) => [shot.id, scene]));
 
   for (const c of shots) {
-    if (c.blockedBy) findings.push({ at: c.number, rule: 'view', severity: 'error', message: `${c.blockedBy} is between the camera and the shot. There's no room for this angle: choose another, or restage.` });
+    if (c.blockedBy) findings.push({ at: c.number, rule: 'view', severity: 'error', message: `${c.blockedBy} is between the camera and the shot. Choose another angle or height, or restage.` });
+    if (c.headCut) findings.push({ at: c.number, rule: 'frame', severity: 'warning', message: `${name(project, c.subject)}'s head leaves the top of the frame by the end of the shot. Frame wider or higher, or move the camera with them (end).` });
     const big = SIZE_ORDER.indexOf(c.size);
     if (big <= 1 && c.lens > 40) findings.push({ at: c.number, rule: 'C11', severity: 'info', message: `${c.size} at ${Math.round(c.lens)} mm; wide shots usually use 24–35 mm.` });
     if (big >= 3 && c.subject && c.lens < 40) findings.push({ at: c.number, rule: 'C11', severity: 'info', message: `${c.size} at ${Math.round(c.lens)} mm; closeups usually use 50–85 mm.` });

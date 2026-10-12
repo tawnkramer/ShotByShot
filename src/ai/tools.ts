@@ -17,7 +17,7 @@ import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/conta
 import { skillById, skillsFor } from './skills';
 import { cameraPosition, frameSubjects, lensToVFov, moveCamera, SHOT_SIZES, turnCamera, type ShotSize, type Subject } from '../three/camera';
 import { bodyPosition, isGround } from '../shots/body';
-import { checkCoverage, describeCoverage, formatFindings, lineSide, viewBlocker } from '../shots/coverage';
+import { checkCoverage, describeCoverage, formatFindings, lineSide, project2d, viewBlocker } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
 import { useAudioJob } from '../audio/job';
@@ -402,7 +402,12 @@ const placeCharacters = tool(
       }
       ctx.dispatch(setActorKey(shot.id, c.id, which, { position, yaw, ...(pl.pose ? { pose: pl.pose } : {}) }));
     }
-    return `Placed ${a.placements.map((x) => x.name).join(', ')}.`;
+    // A walk that goes through furniture is worth knowing about straight away.
+    const eff = effectiveShot(ctx.project(), shot.id)!;
+    const obstacles = obstaclesOf(ctx.project().stages.find((x) => x.id === eff.stageId), eff.setup.stageOverrides);
+    const walks = eff.setup.actors.filter((x) => x.motion.mode === 'moving' && x.motion.end && a.placements.some((pl) => byName(ctx.project().characters, pl.name)?.id === x.characterId));
+    const warn = walks.flatMap((x) => pathProblems(ctx.project().characters.find((c) => c.id === x.characterId)!.name, x.motion.start, x.motion.end!, obstacles));
+    return `Placed ${a.placements.map((x) => x.name).join(', ')}.${warn.length ? `\nWarning: ${warn.join(' ')}` : ''}`;
   },
 );
 
@@ -604,6 +609,29 @@ function movementProblems(p: Project, shot: Shot, actors: { characterId: string;
 }
 
 /** Problems with a character's key on this stage: inside furniture, outside the room, sitting on nothing. */
+/**
+ * Furniture a walk passes through. Walks go in a straight line from the start
+ * to the end key, so the path is sampled; a seat the walk starts or ends in
+ * (getting up, sitting down) doesn't count.
+ */
+function pathProblems(name: string, from: { position: [number, number, number] }, to: { position: [number, number, number] }, obstacles: ReturnType<typeof obstaclesOf>): string[] {
+  const [ax, , az] = from.position, [bx, , bz] = to.position;
+  const hit = new Set<string>();
+  for (const { o, rect } of obstacles) {
+    if (isContainer(o.source) || isGround(o) || (o.source.kind === 'library' && o.source.item === 'door')) continue;
+    if (isSeat(o) && (inside(ax, az, rect, SEAT_REACH) || inside(bx, bz, rect, SEAT_REACH))) continue;
+    for (let i = 1; i < 24; i++) {
+      const u = i / 24;
+      // Leave the ends to keyProblems: only the way between.
+      if (inside(ax + (bx - ax) * u, az + (bz - az) * u, rect, BODY) && !inside(ax, az, rect, BODY) && !inside(bx, bz, rect, BODY)) {
+        hit.add(o.name);
+        break;
+      }
+    }
+  }
+  return hit.size ? [`${name} walks straight through ${[...hit].join(' and ')} (walks go in a straight line from start to end). Start from a spot with a clear path, or split the move across shots.`] : [];
+}
+
 function keyProblems(name: string, k: { position: [number, number, number]; pose: string }, obstacles: ReturnType<typeof obstaclesOf>): string[] {
   const [x, , z] = k.position;
   const out: string[] = [];
@@ -736,7 +764,10 @@ const blockShots = tool(
       for (const actor of eff.setup.actors) {
         const n = name(actor.characterId);
         problems.push(...keyProblems(n, actor.motion.start, obstacles));
-        if (actor.motion.mode === 'moving' && actor.motion.end) problems.push(...keyProblems(`${n} (end)`, actor.motion.end, obstacles));
+        if (actor.motion.mode === 'moving' && actor.motion.end) {
+          problems.push(...keyProblems(`${n} (end)`, actor.motion.end, obstacles));
+          problems.push(...pathProblems(n, actor.motion.start, actor.motion.end, obstacles));
+        }
         const was = prevActors.find((x) => x.characterId === actor.characterId);
         if (was) {
           const last = keyOf(was.motion, 'end');
@@ -751,6 +782,13 @@ const blockShots = tool(
         for (const y of eff.setup.actors.slice(i + 1)) {
           const [ax, , az] = x.motion.start.position, [bx, , bz] = y.motion.start.position;
           if (Math.hypot(ax - bx, az - bz) < 0.45) problems.push(`${name(x.characterId)} and ${name(y.characterId)} overlap.`);
+        }
+      }
+      const propName = (id: string) => p.props.find((x) => x.id === id)?.name ?? '?';
+      for (const [i, x] of eff.setup.props.entries()) {
+        for (const y of eff.setup.props.slice(i + 1)) {
+          const [ax, ay, az] = x.motion.start.position, [bx, by, bz] = y.motion.start.position;
+          if (Math.hypot(ax - bx, az - bz) < 0.08 && Math.abs(ay - by) < 0.05) problems.push(`${propName(x.propId)} and ${propName(y.propId)} are in the same spot.`);
         }
       }
       if (problems.length) warnings.push(`Shot ${shot.number}: ${problems.join(' ')}`);
@@ -774,7 +812,7 @@ const framingSpec = {
   on: z.string().optional().describe('For an insert: a prop in the shot or a stage object to frame.'),
   over: z.string().optional().describe('Over-the-shoulder: the character in the foreground, seen from behind.'),
   size: sizeEnum,
-  angle: num.optional().describe('Degrees off straight-on, toward the line side (singles default 20; over-the-shoulder 15; two-shots 0 = square to the line).'),
+  angle: num.optional().describe('Degrees off straight-on, toward the line side (singles default 20; two-shots 0 = square to the line; over-the-shoulders are set so the shoulder frames the shot).'),
   height: heightEnum.optional(),
   lens: z.number().min(12).max(200).optional().describe('mm; default 28 for WS/EWS, 50 otherwise.'),
 };
@@ -877,14 +915,26 @@ function frameUnclipped(p: Project, eff: EffectiveShot, shotNumber: string, f: F
   if (f.over) {
     const fg = subjectsAt(p, eff, [charId(f.over)], which)[0];
     const base = bearing(main.position, fg.position);
-    const off = f.angle ?? 15;
     const make = (az: number) => {
       const cam = frameSubjects([main], f.size, aspect, { ...opts, azimuth: az });
-      // Stay behind the foreground shoulder: back off and lengthen the lens to keep the size.
-      const behind = Math.hypot(fg.position[0] - main.position[0], fg.position[2] - main.position[2]) + 0.6;
+      // Stand well behind the foreground shoulder (so it frames the shot instead of filling it), lengthening the lens to keep the size.
+      const behind = Math.hypot(fg.position[0] - main.position[0], fg.position[2] - main.position[2]) + 1;
       return cam.distance >= behind ? cam : { ...cam, distance: behind, lens: Math.min(135, cam.lens * (behind / cam.distance)) };
     };
-    return pick(make(base + off), make(base - off));
+    if (f.angle !== undefined) return pick(make(base + f.angle), make(base - f.angle));
+    // Without an angle, swing until the foreground head sits about two thirds of the way to the frame's edge.
+    const fgHead: [number, number, number] = [fg.position[0], fg.position[1] + fg.height * 0.9, fg.position[2]];
+    const best = (sign: number) => {
+      let out = make(base + sign * 15), err = Infinity;
+      for (let off = 6; off <= 35; off++) {
+        const cam = make(base + sign * off);
+        const at = project2d(cam, aspect, fgHead);
+        const e = at ? Math.abs(Math.abs(at[0]) - 0.65) : Infinity;
+        if (e < err) (out = cam), (err = e);
+      }
+      return out;
+    };
+    return pick(best(1), best(-1));
   }
   if (subjects.length === 1) {
     const off = f.angle ?? 20;
