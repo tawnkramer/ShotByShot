@@ -4,8 +4,7 @@
  * for render_shots (headless Chromium via tests/live/browser.ts). Skipped
  * unless LIVE_AGENT and OPENAI_API_KEY are set; the run is billed to that key.
  *   LIVE_AGENT=1 OPENAI_API_KEY=sk-… npx vitest run tests/agent.live.test.ts
- * LIVE_MODEL picks the chat model (default: the app's automatic choice). LIVE_RESPONSES=<effort>
- * routes through the Responses API, for models such as gpt-6.1-sol that only take tools there.
+ * LIVE_MODEL picks the chat model (default: the app's automatic choice).
  * Contact sheets are written to live-output/.
  */
 import 'fake-indexeddb/auto';
@@ -13,13 +12,12 @@ import { expect, it } from 'vitest';
 import { emptyHistory, runCommand, type History } from '../src/state/commands';
 import type { Project } from '../src/state/schema';
 import { setSetting } from '../src/storage/db';
-import { CHAT_MODEL_SETTING } from '../src/ai/chat';
+import { CHAT_MODEL_SETTING, chatModel } from '../src/ai/chat';
 import { runTurn } from '../src/ai/agent';
 import { describeScene } from '../src/ai/context';
 import { coldCoffee } from './fixtures/coldCoffee';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { openBrowserSheet, saveDataUrl } from './live/browser';
-import { responsesFetch } from './live/responsesShim';
 
 const key = process.env.LIVE_AGENT ? process.env.OPENAI_API_KEY : undefined;
 const OUT = process.env.LIVE_OUT ?? 'live-output';
@@ -32,17 +30,6 @@ function log(text: string) {
 
 it.skipIf(!key)('blocks the Cold Coffee scene', async () => {
   if (process.env.LIVE_MODEL) await setSetting(CHAT_MODEL_SETTING, process.env.LIVE_MODEL);
-  // LIVE_RESPONSES=<effort> goes through the Responses API (models that only allow tools with reasoning there);
-  // LIVE_REASONING sets reasoning_effort on chat requests.
-  const effort = process.env.LIVE_REASONING;
-  if (process.env.LIVE_RESPONSES) globalThis.fetch = responsesFetch(globalThis.fetch, process.env.LIVE_RESPONSES);
-  else if (effort) {
-    const real = globalThis.fetch;
-    globalThis.fetch = (url, init) => {
-      if (String(url).endsWith('/chat/completions') && typeof init?.body === 'string') init = { ...init, body: JSON.stringify({ ...JSON.parse(init.body), reasoning_effort: effort }) };
-      return real(url, init);
-    };
-  }
   mkdirSync(OUT, { recursive: true });
   writeFileSync(`${OUT}/log.txt`, '');
   let p: Project = coldCoffee();
@@ -50,6 +37,7 @@ it.skipIf(!key)('blocks the Cold Coffee scene', async () => {
   const sheet = await openBrowserSheet();
   let sheets = 0;
   try {
+    log(`Model: ${await chatModel(key!)}`);
     const started = Date.now();
     const reply = await runTurn({
       text: process.env.LIVE_PROMPT ?? 'Block the scene.',

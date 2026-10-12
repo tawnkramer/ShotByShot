@@ -1,10 +1,19 @@
 import { OPENAI_BASE, API_KEY_SETTING } from './openai';
-import { getSetting, setSetting } from '../storage/db';
+import { deleteSetting, getSetting, setSetting } from '../storage/db';
 
+/** The model the user picked in Settings; unset means automatic. */
 export const CHAT_MODEL_SETTING = 'openai.chatModel';
+/** The automatic choice for the current key and list, so it isn't looked up on every message. */
+export const AUTO_CHAT_MODEL_SETTING = 'openai.chatModel.auto';
 
-/** Preferred chat models, best first. The first one the key can use is picked automatically. */
-export const PREFERRED_CHAT_MODELS = ['gpt-5-mini', 'gpt-5', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o'];
+/** Chat models, best first. The first one the key can use is picked automatically. */
+export const PREFERRED_CHAT_MODELS = ['gpt-5.5', 'gpt-6.1-sol', 'gpt-5.4', 'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'];
+/**
+ * Older builds saved their automatic pick as if the user had chosen it.
+ * Those values are treated as automatic so installs move to the better default.
+ */
+const OLD_AUTOMATIC = ['gpt-5-mini', 'gpt-5', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o'];
+const OLD_AUTOMATIC_MIGRATED = 'openai.chatModel.migrated';
 
 export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 
@@ -17,7 +26,7 @@ export interface ToolCall {
 export type ChatMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string | ContentPart[] }
-  | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
+  | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[]; reasoning?: unknown[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 
 export interface ToolSpec {
@@ -34,17 +43,31 @@ export class ChatError extends Error {
   }
 }
 
-/** The chat model to use: the saved choice, or the first preferred model this key can use. */
-export async function chatModel(apiKey: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+/** The user's pick from Settings, if any. */
+export async function chosenChatModel(): Promise<string | undefined> {
   const saved = await getSetting<string>(CHAT_MODEL_SETTING);
-  if (saved) return saved;
+  if (saved && OLD_AUTOMATIC.includes(saved) && !(await getSetting<boolean>(OLD_AUTOMATIC_MIGRATED))) {
+    await deleteSetting(CHAT_MODEL_SETTING);
+    await setSetting(OLD_AUTOMATIC_MIGRATED, true);
+    return undefined;
+  }
+  return saved || undefined;
+}
+
+/** The chat model to use: the user's pick, or the first preferred model this key can use. */
+export async function chatModel(apiKey: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const chosen = await chosenChatModel();
+  if (chosen) return chosen;
+  const list = PREFERRED_CHAT_MODELS.join(',');
+  const cached = await getSetting<{ list: string; model: string }>(AUTO_CHAT_MODEL_SETTING);
+  if (cached?.list === list) return cached.model;
   try {
     const res = await fetchImpl(`${OPENAI_BASE}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
     if (res.ok) {
       const ids = new Set(((await res.json()) as { data?: { id: string }[] }).data?.map((m) => m.id) ?? []);
       const pick = PREFERRED_CHAT_MODELS.find((m) => ids.has(m));
       if (pick) {
-        await setSetting(CHAT_MODEL_SETTING, pick);
+        await setSetting(AUTO_CHAT_MODEL_SETTING, { list, model: pick });
         return pick;
       }
     }
@@ -61,22 +84,63 @@ export async function apiKey(): Promise<string | undefined> {
 export interface StreamResult {
   content: string;
   toolCalls: ToolCall[];
+  /** The model's reasoning (encrypted), to send back with the next request. */
+  reasoning: unknown[];
 }
 
+/** Models that reason, so their reasoning is carried from one round to the next. */
+const reasons = (model: string) => /^(o\d|gpt-5|gpt-6)/.test(model);
+
+/** The chat history as Responses API input: instructions plus items. */
+export function toResponsesInput(messages: ChatMessage[]): { instructions: string; input: unknown[] } {
+  let instructions = '';
+  const input: unknown[] = [];
+  for (const m of messages) {
+    if (m.role === 'system') instructions = m.content;
+    else if (m.role === 'user') {
+      const parts = typeof m.content === 'string' ? [{ type: 'text' as const, text: m.content }] : m.content;
+      input.push({ role: 'user', content: parts.map((p) => (p.type === 'text' ? { type: 'input_text', text: p.text } : { type: 'input_image', image_url: p.image_url.url })) });
+    } else if (m.role === 'assistant') {
+      input.push(...(m.reasoning ?? []));
+      if (m.content) input.push({ role: 'assistant', content: [{ type: 'output_text', text: m.content }] });
+      for (const c of m.tool_calls ?? []) input.push({ type: 'function_call', call_id: c.id, name: c.function.name, arguments: c.function.arguments });
+    } else input.push({ type: 'function_call_output', call_id: m.tool_call_id, output: m.content });
+  }
+  return { instructions, input };
+}
+
+type StreamEvent = {
+  type: string;
+  delta?: string;
+  item?: { type: string; call_id?: string; name?: string; arguments?: string };
+  message?: string;
+  response?: { error?: { message?: string }; incomplete_details?: { reason?: string } };
+};
+
 /**
- * One chat completion, streamed. Text arrives through onText as it's
- * generated; tool calls are assembled from their fragments and returned.
+ * One model response, streamed (OpenAI Responses API). Text arrives through
+ * onText as it's generated; tool calls come back whole. Nothing is stored on
+ * OpenAI's side: the whole history is sent each time.
  */
 export async function streamChat(
   opts: { apiKey: string; model: string; messages: ChatMessage[]; tools?: ToolSpec[]; signal?: AbortSignal; onText?: (delta: string) => void },
   fetchImpl: typeof fetch = fetch,
 ): Promise<StreamResult> {
+  const { instructions, input } = toResponsesInput(opts.messages);
   let res: Response;
   try {
-    res = await fetchImpl(`${OPENAI_BASE}/chat/completions`, {
+    res = await fetchImpl(`${OPENAI_BASE}/responses`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: opts.model, messages: opts.messages, tools: opts.tools?.length ? opts.tools : undefined, stream: true }),
+      body: JSON.stringify({
+        model: opts.model,
+        instructions: instructions || undefined,
+        input,
+        tools: opts.tools?.length ? opts.tools.map((t) => ({ type: 'function', name: t.function.name, description: t.function.description, parameters: t.function.parameters, strict: false })) : undefined,
+        stream: true,
+        store: false,
+        include: reasons(opts.model) ? ['reasoning.encrypted_content'] : undefined,
+      }),
       signal: opts.signal,
     });
   } catch (e) {
@@ -100,27 +164,28 @@ export async function streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
   let content = '';
-  const calls: { id: string; name: string; args: string }[] = [];
+  const toolCalls: ToolCall[] = [];
+  const reasoning: unknown[] = [];
 
   const handle = (data: string) => {
     if (data === '[DONE]') return;
-    let json: { choices?: { delta?: { content?: string; tool_calls?: { index: number; id?: string; function?: { name?: string; arguments?: string } }[] } }[] };
+    let ev: StreamEvent;
     try {
-      json = JSON.parse(data);
+      ev = JSON.parse(data);
     } catch {
       return;
     }
-    const delta = json.choices?.[0]?.delta;
-    if (!delta) return;
-    if (delta.content) {
-      content += delta.content;
-      opts.onText?.(delta.content);
-    }
-    for (const tc of delta.tool_calls ?? []) {
-      const c = (calls[tc.index] ??= { id: '', name: '', args: '' });
-      if (tc.id) c.id = tc.id;
-      if (tc.function?.name) c.name += tc.function.name;
-      if (tc.function?.arguments) c.args += tc.function.arguments;
+    if (ev.type === 'response.output_text.delta' && ev.delta) {
+      content += ev.delta;
+      opts.onText?.(ev.delta);
+    } else if (ev.type === 'response.output_item.done' && ev.item) {
+      const it = ev.item;
+      if (it.type === 'function_call') toolCalls.push({ id: it.call_id || `call_${toolCalls.length}`, type: 'function', function: { name: it.name ?? '', arguments: it.arguments || '{}' } });
+      else if (it.type === 'reasoning') reasoning.push(it);
+    } else if (ev.type === 'error' || ev.type === 'response.failed') {
+      throw new ChatError(`OpenAI error: ${ev.message ?? ev.response?.error?.message ?? 'the response failed.'}`);
+    } else if (ev.type === 'response.incomplete' && !content && !toolCalls.length) {
+      throw new ChatError(`OpenAI stopped early (${ev.response?.incomplete_details?.reason ?? 'incomplete'}).`);
     }
   };
 
@@ -136,9 +201,5 @@ export async function streamChat(
     }
   }
   if (buffer.trim().startsWith('data:')) handle(buffer.trim().slice(5).trim());
-
-  return {
-    content,
-    toolCalls: calls.filter(Boolean).map((c, i) => ({ id: c.id || `call_${i}`, type: 'function' as const, function: { name: c.name, arguments: c.args || '{}' } })),
-  };
+  return { content, toolCalls, reasoning };
 }

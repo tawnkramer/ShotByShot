@@ -5,7 +5,7 @@ import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { requestPersistentStorage } from '../storage/projectIO';
 import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
 import { buildLabel } from '../version';
-import { CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS } from '../ai/chat';
+import { AUTO_CHAT_MODEL_SETTING, CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, chatModel as resolveChatModel, chosenChatModel } from '../ai/chat';
 import { ComfySettings } from '../comfy/ComfySettings';
 import { OpenArtSettings } from '../openart/OpenArtSettings';
 
@@ -17,12 +17,14 @@ export function SettingsPage() {
   const [testing, setTesting] = useState(false);
   const [ttsModel, setTtsModel] = useState('');
   const [chatModel, setChatModel] = useState('');
+  const [autoModel, setAutoModel] = useState<string | undefined>();
   const [storage, setStorage] = useState<{ used: number; quota: number; persisted: boolean } | null>(null);
 
   useEffect(() => {
     void getSetting<string>(API_KEY_SETTING).then(setSavedKey);
     void getSetting<string>(TTS_MODEL_SETTING).then((m) => setTtsModel(m ?? ''));
-    void getSetting<string>(CHAT_MODEL_SETTING).then((m) => setChatModel(m ?? ''));
+    void chosenChatModel().then((m) => setChatModel(m ?? ''));
+    void getSetting<{ model: string }>(AUTO_CHAT_MODEL_SETTING).then((a) => setAutoModel(a?.model));
     void loadStorage().then(setStorage);
   }, []);
 
@@ -34,6 +36,10 @@ export function SettingsPage() {
     setTesting(false);
     setCheck(result);
     if (result.ok) {
+      // A new key may reach different models: pick the automatic one again.
+      await deleteSetting(AUTO_CHAT_MODEL_SETTING);
+      await resolveChatModel(k).catch(() => undefined);
+      setAutoModel((await getSetting<{ model: string }>(AUTO_CHAT_MODEL_SETTING))?.model);
       await setSetting(API_KEY_SETTING, k);
       setSavedKey(k);
       setKey('');
@@ -107,18 +113,21 @@ export function SettingsPage() {
             {check && <p className={check.ok ? 'ok small' : 'error small'}>{check.message}</p>}
             <label className="field">
               <span>Assistant model</span>
-              <input
-                list="chat-models"
-                placeholder="Automatic"
+              <select
                 value={chatModel}
-                onChange={(e) => setChatModel(e.target.value)}
-                onBlur={() => void (chatModel.trim() ? setSetting(CHAT_MODEL_SETTING, chatModel.trim()) : deleteSetting(CHAT_MODEL_SETTING))}
-              />
-              <datalist id="chat-models">
-                {(check?.models?.length ? PREFERRED_CHAT_MODELS.filter((m) => check.models!.includes(m)) : PREFERRED_CHAT_MODELS).map((m) => (
-                  <option key={m} value={m} />
+                onChange={(e) => {
+                  const m = e.target.value;
+                  setChatModel(m);
+                  void (m ? setSetting(CHAT_MODEL_SETTING, m) : deleteSetting(CHAT_MODEL_SETTING));
+                }}
+              >
+                <option value="">Automatic{autoModel ? ` (${autoModel})` : ''}</option>
+                {[...(check?.models?.length ? PREFERRED_CHAT_MODELS.filter((m) => check.models!.includes(m)) : PREFERRED_CHAT_MODELS), ...(chatModel && !PREFERRED_CHAT_MODELS.includes(chatModel) ? [chatModel] : [])].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </label>
             <label className="field">
               <span>Speech model</span>

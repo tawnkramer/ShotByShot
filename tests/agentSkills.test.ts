@@ -11,6 +11,7 @@ import { matchSkill, skillById } from '../src/ai/skills';
 import { effectiveShot } from '../src/shots/setup';
 import { sheetLayout } from '../src/export/contactSheet';
 import { coldCoffee } from './fixtures/coldCoffee';
+import { responseStream, type ResponsesBody } from './fixtures/openaiStub';
 
 function harness(p: Project, opts: { shotId?: string } = {}) {
   let project = p;
@@ -242,14 +243,13 @@ describe('agent loop with a skill', () => {
 
   it('loads the skill from the request and allows more rounds', async () => {
     const rounds = MAX_ROUNDS + 4;
-    const bodies: { messages: { role: string; content: unknown }[] }[] = [];
+    const bodies: ResponsesBody[] = [];
     let n = 0;
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(init.body as string));
-      const delta = ++n < rounds
-        ? { tool_calls: [{ index: 0, id: `c${n}`, function: { name: 'block_shots', arguments: JSON.stringify(OPENING) } }] }
-        : { content: 'Blocked the opening.' };
-      return new Response(`data: ${JSON.stringify({ choices: [{ delta }] })}\n\ndata: [DONE]\n\n`, { status: 200 });
+      return responseStream(++n < rounds
+        ? { tool_calls: [{ id: `c${n}`, function: { name: 'block_shots', arguments: JSON.stringify(OPENING) } }] }
+        : { content: 'Blocked the opening.' });
     });
     const h = harness(coldCoffee());
     const reply = await runTurn({
@@ -268,19 +268,19 @@ describe('agent loop with a skill', () => {
     vi.unstubAllGlobals();
     expect(reply).toBe('Blocked the opening.');
     expect(bodies).toHaveLength(rounds);
-    expect(bodies[0].messages[0].content).toMatch(/SKILL: SHOT BY SHOT[\s\S]*Scene detail/);
+    expect(bodies[0].instructions).toMatch(/SKILL: SHOT BY SHOT[\s\S]*Scene detail/);
     expect(actorsOf(h.get(), '1.2').Ben.mode).toBe('moving');
   });
 
   it('loads a skill the model asks for in the same turn', async () => {
     const replies = [
-      { tool_calls: [{ index: 0, id: 'c1', function: { name: 'use_skill', arguments: JSON.stringify({ id: 'shot_by_shot' }) } }] },
+      { tool_calls: [{ id: 'c1', function: { name: 'use_skill', arguments: JSON.stringify({ id: 'shot_by_shot' }) } }] },
       { content: 'Ready.' },
     ];
-    const bodies: { messages: { role: string; content: unknown }[] }[] = [];
+    const bodies: ResponsesBody[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(init.body as string));
-      return new Response(`data: ${JSON.stringify({ choices: [{ delta: replies.shift() }] })}\n\ndata: [DONE]\n\n`, { status: 200 });
+      return responseStream(replies.shift()!);
     });
     const h = harness(coldCoffee());
     await runTurn({
@@ -289,7 +289,7 @@ describe('agent loop with a skill', () => {
       setStage: h.ctx.setStage, navigate: h.ctx.navigate, snapshot: h.ctx.snapshot, apiKey: 'sk-test',
     });
     vi.unstubAllGlobals();
-    expect(bodies[0].messages[0].content).not.toMatch(/SKILL: SHOT BY SHOT/);
-    expect(bodies[1].messages[0].content).toMatch(/SKILL: SHOT BY SHOT/);
+    expect(bodies[0].instructions).not.toMatch(/SKILL: SHOT BY SHOT/);
+    expect(bodies[1].instructions).toMatch(/SKILL: SHOT BY SHOT/);
   });
 });

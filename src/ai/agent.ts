@@ -77,7 +77,7 @@ export async function runTurn(o: TurnOptions): Promise<string> {
     messages[0] = { role: 'system', content: systemPrompt(o.getProject(), o.step, { shotId: o.shotId, stageId: o.stageId(), skill }) };
     const res = await streamChat({ apiKey: key, model, messages, tools: specs, signal: o.signal, onText: o.onText });
     if (res.content) replies.push(res.content);
-    messages.push({ role: 'assistant', content: res.content || null, tool_calls: res.toolCalls.length ? res.toolCalls : undefined });
+    messages.push({ role: 'assistant', content: res.content || null, tool_calls: res.toolCalls.length ? res.toolCalls : undefined, reasoning: res.reasoning.length ? res.reasoning : undefined });
     if (!res.toolCalls.length) return replies.join('\n\n').trim();
     for (const call of res.toolCalls) {
       const result = await runTool(tools, call.function.name, call.function.arguments, ctx);

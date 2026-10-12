@@ -13,6 +13,7 @@ import { runTurn } from '../src/ai/agent';
 import { runTool, toolsFor, toolSpecs, type ToolContext } from '../src/ai/tools';
 import { systemPrompt } from '../src/ai/context';
 import { effectiveShot } from '../src/shots/setup';
+import { responseStream, type ResponsesBody } from './fixtures/openaiStub';
 
 /** A tiny in-memory project store the tools can act on. */
 function harness(p: Project, opts: { shotId?: string } = {}) {
@@ -132,14 +133,13 @@ describe('agent loop', () => {
 
   it('runs tool calls, feeds back results, and returns the final reply', async () => {
     const replies = [
-      { tool_calls: [{ index: 0, id: 'c1', function: { name: 'add_objects', arguments: JSON.stringify({ objects: [{ item: 'table', x: 0, z: 0 }] }) } }] },
+      { tool_calls: [{ id: 'c1', function: { name: 'add_objects', arguments: JSON.stringify({ objects: [{ item: 'table', x: 0, z: 0 }] }) } }] },
       { content: 'Added a table in the middle.' },
     ];
-    const bodies: { messages: { role: string; content: unknown }[]; model: string }[] = [];
+    const bodies: ResponsesBody[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(init.body as string));
-      const delta = replies.shift()!;
-      return new Response(`data: ${JSON.stringify({ choices: [{ delta }] })}\n\ndata: [DONE]\n\n`, { status: 200 });
+      return responseStream(replies.shift()!);
     });
     const h = harness(sample());
     const reply = await runTurn({
@@ -157,9 +157,9 @@ describe('agent loop', () => {
     expect(reply).toBe('Added a table in the middle.');
     expect(h.get().stages[0].objects.map((o) => o.name)).toEqual(['Table']);
     expect(bodies[0].model).toBe('test-model');
-    const toolMsg = bodies[1].messages.find((m) => m.role === 'tool');
-    expect(toolMsg?.content).toMatch(/Added to "Dockside Bar": Table/);
-    // The second request's system prompt already shows the table.
-    expect(bodies[1].messages[0].content).toMatch(/- Table \(table/);
+    const toolMsg = bodies[1].input.find((m) => m.type === 'function_call_output');
+    expect(toolMsg).toMatchObject({ call_id: 'c1', output: expect.stringMatching(/Added to "Dockside Bar": Table/) });
+    // The second request's instructions already show the table.
+    expect(bodies[1].instructions).toMatch(/- Table \(table/);
   });
 });
