@@ -5,7 +5,7 @@ import { cueName, speakerOf } from '../story/classify';
 import { frameSubjects, type ShotSize, type Subject } from '../three/camera';
 import { autoDuration, shotCaptions, type Caption } from './timing';
 import { validClips } from '../audio/clips';
-import { seatedPosition } from './seats';
+import { bodyPosition } from './body';
 
 export function aspectOf(project: Project): number {
   return ASPECT_RATIOS.find((a) => a.id === project.aspect)!.ratio;
@@ -123,7 +123,7 @@ export function subjectsFor(project: Project, setup: ShotSetup, ids?: string[], 
     .map((a) => {
       const c = project.characters.find((x) => x.id === a.characterId);
       const k = a.motion.start;
-      return { position: seatedPosition(stage, setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
+      return { position: bodyPosition(stage, setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
     });
 }
 

@@ -16,7 +16,7 @@ import { isContainer, objectExtent, worldRect, type Rect } from '../staging/plac
 import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
 import { skillById, skillsFor } from './skills';
 import { cameraPosition, frameSubjects, lensToVFov, moveCamera, SHOT_SIZES, turnCamera, type ShotSize, type Subject } from '../three/camera';
-import { seatedPosition } from '../shots/seats';
+import { bodyPosition, isGround } from '../shots/body';
 import { checkCoverage, describeCoverage, formatFindings, lineSide, viewBlocker } from '../shots/coverage';
 import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
@@ -56,7 +56,7 @@ function tool<S extends z.ZodType>(name: string, description: string, schema: S,
 
 const num = z.number();
 const yawDesc = 'Facing in degrees: 0 faces the front of the stage (+Z), 90 faces +X, -90 faces -X, 180 faces the back.';
-const liftDesc = 'Height of what they stand or sit on, in meters (default 0, the floor), e.g. 0.4 on a platform. Not needed for chairs and bar stools: sitting on one puts them at its seat height.';
+const liftDesc = 'Extra height in meters (default 0). Rarely needed: people stand on the top of boxes, cylinders and planes (platforms, piers, steps) under them, and sit at the seat height of chairs and stools, automatically.';
 
 // ---------- helpers ----------
 
@@ -380,7 +380,7 @@ const at = z.enum(['start', 'end']).optional().describe('Keyframe. Placing at "e
 
 const placeCharacters = tool(
   'place_characters',
-  'Place characters in the open shot (adding them if needed). Use face to turn toward another character or object by name. Someone sitting at a chair or bar stool is seated at its height automatically.',
+  'Place characters in the open shot (adding them if needed). Use face to turn toward another character or object by name. People stand on platforms (boxes, cylinders, planes) and sit on chairs and bar stools at the right height automatically.',
   z.object({
     placements: z.array(z.object({ name: z.string(), x: num.optional(), z: num.optional(), y: num.optional().describe(liftDesc), yaw: num.optional().describe(yawDesc), face: z.string().optional(), pose: z.enum(POSES).optional(), at })).min(1),
   }),
@@ -613,8 +613,9 @@ function keyProblems(name: string, k: { position: [number, number, number]; pose
       if (o.source.kind === 'library' && o.source.item === 'room' && !inside(x, z, rect)) out.push(`${name} is outside ${o.name} ${at}.`);
       continue;
     }
-    // Seats are for sitting in, and doorways are for walking through.
+    // Seats are for sitting in, doorways for walking through, and platforms for standing on.
     if ((k.pose === 'sitting' && isSeat(o)) || (o.source.kind === 'library' && o.source.item === 'door')) continue;
+    if (isGround(o)) continue;
     if (inside(x, z, rect, k.pose === 'sitting' || k.pose === 'lying' ? 0 : BODY)) out.push(`${name} is inside ${o.name} ${at}.`);
   }
   if (k.pose === 'sitting') {
@@ -742,7 +743,7 @@ const blockShots = tool(
           const d = Math.hypot(last.position[0] - actor.motion.start.position[0], last.position[2] - actor.motion.start.position[2]);
           // Walking into a shot standing (or the reverse) isn't a jump; sitting down off screen is.
           const posture = (pose: string) => (pose === 'walking' ? 'standing' : pose);
-          if (d > CONTINUITY_M || posture(last.pose) !== posture(actor.motion.start.pose)) problems.push(`${n} starts ${d.toFixed(1)} m${last.pose !== actor.motion.start.pose ? `, ${actor.motion.start.pose} not ${last.pose},` : ''} from where shot ${before!.number} left them; fine only if the script moves them between shots.`);
+          if (d > CONTINUITY_M || posture(last.pose) !== posture(actor.motion.start.pose)) problems.push(`${n} starts ${d.toFixed(1)} m${posture(last.pose) !== posture(actor.motion.start.pose) ? `, ${actor.motion.start.pose} not ${last.pose},` : ''} from where shot ${before!.number} left them; fine only if the script moves them between shots.`);
         }
       }
       problems.push(...movementProblems(p, shot, eff.setup.actors));
@@ -784,7 +785,7 @@ function subjectsAt(p: Project, eff: EffectiveShot, ids: string[], which: 'start
     const a = eff.setup.actors.find((x) => x.characterId === id)!;
     const k = keyOf(a.motion, which);
     const c = p.characters.find((x) => x.id === id);
-    return { position: seatedPosition(p.stages.find((s) => s.id === eff.stageId), eff.setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
+    return { position: bodyPosition(p.stages.find((s) => s.id === eff.stageId), eff.setup.stageOverrides, c, k), yaw: k.yaw, height: poseHeight(c?.heightCm, k.pose) };
   });
 }
 
