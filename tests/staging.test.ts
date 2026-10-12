@@ -30,7 +30,8 @@ describe('stage names', () => {
 
 describe('stage commands', () => {
   it('creates one stage per location, sharing repeated locations', () => {
-    const [p] = run(createProject('T'), importScript(SAMPLE_SCRIPT));
+    // The sample plus a return to the bar, so one location has two scenes.
+    const [p] = run(createProject('T'), importScript(`${SAMPLE_SCRIPT}\nINT. DOCKSIDE BAR - LATER\n\nThe bar is dark.\n`));
     const { command, ids } = createStagesForScenes(p);
     const [q] = run(p, command);
     expect(q.stages.map((s) => s.name)).toEqual(['Dockside Bar', 'Docks']);

@@ -41,9 +41,10 @@ Maya, wait!
 MAYA
 Ten years. Ten years I told everyone he just left.
 
-CUT TO:
+Dex puts his hand on her shoulder.
 
-INT. DOCKSIDE BAR - LATER
+DEX
+We all wanted that.
 
-The bar is dark. Maya sits alone, the envelope open in front of her.
+Maya turns, and they hug.
 `;

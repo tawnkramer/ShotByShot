@@ -17,10 +17,16 @@ describe('classifyScript', () => {
     expect(byText("We're closed.")).toBe('dialogue');
     expect(byText('(quietly)')).toBe('dialogue');
     expect(byText('CLOSE ON the envelope')).toBe('camera');
-    expect(byText('CUT TO:')).toBe('camera');
+    expect(byText('Dex puts his hand')).toBe('action');
+    expect(byText('We all wanted that.')).toBe('dialogue');
+    expect(byText('Maya turns, and they hug.')).toBe('action');
     expect(lines.filter((l) => l.type === 'character').map((l) => l.text)).toEqual([
-      'MAYA', 'DEX', 'MAYA', 'DEX', 'DEX', 'MAYA',
+      'MAYA', 'DEX', 'MAYA', 'DEX', 'DEX', 'MAYA', 'DEX',
     ]);
+  });
+
+  it('labels a transition', () => {
+    expect(types('He runs.\n\nCUT TO:\n\nShe sleeps.')[1]).toBe('camera:CUT TO:');
   });
 
   it('recognizes a camera direction followed by description', () => {

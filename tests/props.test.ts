@@ -14,7 +14,7 @@ describe('props', () => {
   it('suggests props mentioned in action lines', () => {
     const items = suggestProps(base).map((s) => s.item);
     expect(items).toEqual(expect.arrayContaining(['envelope', 'glass']));
-    expect(suggestProps(base).find((s) => s.item === 'envelope')!.mentions).toBe(3);
+    expect(suggestProps(base).find((s) => s.item === 'envelope')!.mentions).toBe(2);
   });
 
   it('stops suggesting props that are already in the project', () => {
