@@ -61,6 +61,7 @@ const PROP_WORDS: [RegExp, LibraryItem][] = [
   [/\b(books?|notebooks?|diary|journal)\b/i, 'book'],
   [/\b(laptops?|computer)\b/i, 'laptop'],
   [/\blamps?\b/i, 'lamp'],
+  [/\b(cars?|hatchbacks?|sedans?|suvs?|taxis?|cabs?)\b/i, 'car'],
 ];
 
 export interface PropSuggestion {

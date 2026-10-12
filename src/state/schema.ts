@@ -49,7 +49,7 @@ export const scriptLineSchema = z.object({
 });
 
 export const SET_ITEMS = ['table', 'chair', 'door', 'window', 'bar', 'stool', 'wall', 'room'] as const;
-export const PROP_ITEMS = ['bottle', 'mug', 'glass', 'phone', 'envelope', 'book', 'briefcase', 'bag', 'laptop', 'lamp', 'pistol', 'knife'] as const;
+export const PROP_ITEMS = ['bottle', 'mug', 'glass', 'phone', 'envelope', 'book', 'briefcase', 'bag', 'laptop', 'lamp', 'pistol', 'knife', 'car'] as const;
 export const LIBRARY_ITEMS = [...SET_ITEMS, ...PROP_ITEMS] as const;
 export const COMPOSITE_SHAPES = ['box', 'cylinder', 'sphere', 'cone', 'torus'] as const;
 export const PRIMITIVE_SHAPES = ['box', 'cylinder', 'sphere', 'cone', 'plane'] as const;

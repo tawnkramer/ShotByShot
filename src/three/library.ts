@@ -208,6 +208,30 @@ export const LIBRARY: Record<LibraryItem, ItemDef> = {
       return group(box(0.33, 0.016, 0.23, 0.4), lid);
     },
   },
+  car: {
+    label: 'Car',
+    category: 'prop',
+    params: [P('length', 'Length', 4.2, 3, 5.5, 0.1), P('width', 'Width', 1.8, 1.5, 2.1), P('height', 'Height', 1.5, 1.2, 2)],
+    build: ({ length: l, width: w, height: h }) => {
+      // A grey-box hatchback, nose toward +Z: wheels, body, then a glass cabin under a roof so the driver shows.
+      const r = 0.32, clear = 0.16, body = h * 0.42;
+      const cabin = h - clear - body - 0.05;
+      const wheels = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => {
+        // Set out to the body's sides so they show, as on a real car's arches.
+        const wheel = part(new THREE.CylinderGeometry(r, r, 0.22, 20), 0.2, sx * (w / 2 - 0.04), r, sz * l * 0.32);
+        wheel.rotation.z = Math.PI / 2;
+        return wheel;
+      });
+      const lights = [-1, 1].map((sx) => box(0.32, 0.1, 0.03, 0.95, sx * (w / 2 - 0.3), clear + body * 0.62, l / 2));
+      return group(
+        ...wheels,
+        box(w - 0.16, body, l, 0.7, 0, clear),
+        glass(box(w * 0.86, cabin, l * 0.52, 0.9, 0, clear + body, -l * 0.06)),
+        box(w * 0.88, 0.05, l * 0.5, 0.72, 0, clear + body + cabin, -l * 0.07),
+        ...lights,
+      );
+    },
+  },
   lamp: {
     label: 'Lamp',
     category: 'prop',
