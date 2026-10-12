@@ -18,7 +18,7 @@ describe('classifyScript', () => {
     expect(byText('(quietly)')).toBe('dialogue');
     expect(byText('CLOSE ON the envelope')).toBe('camera');
     expect(byText('Dex puts his hand')).toBe('action');
-    expect(byText('We all wanted that.')).toBe('dialogue');
+    expect(byText('We all miss him.')).toBe('dialogue');
     expect(byText('Maya turns, and they hug.')).toBe('action');
     expect(lines.filter((l) => l.type === 'character').map((l) => l.text)).toEqual([
       'MAYA', 'DEX', 'MAYA', 'DEX', 'DEX', 'MAYA', 'DEX',

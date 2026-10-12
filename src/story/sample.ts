@@ -44,7 +44,7 @@ Ten years. Ten years I told everyone he just left.
 Dex puts his hand on her shoulder.
 
 DEX
-We all wanted that.
+We all miss him.
 
 Maya turns, and they hug.
 `;
