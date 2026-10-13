@@ -5,8 +5,8 @@ import { deleteSetting, getSetting, setSetting } from '../storage/db';
 import { requestPersistentStorage } from '../storage/projectIO';
 import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
 import { buildLabel } from '../version';
-import { AUTO_CHAT_MODEL_SETTING, CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, chatModel as resolveChatModel, chosenChatModel } from '../ai/chat';
-import { AUTO_GEMINI_MODEL_SETTING, GEMINI_KEY_SETTING, PREFERRED_GEMINI_MODELS, geminiChatModel as resolveGeminiModel, testGeminiKey } from '../ai/gemini';
+import { AUTO_CHAT_MODEL_SETTING, CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, chatModel as resolveChatModel, openAIChatModels, chosenChatModel } from '../ai/chat';
+import { AUTO_GEMINI_MODEL_SETTING, GEMINI_KEY_SETTING, PREFERRED_GEMINI_MODELS, rememberGeminiModels, testGeminiKey } from '../ai/gemini';
 import { ComfySettings } from '../comfy/ComfySettings';
 import { OpenArtSettings } from '../openart/OpenArtSettings';
 
@@ -37,9 +37,9 @@ export function SettingsPage() {
 
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone;
   const anyKey = !!(openaiKey || geminiKey);
-  const offered = (preferred: string[], available?: string[]) => (available?.length ? preferred.filter((m) => available.includes(m)) : preferred);
-  const openaiOptions = openaiKey || !anyKey ? offered(PREFERRED_CHAT_MODELS, openaiModels) : [];
-  const geminiOptions = geminiKey || !anyKey ? offered(PREFERRED_GEMINI_MODELS, geminiModels) : [];
+  // The key's own model lists once they're read, so new models show up without an app update.
+  const openaiOptions = openaiKey || !anyKey ? (openaiModels?.length ? openAIChatModels(openaiModels) : PREFERRED_CHAT_MODELS) : [];
+  const geminiOptions = geminiKey || !anyKey ? (geminiModels?.length ? geminiModels : PREFERRED_GEMINI_MODELS) : [];
   const custom = chatModel && ![...openaiOptions, ...geminiOptions].includes(chatModel) ? chatModel : undefined;
 
   return (
@@ -98,10 +98,10 @@ export function SettingsPage() {
               placeholder="AIza…"
               test={testGeminiKey}
               onKey={setGeminiKey}
-              onModels={setGeminiModels}
-              onSaved={async (k) => {
-                await deleteSetting(AUTO_GEMINI_MODEL_SETTING);
-                await resolveGeminiModel(k).catch(() => undefined);
+              onModels={(models) => {
+                setGeminiModels(models);
+                // A fresh list may have a newer model: make it the automatic choice.
+                if (models?.length) void rememberGeminiModels(models).then(loadAutoModel);
               }}
               afterChange={loadAutoModel}
             />
@@ -186,7 +186,7 @@ function KeyField({ setting, placeholder, test, onKey, onModels, onSaved, afterC
   onKey: (key: string | undefined) => void;
   onModels: (models: string[] | undefined) => void;
   /** Runs after a new key passes its test, before it is saved. */
-  onSaved: (key: string) => Promise<void>;
+  onSaved?: (key: string) => Promise<void>;
   afterChange: () => Promise<void>;
 }) {
   const [key, setKey] = useState('');
@@ -195,9 +195,14 @@ function KeyField({ setting, placeholder, test, onKey, onModels, onSaved, afterC
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    void getSetting<string>(setting).then((k) => {
+    void getSetting<string>(setting).then(async (k) => {
       setSavedKey(k);
       onKey(k);
+      // Read the saved key's models quietly, so the picker lists what it can use today.
+      if (k) {
+        const result = await test(k).catch(() => undefined);
+        if (result?.ok) onModels(result.models);
+      }
     });
   }, [setting]);
 
@@ -214,7 +219,7 @@ function KeyField({ setting, placeholder, test, onKey, onModels, onSaved, afterC
     const k = key.trim();
     if (!k) return;
     if (!(await runTest(k)).ok) return;
-    await onSaved(k);
+    await onSaved?.(k);
     await setSetting(setting, k);
     setSavedKey(k);
     onKey(k);

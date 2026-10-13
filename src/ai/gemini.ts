@@ -5,10 +5,11 @@ import { getSetting, setSetting } from '../storage/db';
 
 export const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 export const GEMINI_KEY_SETTING = 'gemini.apiKey';
-/** The automatic Gemini choice for the current key and list. */
+/** The automatic Gemini choice, and when it was made, so new models are picked up within a day. */
 export const AUTO_GEMINI_MODEL_SETTING = 'gemini.chatModel.auto';
+const AUTO_MAX_AGE = 24 * 60 * 60 * 1000;
 
-/** Gemini chat models, best first. The first one the key can use is picked automatically. */
+/** Gemini chat models, best first: used when the key's model list can't be read. */
 export const PREFERRED_GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'];
 
 /** Ids made up for calls Gemini returned without one; they are not sent back. */
@@ -20,6 +21,9 @@ export async function geminiApiKey(): Promise<string | undefined> {
   return getSetting<string>(GEMINI_KEY_SETTING);
 }
 
+/** Gemini models that aren't for chat with tools (images, speech, embeddings, live audio…). */
+const NOT_CHAT = /(image|tts|embedding|audio|live|aqa|robotics|computer-use)/;
+
 /** The ids of models this key can chat with, without the "models/" prefix. */
 async function listModels(key: string, fetchImpl: typeof fetch): Promise<Response | string[]> {
   const ids: string[] = [];
@@ -28,11 +32,53 @@ async function listModels(key: string, fetchImpl: typeof fetch): Promise<Respons
     const res = await fetchImpl(`${GEMINI_BASE}/models?pageSize=1000${page ? `&pageToken=${encodeURIComponent(page)}` : ''}`, { headers: { 'x-goog-api-key': key } });
     if (!res.ok) return res;
     const body = (await res.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[]; nextPageToken?: string };
-    for (const m of body.models ?? []) if (!m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent')) ids.push(m.name.replace(/^models\//, ''));
+    for (const m of body.models ?? []) {
+      const id = m.name.replace(/^models\//, '');
+      if (isGeminiModel(id) && !NOT_CHAT.test(id) && (!m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))) ids.push(id);
+    }
     if (!body.nextPageToken) break;
     page = body.nextPageToken;
   }
-  return ids.sort();
+  return sortGeminiModels(ids);
+}
+
+const TIERS = ['pro', 'flash', 'flash-lite'];
+
+/** Version, tier and stability of a regular model id like "gemini-3.5-flash" or "gemini-3.1-pro-preview". */
+function parseGeminiId(id: string): { major: number; minor: number; tier: number; preview: boolean } | undefined {
+  const m = /^gemini-(\d+)(?:\.(\d+))?-(pro|flash|flash-lite)(-preview(?:-[\w-]+)?)?$/.exec(id);
+  if (!m) return undefined;
+  return { major: +m[1], minor: +(m[2] ?? 0), tier: TIERS.indexOf(m[3]), preview: !!m[4] };
+}
+
+/** Newest first; within a version stable before preview, then pro, flash, flash-lite. Other ids (dated snapshots, aliases) go last. */
+export function sortGeminiModels(ids: string[]): string[] {
+  const key = (id: string) => {
+    const p = parseGeminiId(id);
+    return p ? [0, -p.major, -p.minor, +p.preview, p.tier] : [1, 0, 0, 0, 0];
+  };
+  return [...new Set(ids)].sort((a, b) => {
+    const ka = key(a), kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+    return a.localeCompare(b);
+  });
+}
+
+/** The automatic choice from a key's models: the newest stable Pro or Flash, else the first preferred model it has. */
+export function pickGeminiModel(ids: string[]): string | undefined {
+  return (
+    sortGeminiModels(ids).find((id) => {
+      const p = parseGeminiId(id);
+      return p && !p.preview && TIERS[p.tier] !== 'flash-lite';
+    }) ?? PREFERRED_GEMINI_MODELS.find((m) => ids.includes(m))
+  );
+}
+
+/** Remembers the automatic choice for a model list just read (Settings reads it when it opens). */
+export async function rememberGeminiModels(ids: string[]): Promise<string | undefined> {
+  const pick = pickGeminiModel(ids);
+  if (pick) await setSetting(AUTO_GEMINI_MODEL_SETTING, { model: pick, at: Date.now() });
+  return pick;
 }
 
 export async function testGeminiKey(key: string, fetchImpl: typeof fetch = fetch): Promise<KeyCheck> {
@@ -49,24 +95,20 @@ export async function testGeminiKey(key: string, fetchImpl: typeof fetch = fetch
   return { ok: false, message: `Google returned an error (${result.status}).` };
 }
 
-/** The first preferred Gemini model this key can use. */
+/** The automatic Gemini model: the newest one the key can use, looked up again once a day. */
 export async function geminiChatModel(key: string, fetchImpl: typeof fetch = fetch): Promise<string> {
-  const list = PREFERRED_GEMINI_MODELS.join(',');
-  const cached = await getSetting<{ list: string; model: string }>(AUTO_GEMINI_MODEL_SETTING);
-  if (cached?.list === list) return cached.model;
+  const cached = await getSetting<{ model: string; at?: number }>(AUTO_GEMINI_MODEL_SETTING);
+  if (cached?.at && Date.now() - cached.at < AUTO_MAX_AGE) return cached.model;
   try {
     const ids = await listModels(key, fetchImpl);
     if (Array.isArray(ids)) {
-      const pick = PREFERRED_GEMINI_MODELS.find((m) => ids.includes(m));
-      if (pick) {
-        await setSetting(AUTO_GEMINI_MODEL_SETTING, { list, model: pick });
-        return pick;
-      }
+      const pick = await rememberGeminiModels(ids);
+      if (pick) return pick;
     }
   } catch {
     /* fall through */
   }
-  return PREFERRED_GEMINI_MODELS[0];
+  return cached?.model ?? PREFERRED_GEMINI_MODELS[0];
 }
 
 type Part = {

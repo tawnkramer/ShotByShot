@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { AUTO_GEMINI_MODEL_SETTING, GEMINI_KEY_SETTING, PREFERRED_GEMINI_MODELS, geminiChatModel, streamGeminiChat, testGeminiKey, toGeminiContents } from '../src/ai/gemini';
-import { CHAT_MODEL_SETTING, type ChatMessage } from '../src/ai/chat';
+import { AUTO_GEMINI_MODEL_SETTING, GEMINI_KEY_SETTING, PREFERRED_GEMINI_MODELS, geminiChatModel, pickGeminiModel, sortGeminiModels, streamGeminiChat, testGeminiKey, toGeminiContents } from '../src/ai/gemini';
+import { CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, openAIChatModels, type ChatMessage } from '../src/ai/chat';
 import { API_KEY_SETTING } from '../src/ai/openai';
 import { assistantModel } from '../src/ai/agent';
 import { getSetting, resetDbForTests, setSetting } from '../src/storage/db';
@@ -126,16 +126,50 @@ describe('Gemini keys and models', () => {
   const models = (names: string[]) =>
     (async () => new Response(JSON.stringify({ models: names.map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }), { status: 200 })) as unknown as typeof fetch;
 
-  it('tests a key by listing its chat models', async () => {
-    const ok = await testGeminiKey('k', models(['gemini-2.5-flash', 'gemini-3.5-flash']));
-    expect(ok).toEqual({ ok: true, message: 'Key works. 2 models available.', models: ['gemini-2.5-flash', 'gemini-3.5-flash'] });
+  it('tests a key by listing its chat models, newest first', async () => {
+    const ok = await testGeminiKey('k', models(['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash-image', 'gemini-embedding-001', 'gemma-3-27b-it']));
+    expect(ok).toEqual({ ok: true, message: 'Key works. 2 models available.', models: ['gemini-3.5-flash', 'gemini-2.5-flash'] });
     const bad = await testGeminiKey('k', (async () => new Response(JSON.stringify({ error: { message: 'API key not valid.' } }), { status: 400 })) as unknown as typeof fetch);
     expect(bad).toMatchObject({ ok: false, message: 'Google rejected this key.' });
   });
 
-  it('picks the best preferred model the key can use and remembers it', async () => {
-    expect(await geminiChatModel('k', models(['gemini-2.5-pro', 'gemini-3-flash-preview']))).toBe('gemini-3-flash-preview');
-    expect(await getSetting(AUTO_GEMINI_MODEL_SETTING)).toEqual({ list: PREFERRED_GEMINI_MODELS.join(','), model: 'gemini-3-flash-preview' });
+  it('sorts newest first, stable before preview, pro before flash', () => {
+    expect(sortGeminiModels(['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-pro-preview', 'gemini-3.10-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.5-pro-preview', 'gemini-2.5-pro'])).toEqual([
+      'gemini-3.10-flash',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-pro-preview',
+      'gemini-3.1-pro-preview',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-flash-latest',
+    ]);
+  });
+
+  it('picks the newest stable Pro or Flash automatically', () => {
+    expect(pickGeminiModel(['gemini-2.5-pro', 'gemini-3.5-flash', 'gemini-3.6-flash-lite', 'gemini-3.7-pro-preview'])).toBe('gemini-3.5-flash');
+    expect(pickGeminiModel(['gemini-3.5-flash', 'gemini-3.6-flash'])).toBe('gemini-3.6-flash');
+    // Only previews: fall back to the preferred list.
+    expect(pickGeminiModel(['gemini-3-flash-preview', 'gemini-3.1-pro-preview'])).toBe('gemini-3.1-pro-preview');
+  });
+
+  it('remembers the automatic model for a day, then looks again', async () => {
+    let calls = 0;
+    let list = ['gemini-2.5-pro', 'gemini-3.5-flash'];
+    const fake = (async (...a: Parameters<typeof fetch>) => (calls++, models(list)(...a))) as typeof fetch;
+    expect(await geminiChatModel('k', fake)).toBe('gemini-3.5-flash');
+    list = [...list, 'gemini-3.6-flash'];
+    expect(await geminiChatModel('k', fake)).toBe('gemini-3.5-flash');
+    expect(calls).toBe(1);
+    const saved = await getSetting<{ model: string; at: number }>(AUTO_GEMINI_MODEL_SETTING);
+    await setSetting(AUTO_GEMINI_MODEL_SETTING, { ...saved, at: saved!.at - 25 * 60 * 60 * 1000 });
+    expect(await geminiChatModel('k', fake)).toBe('gemini-3.6-flash');
+    expect(calls).toBe(2);
+  });
+
+  it('lists OpenAI chat models from a key, preferred first', () => {
+    const ids = ['gpt-7', 'gpt-5.5', 'gpt-4o', 'gpt-4o-2024-08-06', 'gpt-image-2', 'gpt-4o-mini-tts', 'text-embedding-3-large', 'whisper-1', 'gpt-realtime', 'o3'];
+    expect(openAIChatModels(ids)).toEqual([...PREFERRED_CHAT_MODELS.filter((m) => ids.includes(m)), 'o3', 'gpt-7']);
   });
 
   it('routes the assistant to the provider of the chosen model, or OpenAI first when automatic', async () => {

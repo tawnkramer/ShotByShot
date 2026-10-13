@@ -21,8 +21,10 @@ Pushes to `main` deploy to GitHub Pages via `.github/workflows/deploy.yml` (set 
 
 The assistant runs on OpenAI or Google Gemini. Save an OpenAI key, a Gemini key
 (from [Google AI Studio](https://aistudio.google.com/apikey)), or both in Settings, then
-pick the **Assistant model** there. **Automatic** uses OpenAI when an OpenAI key is
-saved and Gemini otherwise. Each key is stored only in this browser and sent only to
+pick the **Assistant model** there. The picker lists the chat models each saved key
+can use, read fresh whenever Settings opens, so new models appear without an app
+update. **Automatic** uses OpenAI when an OpenAI key is saved and Gemini otherwise;
+for Gemini it picks the newest stable Pro or Flash model, checking again once a day. Each key is stored only in this browser and sent only to
 its own provider. Images and dialogue voices always use the OpenAI key.
 
 ## Character images
