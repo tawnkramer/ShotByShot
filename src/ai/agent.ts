@@ -1,6 +1,7 @@
 import type { Command } from '../state/commands';
 import type { Project, Step } from '../state/schema';
-import { apiKey, chatModel, streamChat, type ChatMessage, type ContentPart } from './chat';
+import { apiKey, chatModel, chosenChatModel, streamChat, type ChatMessage, type ContentPart } from './chat';
+import { geminiApiKey, geminiChatModel, isGeminiModel, streamGeminiChat } from './gemini';
 import { runTool, toolsFor, toolSpecs, type ToolContext } from './tools';
 import { systemPrompt } from './context';
 import { matchSkill, skillById } from './skills';
@@ -28,8 +29,36 @@ export interface TurnOptions {
   onTool?: (name: string, args: string, result: string) => void;
   /** Renders a contact sheet of shots; defaults to an offscreen WebGL render. */
   renderSheet?: ToolContext['renderSheet'];
-  /** Overrides the key saved in Settings (for tests run outside the browser). */
+  /** Overrides the OpenAI key saved in Settings (for tests run outside the browser). */
   apiKey?: string;
+  /** Overrides the Gemini key saved in Settings. */
+  geminiApiKey?: string;
+}
+
+export interface AssistantModel {
+  provider: 'openai' | 'gemini';
+  key: string;
+  model: string;
+}
+
+/**
+ * The model the assistant uses and the key for it: the model picked in
+ * Settings, or else the automatic one for the OpenAI key, or the Gemini key
+ * when there is no OpenAI key.
+ */
+export async function assistantModel(keys: { openai?: string; gemini?: string } = {}, fetchImpl: typeof fetch = fetch): Promise<AssistantModel> {
+  const openai = keys.openai ?? (await apiKey());
+  const gemini = keys.gemini ?? (await geminiApiKey());
+  const chosen = await chosenChatModel();
+  if (chosen) {
+    const provider = isGeminiModel(chosen) ? 'gemini' : 'openai';
+    const key = provider === 'gemini' ? gemini : openai;
+    if (!key) throw new Error(`Add your ${provider === 'gemini' ? 'Gemini' : 'OpenAI'} API key in Settings to use ${chosen}, or pick another assistant model.`);
+    return { provider, key, model: chosen };
+  }
+  if (openai) return { provider: 'openai', key: openai, model: await chatModel(openai, fetchImpl) };
+  if (gemini) return { provider: 'gemini', key: gemini, model: await geminiChatModel(gemini, fetchImpl) };
+  throw new Error('Add an OpenAI or Gemini API key in Settings to use the assistant.');
 }
 
 /**
@@ -37,9 +66,8 @@ export interface TurnOptions {
  * results (and snapshots), and repeat until it answers in words.
  */
 export async function runTurn(o: TurnOptions): Promise<string> {
-  const key = o.apiKey ?? (await apiKey());
-  if (!key) throw new Error('Add your OpenAI API key in Settings to use the assistant.');
-  const model = await chatModel(key);
+  const { provider, key, model } = await assistantModel({ openai: o.apiKey, gemini: o.geminiApiKey });
+  const stream = provider === 'gemini' ? streamGeminiChat : streamChat;
   const tools = toolsFor(o.step, !!o.shotId);
   const specs = toolSpecs(tools);
   const pendingImages: { url: string; caption: string }[] = [];
@@ -75,7 +103,7 @@ export async function runTurn(o: TurnOptions): Promise<string> {
   for (let round = 0; round < maxRounds(); round++) {
     // Refresh the state each round so the model sees the effect of its own changes.
     messages[0] = { role: 'system', content: systemPrompt(o.getProject(), o.step, { shotId: o.shotId, stageId: o.stageId(), skill }) };
-    const res = await streamChat({ apiKey: key, model, messages, tools: specs, signal: o.signal, onText: o.onText });
+    const res = await stream({ apiKey: key, model, messages, tools: specs, signal: o.signal, onText: o.onText });
     if (res.content) replies.push(res.content);
     messages.push({ role: 'assistant', content: res.content || null, tool_calls: res.toolCalls.length ? res.toolCalls : undefined, reasoning: res.reasoning.length ? res.reasoning : undefined });
     // The last answer is the summary; earlier text ("I'll block the scene…") was streamed as it happened.

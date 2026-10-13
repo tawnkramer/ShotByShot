@@ -21,6 +21,8 @@ export interface ToolCall {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
+  /** Gemini's signature for this call, sent back with it on the next request. */
+  thoughtSignature?: string;
 }
 
 export type ChatMessage =

@@ -2,8 +2,9 @@
 /**
  * Asks the real assistant to block the Cold Coffee scene, then plan its camera, with real renders
  * for render_shots (headless Chromium via tests/live/browser.ts). Skipped
- * unless LIVE_AGENT and OPENAI_API_KEY are set; the run is billed to that key.
+ * unless LIVE_AGENT and OPENAI_API_KEY or GEMINI_API_KEY are set; the run is billed to that key.
  *   LIVE_AGENT=1 OPENAI_API_KEY=sk-… npx vitest run tests/agent.live.test.ts
+ *   LIVE_AGENT=1 GEMINI_API_KEY=AIza… npx vitest run tests/agent.live.test.ts
  * LIVE_MODEL picks the chat model (default: the app's automatic choice).
  * LIVE_PROMPT is the requests, separated by "|". Contact sheets and a log go to live-output/.
  */
@@ -12,15 +13,17 @@ import { expect, it } from 'vitest';
 import { emptyHistory, runCommand, type History } from '../src/state/commands';
 import type { Project } from '../src/state/schema';
 import { setSetting } from '../src/storage/db';
-import { CHAT_MODEL_SETTING, chatModel } from '../src/ai/chat';
-import { runTurn } from '../src/ai/agent';
+import { CHAT_MODEL_SETTING } from '../src/ai/chat';
+import { assistantModel, runTurn } from '../src/ai/agent';
 import { describeScene } from '../src/ai/context';
 import { checkCoverage, formatFindings } from '../src/shots/coverage';
 import { coldCoffee } from './fixtures/coldCoffee';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { openBrowserSheet, saveDataUrl } from './live/browser';
 
-const key = process.env.LIVE_AGENT ? process.env.OPENAI_API_KEY : undefined;
+const openaiKey = process.env.LIVE_AGENT ? process.env.OPENAI_API_KEY : undefined;
+const geminiKey = process.env.LIVE_AGENT ? process.env.GEMINI_API_KEY : undefined;
+const key = openaiKey || geminiKey;
 const OUT = process.env.LIVE_OUT ?? 'live-output';
 
 /** Vitest hides a passing test's console, so the run also goes to a log file. */
@@ -46,7 +49,7 @@ it.skipIf(!key)('stages and shoots the Cold Coffee scene', async () => {
     }
   };
   try {
-    log(`Model: ${await chatModel(key!)}`);
+    log(`Model: ${(await assistantModel({ openai: openaiKey, gemini: geminiKey })).model}`);
     // One turn per prompt, like the user asking in the chat: block, review, then the camera.
     for (const text of (process.env.LIVE_PROMPT ?? 'Block the scene.|Plan the camera.').split('|')) {
       const started = Date.now();
@@ -68,7 +71,8 @@ it.skipIf(!key)('stages and shoots the Cold Coffee scene', async () => {
           return url;
         },
         onTool: (name, args, result) => log(`\n>>> ${name} ${args}\n<<< ${result}`),
-        apiKey: key,
+        apiKey: openaiKey,
+        geminiApiKey: geminiKey,
       });
       history.push({ role: 'user', text }, { role: 'assistant', text: reply });
       log(`\nReply (${Math.round((Date.now() - started) / 1000)} s, ${h.past.length - before} changes):\n${reply}`);
