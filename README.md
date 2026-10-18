@@ -1,6 +1,6 @@
 # ShotByShot
 
-Mobile-first shot breakdown and previs web app. A static site (GitHub Pages) built with three.js. Projects are stored in the browser and can be saved as a project file. An AI assistant uses your own API key (OpenAI first).
+Mobile-first shot breakdown and previs web app. A static site (GitHub Pages) built with three.js. Projects are stored in the browser and can be saved as a project file. An AI assistant uses your own API key: OpenAI or Google Gemini.
 
 Workflow: **Story → Staging → Characters → Props → Shots → Previs → Export**
 
@@ -16,6 +16,16 @@ npm run build      # production build in dist/
 ```
 
 Pushes to `main` deploy to GitHub Pages via `.github/workflows/deploy.yml` (set **Settings → Pages → Source** to **GitHub Actions** once the repo is public).
+
+## Assistant models
+
+The assistant runs on OpenAI or Google Gemini. Save an OpenAI key, a Gemini key
+(from [Google AI Studio](https://aistudio.google.com/apikey)), or both in Settings, then
+pick the **Assistant model** there. The picker lists the chat models each saved key
+can use, read fresh whenever Settings opens, so new models appear without an app
+update. **Automatic** uses OpenAI when an OpenAI key is saved and Gemini otherwise;
+for Gemini it picks the newest stable Pro or Flash model, checking again once a day. Each key is stored only in this browser and sent only to
+its own provider. Images and dialogue voices always use the OpenAI key.
 
 ## Character images
 

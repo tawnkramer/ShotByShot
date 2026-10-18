@@ -8,6 +8,20 @@ export const AUTO_CHAT_MODEL_SETTING = 'openai.chatModel.auto';
 
 /** Chat models, best first. The first one the key can use is picked automatically. */
 export const PREFERRED_CHAT_MODELS = ['gpt-5.5', 'gpt-6.1-sol', 'gpt-5.4', 'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'];
+/** OpenAI models that aren't for the assistant (speech, images, search, embeddings, coding agents…). */
+const NOT_CHAT = /(audio|realtime|transcribe|tts|image|search|embedding|moderation|instruct|codex|computer-use|deep-research|diarize|gpt-3\.5)/;
+
+/**
+ * The OpenAI chat models in a key's model list, for the model picker:
+ * the preferred ones in their order, then the rest, newest-looking first.
+ * Dated snapshots are left out.
+ */
+export function openAIChatModels(ids: string[]): string[] {
+  const chat = ids.filter((id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !NOT_CHAT.test(id) && !/-\d{4}-\d{2}-\d{2}$/.test(id));
+  const rest = chat.filter((id) => !PREFERRED_CHAT_MODELS.includes(id)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  return [...PREFERRED_CHAT_MODELS.filter((m) => chat.includes(m)), ...rest];
+}
+
 /**
  * Older builds saved their automatic pick as if the user had chosen it.
  * Those values are treated as automatic so installs move to the better default.
@@ -21,6 +35,8 @@ export interface ToolCall {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
+  /** Gemini's signature for this call, sent back with it on the next request. */
+  thoughtSignature?: string;
 }
 
 export type ChatMessage =

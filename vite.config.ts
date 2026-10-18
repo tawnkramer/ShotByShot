@@ -26,7 +26,7 @@ const CSP = [
   "worker-src 'self' blob:",
   // Comfy Cloud serves outputs from short-lived signed storage URLs. Browsers reach it through
   // the user's own relay (relay/), deployed as a Cloudflare Worker on workers.dev.
-  "connect-src 'self' blob: data: https://api.openai.com https://cloud.comfy.org https://storage.googleapis.com https://*.workers.dev",
+  "connect-src 'self' blob: data: https://api.openai.com https://generativelanguage.googleapis.com https://cloud.comfy.org https://storage.googleapis.com https://*.workers.dev",
   "object-src 'none'",
   "base-uri 'self'",
 ].join('; ');

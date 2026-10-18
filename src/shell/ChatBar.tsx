@@ -5,6 +5,7 @@ import { useProjectStore } from '../state/store';
 import { useStagingUI } from '../staging/uiStore';
 import { addChat, getSetting, listChat, type ChatMessage } from '../storage/db';
 import { API_KEY_SETTING } from '../ai/openai';
+import { GEMINI_KEY_SETTING } from '../ai/gemini';
 import { captureView, prepareImage, runTurn } from '../ai/agent';
 import { suggestionsFor } from '../ai/suggestions';
 import { useChatUI } from './chatUI';
@@ -48,7 +49,7 @@ export function ChatBar({ step, projectId, shotId }: Props) {
 
   useEffect(() => {
     void listChat(projectId).then(setMessages);
-    void getSetting<string>(API_KEY_SETTING).then((k) => setHasKey(!!k));
+    void Promise.all([getSetting<string>(API_KEY_SETTING), getSetting<string>(GEMINI_KEY_SETTING)]).then(([o, g]) => setHasKey(!!(o || g)));
   }, [projectId]);
 
   useEffect(() => {
@@ -237,7 +238,7 @@ export function ChatBar({ step, projectId, shotId }: Props) {
         </button>
         {hasKey === false ? (
           <button type="button" className="chat-input chat-nokey" onClick={() => navigate('/settings')}>
-            Add your OpenAI key to use the assistant
+            Add an OpenAI or Gemini key to use the assistant
           </button>
         ) : (
           <>
