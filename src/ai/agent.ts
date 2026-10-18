@@ -40,7 +40,7 @@ export async function runTurn(o: TurnOptions): Promise<string> {
   const key = o.apiKey ?? (await apiKey());
   if (!key) throw new Error('Add your OpenAI API key in Settings to use the assistant.');
   const model = await chatModel(key);
-  const tools = toolsFor(o.step, !!o.shotId);
+  const tools = toolsFor(o.step, !!o.shotId, o.getProject());
   const specs = toolSpecs(tools);
   const pendingImages: { url: string; caption: string }[] = [];
   // A request that clearly asks for a skill loads it up front; the model can also load one with use_skill.

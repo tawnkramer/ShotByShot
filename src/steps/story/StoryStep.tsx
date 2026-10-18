@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useProjectStore } from '../../state/store';
-import { BREAKDOWN_MODES, LINE_TYPES, type BreakdownMode, type LineType } from '../../state/schema';
+import { LINE_TYPES, mediumOf, type BreakdownMode, type LineType } from '../../state/schema';
 import { applyBreakdown, deleteLines, setLineTypes, toggleBreak } from '../../story/commands';
 import { LOW_CONFIDENCE } from '../../story/classify';
 import { ImportPanel } from './ImportPanel';
@@ -9,7 +9,9 @@ import { ScriptLineRow } from './ScriptLineRow';
 import { LINE_TYPE_INFO, nextType } from './lineTypes';
 import { useChatUI } from '../../shell/chatUI';
 
-const MODE_LABELS: Record<BreakdownMode, string> = { line: 'Per line', pair: 'Per 2 lines', mixed: 'Mixed' };
+const MODE_LABELS: Record<BreakdownMode, string> = { line: 'Per line', pair: 'Per 2 lines', mixed: 'Mixed', panels: 'Panels' };
+/** Comics pack dialogue into panels instead of cutting on each speaker. */
+const MODES = { film: ['line', 'pair', 'mixed'], comic: ['line', 'pair', 'panels'] } as const satisfies Record<string, readonly BreakdownMode[]>;
 
 export function StoryStep() {
   const project = useProjectStore((s) => s.project)!;
@@ -101,7 +103,7 @@ export function StoryStep() {
         ) : (
           <>
             <div className="segmented" role="radiogroup" aria-label="Shot breakdown">
-              {BREAKDOWN_MODES.map((m) => (
+              {MODES[mediumOf(project)].map((m) => (
                 <button
                   key={m}
                   role="radio"
@@ -115,7 +117,7 @@ export function StoryStep() {
             </div>
             <div className="row gap">
               <span className="muted small grow">
-                {script.length} lines · {shots.length} shots
+                {script.length} lines · {shots.length} {mediumOf(project) === 'comic' ? 'panels' : 'shots'}
                 {reviewCount > 0 && <span className="review-count"> · {reviewCount} to check</span>}
               </span>
               <button className="btn ghost small-btn" onClick={() => useChatUI.getState().open('Check my line labels and fix any mistakes.')}>

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createProject, type Project } from '../state/schema';
+import { createProject, type Medium, type Project } from '../state/schema';
 import { deleteProject, listProjects, loadProject, saveProject, type ProjectSummary } from '../storage/db';
 import { duplicateProject, exportProjectFile, importProjectFile, requestPersistentStorage } from '../storage/projectIO';
 import { pickFile } from '../shell/download';
+import { Overlay } from '../shell/Overlay';
 
 const STALE_EXPORT_MS = 7 * 24 * 3600 * 1000;
 
@@ -11,6 +12,7 @@ export function ProjectsHome() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const refresh = useCallback(() => {
     listProjects().then(setProjects, (e) => setError(String(e)));
@@ -19,10 +21,8 @@ export function ProjectsHome() {
 
   const openProject = (p: Pick<Project, 'id' | 'step'>) => navigate(`/p/${p.id}/${p.step}`);
 
-  const onNew = async () => {
-    const name = window.prompt('Project name', 'Untitled film');
-    if (name === null) return;
-    const project = createProject(name.trim() || 'Untitled film');
+  const onCreate = async (name: string, medium: Medium) => {
+    const project = createProject(name.trim() || (medium === 'comic' ? 'Untitled comic' : 'Untitled film'), medium);
     await saveProject(project);
     void requestPersistentStorage();
     openProject(project);
@@ -67,7 +67,7 @@ export function ProjectsHome() {
       <main className="body">
         <div className="page">
           <div className="row gap">
-            <button className="btn primary grow" onClick={onNew}>
+            <button className="btn primary grow" onClick={() => setCreating(true)}>
               New project
             </button>
             <button className="btn grow" onClick={onOpenFile}>
@@ -93,7 +93,7 @@ export function ProjectsHome() {
                     <button className="card-main" onClick={() => loadProject(p.id).then((full) => full && openProject(full))}>
                       <span className="card-title">{p.name}</span>
                       <span className="muted small">
-                        {p.aspect} · edited {new Date(p.updatedAt).toLocaleString()}
+                        {p.medium === 'comic' ? 'Comic' : p.aspect} · edited {new Date(p.updatedAt).toLocaleString()}
                         {stale && ' · no recent backup'}
                       </span>
                     </button>
@@ -117,6 +117,44 @@ export function ProjectsHome() {
           )}
         </div>
       </main>
+      {creating && <NewProjectSheet onCreate={(name, medium) => void onCreate(name, medium)} onClose={() => setCreating(false)} />}
     </div>
+  );
+}
+
+const MEDIUM_INFO: Record<Medium, { label: string; note: string; placeholder: string }> = {
+  film: { label: 'Film', note: 'Shots with movement, timing and voices. Plays as previs and exports video.', placeholder: 'Untitled film' },
+  comic: { label: 'Comic', note: 'Panels: one frozen moment each, with balloons and captions. No timing or sound.', placeholder: 'Untitled comic' },
+};
+
+function NewProjectSheet({ onCreate, onClose }: { onCreate: (name: string, medium: Medium) => void; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [medium, setMedium] = useState<Medium>('film');
+  return (
+    <Overlay>
+      <div className="scrim" onClick={onClose} />
+      <form className="sheet" role="dialog" aria-label="New project" onSubmit={(e) => { e.preventDefault(); onCreate(name, medium); }}>
+        <div className="sheet-head">
+          <strong>New project</strong>
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+        </div>
+        <label className="field">
+          <span>Name</span>
+          <input autoFocus value={name} placeholder={MEDIUM_INFO[medium].placeholder} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <div className="field">
+          <span>Kind</span>
+          <div className="segmented" role="radiogroup" aria-label="Kind of project">
+            {(Object.keys(MEDIUM_INFO) as Medium[]).map((m) => (
+              <button type="button" key={m} role="radio" aria-checked={medium === m} className={medium === m ? 'on' : ''} onClick={() => setMedium(m)}>
+                {MEDIUM_INFO[m].label}
+              </button>
+            ))}
+          </div>
+          <p className="muted small">{MEDIUM_INFO[medium].note}</p>
+        </div>
+        <button className="btn primary">Create</button>
+      </form>
+    </Overlay>
   );
 }

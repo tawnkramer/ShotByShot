@@ -1,7 +1,7 @@
 import { Overlay } from './Overlay';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { STEPS, STEP_LABELS, type Step } from '../state/schema';
+import { stepLabel, stepsFor, type Step } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { exportProjectFile } from '../storage/projectIO';
 import { ProjectSettingsSheet } from './ProjectSettingsSheet';
@@ -24,9 +24,10 @@ export function Header({ step, onStep, primary, onBack }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const index = STEPS.indexOf(step);
-  const prev = STEPS[index - 1];
-  const next = STEPS[index + 1];
+  const steps = stepsFor(project);
+  const index = steps.indexOf(step);
+  const prev = steps[index - 1];
+  const next = steps[index + 1];
 
   const menu = (action: () => void) => () => {
     setMenuOpen(false);
@@ -38,20 +39,20 @@ export function Header({ step, onStep, primary, onBack }: Props) {
       <div className="header-side">
         <button
           className="btn ghost icon"
-          aria-label={prev ? `Back to ${STEP_LABELS[prev]}` : 'All projects'}
+          aria-label={prev ? `Back to ${stepLabel(prev, project)}` : 'All projects'}
           onClick={() => (onBack ? onBack() : prev ? onStep(prev) : navigate('/'))}
         >
           ‹
         </button>
       </div>
       <div className="header-title">
-        <strong>{STEP_LABELS[step]}</strong>
+        <strong>{stepLabel(step, project)}</strong>
         <nav className="dots" aria-label="Steps">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <button
               key={s}
               className={`dot ${s === step ? 'current' : i < index ? 'done' : ''}`}
-              aria-label={STEP_LABELS[s]}
+              aria-label={stepLabel(s, project)}
               aria-current={s === step ? 'step' : undefined}
               onClick={() => onStep(s)}
             />

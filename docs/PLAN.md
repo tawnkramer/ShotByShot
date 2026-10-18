@@ -760,6 +760,108 @@ AI tools only depend on M1.
   DAY 12", "12A. EXT. …", Fountain "#12A#"), otherwise they count up from the
   last number. Older projects switch to scene.shot when opened.
 
+- **C2 (Comic lettering core) done, ahead of C1:** `src/comic/` ports the
+  comic text editor: measured oval wrapping (line count 2–7, sine width
+  profile, ~90 % fill scoring, word rebalancing), balanced caption wrapping,
+  the tail geometry (base points on the outline, inset under the stroke, tips
+  pushed clear of the balloon) and Canvas 2D drawing, with drop caps.
+  Lettering is stored on the shot (`shot.lettering`): centers are 0–1 of the
+  panel and lengths are thousandths of the panel width, so the same lettering
+  exports identically at any resolution. Styles layer built-in defaults,
+  project defaults (`project.lettering`, set with **Make default**) and
+  per-element overrides. The editor opens from the shot's Image tab (**Add
+  Lettering**) on the shot image, or on the previs frame until there is one:
+  + Balloon / + Caption, drag to move (one undo step), a large offset handle
+  to aim tails, text sheet with automatic or typed line breaks, size, bold,
+  italic, font, oval/rounded, tail on/off, delete, and **Save PNG** at the
+  art's full size. Fonts: Comic Neue, Bangers, Permanent Marker, Architects
+  Daughter and Covered By Your Grace are bundled (OFL, precached for
+  offline); **Settings → Lettering fonts** adds the user's own licensed fonts
+  (e.g. Wild Words), kept in IndexedDB, never in project files; the first one
+  is the default lettering font. After the first round of feedback: the
+  editor lists the panel's dialogue (or the whole scene's), one speech per
+  line with parentheticals dropped; tapping one, or **+ Balloon**, adds a
+  balloon with that text (`lineId` remembers the source, the text stays
+  editable), placed down the panel in reading order. Typed line breaks
+  always stand; only unbroken text is shaped automatically. Lettering shows
+  outside the editor too: baked onto the shot image in the frame and on
+  the list thumbnails, and drawn over the previs frame on the Image tab.
+
+- **C1 (Comic projects) done:** **New project** asks Film or Comic (also
+  switchable in Project settings; film-only data is kept, just hidden).
+  `project.medium` is `'comic'` for comics and absent for films, so older
+  projects stay films. Comics run Story → Staging → Characters → Props →
+  **Panels**; Previs and Export are hidden until C4/C5. Defaults: Standard
+  4:3 panels, sequential numbers, and the **Panels** breakdown (dialogue
+  packs into a panel up to three balloons, ~35 words and two speakers;
+  action gets its own panel; the scene's establishing panel can carry one
+  short action line). The panel editor has no timeline, audio, Start/End
+  keys or moving camera; the Camera tab has **Panel shape** (Wide 2:1, Wide
+  16:9, Standard 4:3, Square, Tall 3:4, Tall 9:16) stored per panel
+  (`shot.panel.shape`) and used by the viewport, thumbnails, framing tools,
+  image generation and lettering. Lists, menus and the Image tab say
+  "panel"; the assistant is told it's a comic (start keys only, leave room
+  for balloons).
+
+- **C3 (Script-driven lettering) done:** balloon kinds speech, thought
+  (cloud and bubble trail), whisper (dashed), shout (burst, bold, larger)
+  and phone/radio (zig-zag tail), read from cue extensions and
+  parentheticals: (whispers), (shouting), all-caps lines with "!",
+  (thinking), (on phone), (V.O.) narration as a caption, (O.S.) with a tail
+  to the panel edge; the kind can be changed in the editor. `panelHeads`
+  projects every character's head and mouth through the panel's camera
+  (pure math, no rendering). `placeLettering` puts items in reading order
+  on a grid of candidate spots, scoring face overlap, overlap with other
+  lettering, reading order, height in the panel and distance above the
+  speaker's mouth; tails stop just short of the mouth, or point to the
+  edge for speakers out of frame or off panel. Auto-placed elements carry
+  `auto: true` and `targetCharacterId`; moving one or its tail by hand
+  pins it, and **Auto letter** adds missing dialogue and re-places only
+  the unpinned ones. Tapping a line or **+ Balloon** places that balloon
+  the same way. A warning in the editor when lettering fills almost
+  half the panel (covering a face is sometimes intended, so it isn't
+  flagged). **Letter all panels** on the Panels list
+  letters every panel that has dialogue and no lettering, as one undo
+  step.
+
+- **C4 (Pages, one panel per page) done:** comic projects gain a
+  **Pages** step after Panels. Pages follow panel order until reordered
+  (↑/↓ per page; `project.comic.pageOrder`, with panels added later
+  slotting in after the panel before them); panels can be left out
+  (`leftOut`) and any page made the cover (`coverId`, default the first
+  page). Pages are named Page01, Page02, … with a warning past 99. Each
+  card shows the panel as it will read (its image, or the previs frame
+  until it has one, with lettering drawn on) and whether it's still
+  previs or unlettered. **Read** opens a full-screen reader: swipe, tap
+  the sides, arrow keys or Previous/Next, with **Edit panel** to jump to
+  the panel editor.
+
+- **C5 (Comic export) done:** comics get an **Export** step after Pages.
+  Each page is drawn at the chosen width (1200/1600/2400 px): the panel's
+  image, or a previs render of panels without one (one offscreen renderer
+  per panel shape), with its lettering in the loaded fonts. **Make page
+  images** zips `Page01.jpg…` and `cover.jpg` (JPEG or PNG; lettering on the
+  cover is optional, off by default). **Make PDF** writes the cover then
+  every page with a small built-in PDF writer that embeds the JPEGs as-is
+  (pages 8.5 in wide). **Make site package** zips `comics/<slug>/` with the
+  pages and cover, `comics-entry.json` (slug, title, cover path, page
+  count, tags, ready for the site's `comics.json`) and a README; slug,
+  title and tags are edited on the screen and saved in the project
+  (`comic.publish`), and the entry can be copied directly.
+
+- **C6 (Comic assistant) done:** in comic projects the assistant gets
+  `letter_panels` (all unlettered panels, or named ones re-placed),
+  `edit_lettering` (text, kind, size, bold, italic, remove, or add with a
+  speaker; automatic balloons re-placed, hand-placed ones kept),
+  `rewrite_dialogue` (changes the script line and the balloons showing it),
+  `check_lettering` (unlettered speech, more than 3 balloons or ~35 words,
+  crowded panels; not faces), `arrange_pages` (named panels first, leave
+  out, put back, cover) and `view_pages` (up to 6 lettered pages as one
+  image for the model). Film-only tools (camera moves, durations, voices)
+  are hidden. The prompt lists each panel's lettering state and the pages,
+  and the open panel's balloons numbered for `edit_lettering`; the starter
+  suggestions are comic ones.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or

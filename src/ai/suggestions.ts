@@ -1,8 +1,14 @@
-import type { Project, Step } from '../state/schema';
+import { mediumOf, type Project, type Step } from '../state/schema';
 
 /** Starter requests for each step, using the project's own names where it helps. */
 export function suggestionsFor(step: Step, project: Project, inShotEditor: boolean): string[] {
   const [a, b] = project.characters.map((c) => c.name);
+  if (mediumOf(project) === 'comic') {
+    if (step === 'shots') return inShotEditor
+      ? ['Frame this panel with room above their heads for balloons.', 'Letter this panel.', 'Shorten the dialogue in this panel to fit.', a && b ? `Over-the-shoulder on ${a}, from behind ${b}.` : 'Frame a wide panel of everyone.']
+      : ['Block the scene.', 'Plan the camera.', 'Letter every panel.', 'Check the lettering and fix what reads badly.'];
+    if (step === 'pages' || step === 'export') return ['Show me the first three pages.', 'Make the most dramatic panel the cover.', 'Check the lettering and fix what reads badly.'];
+  }
   switch (step) {
     case 'story':
       return ['Check my line labels and fix any mistakes.', 'Break this into shots the way an editor would.', 'Give the action beats their own shots.'];

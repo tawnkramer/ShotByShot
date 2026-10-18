@@ -1,6 +1,6 @@
 import type { ActorKey, CameraState, Project, ScriptLine, Shot, ShotCamera, ShotSetup, Stage } from '../state/schema';
 import { freeSpotFor, type Rect } from '../staging/placement';
-import { ASPECT_RATIOS } from '../state/schema';
+import { ASPECT_RATIOS, mediumOf } from '../state/schema';
 import { cueName, speakerOf } from '../story/classify';
 import { frameSubjects, type ShotSize, type Subject } from '../three/camera';
 import { autoDuration, shotCaptions, type Caption } from './timing';
@@ -8,7 +8,16 @@ import { validClips } from '../audio/clips';
 import { bodyPosition } from './body';
 
 export function aspectOf(project: Project): number {
-  return ASPECT_RATIOS.find((a) => a.id === project.aspect)!.ratio;
+  return ratioOf(project.aspect);
+}
+
+function ratioOf(id: string): number {
+  return ASPECT_RATIOS.find((a) => a.id === id)?.ratio ?? 16 / 9;
+}
+
+/** The shape of one shot's frame: a comic panel's own shape, else the project's. */
+export function frameAspect(project: Project, shot: Pick<Shot, 'panel'> | undefined): number {
+  return shot?.panel?.shape && mediumOf(project) === 'comic' ? ratioOf(shot.panel.shape) : aspectOf(project);
 }
 
 export function shotLines(project: Project, shot: Shot): ScriptLine[] {
@@ -129,7 +138,7 @@ export function subjectsFor(project: Project, setup: ShotSetup, ids?: string[], 
 
 /** A sensible first camera: on the speaker if one person talks, otherwise everyone. */
 export function autoCamera(project: Project, shot: Shot, setup: ShotSetup, stageId?: string): CameraState {
-  const aspect = aspectOf(project);
+  const aspect = frameAspect(project, shot);
   const speakers = speakersInShot(project, shot).filter((id) => setup.actors.some((a) => a.characterId === id));
   if (speakers.length === 1 && setup.actors.length > 1) {
     const [s] = subjectsFor(project, setup, speakers, stageId);

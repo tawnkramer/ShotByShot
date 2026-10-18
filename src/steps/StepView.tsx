@@ -10,6 +10,7 @@ const CharactersStep = lazy(() => import('./characters/CharactersStep').then((m)
 const PropsStep = lazy(() => import('./props/PropsStep').then((m) => ({ default: m.PropsStep })));
 const ShotsStep = lazy(() => import('./shots/ShotsStep').then((m) => ({ default: m.ShotsStep })));
 const PrevisStep = lazy(() => import('./previs/PrevisStep').then((m) => ({ default: m.PrevisStep })));
+const PagesStep = lazy(() => import('./pages/PagesStep').then((m) => ({ default: m.PagesStep })));
 const ExportStep = lazy(() => import('./export/ExportStep').then((m) => ({ default: m.ExportStep })));
 const ShotEditor = lazy(() => import('./shots/ShotEditor').then((m) => ({ default: m.ShotEditor })));
 
@@ -21,7 +22,7 @@ export function ShotEditorView({ shotId }: { shotId: string }) {
   );
 }
 
-const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep, props: PropsStep, shots: ShotsStep, previs: PrevisStep, export: ExportStep };
+const LAZY: Partial<Record<Step, React.ComponentType>> = { staging: StagingStep, characters: CharactersStep, props: PropsStep, shots: ShotsStep, pages: PagesStep, previs: PrevisStep, export: ExportStep };
 
 const COMING: Record<Step, { summary: string; milestone: string }> = {
   story: { summary: 'Import a text script, label each line, and break it into shots.', milestone: 'M1' },
@@ -29,6 +30,7 @@ const COMING: Record<Step, { summary: string; milestone: string }> = {
   characters: { summary: 'Define characters with height, build, and voice, shown as simple mannequins.', milestone: 'M3' },
   props: { summary: 'Import props or have the assistant model them.', milestone: 'M3' },
   shots: { summary: 'Frame each shot, block characters with start and end positions, and time the dialogue.', milestone: 'M4' },
+  pages: { summary: 'Put panels in page order, choose the cover, and read the comic through.', milestone: 'C4' },
   previs: { summary: 'Play every shot in order with captions and dialogue audio.', milestone: 'M7' },
   export: { summary: 'Render an MP4 and optional start/end stills for each shot.', milestone: 'M8' },
 };
