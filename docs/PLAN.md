@@ -1014,15 +1014,18 @@ Later (multi-panel pages, milestone C7):
 
 ### 13.10 Data model additions
 
+Lettering (C2, built) lives on the shot and the project, so it works in
+film projects too; the comic-only fields come with C1 and later.
+
 ```ts
 interface Project {
   // …existing fields
-  medium: 'film' | 'comic';                 // default 'film'
-  comic?: {
+  medium: 'film' | 'comic';                 // C1; default 'film'
+  lettering?: { speech?: Partial<LetterStyle>; caption?: Partial<LetterStyle> };  // C2: project defaults
+  comic?: {                                 // C1+
     page: { size: PageSizeId; widthIn: number; heightIn?: number;   // no height = vertical scroll
             marginIn: number; gutterIn: number; bleedIn: number };
-    lettering: LetteringStyle;              // project-wide defaults
-    pages?: ComicPage[];                   // C7; until then each panel is a page, in panel order
+    pages?: ComicPage[];                    // C7; until then each panel is a page, in panel order
     readingOrder: 'ltr' | 'rtl';
     publish?: { slug: string; title: string; tags: string[] };
   };
@@ -1030,39 +1033,42 @@ interface Project {
 
 interface Shot {                             // a panel in comic projects
   // …existing fields
-  panel?: {
+  lettering?: LetterElement[];               // C2, in drawing order
+  panel?: {                                  // C1+
     ratio: number;                           // width / height; from the page slot if placed
     art: 'render' | 'image' | 'upload';      // which art is current
     upload?: { blob: string; name: string };
     leaveRoom?: boolean;                     // frame for lettering
-    lettering: LetterElement[];
   };
 }
 
-type LetterKind = 'speech' | 'thought' | 'whisper' | 'shout' | 'electronic' | 'caption' | 'sfx';
+// C2 has speech and caption; the rest arrive with C3 (§13.6).
+type LetterKind = 'speech' | 'caption' | 'thought' | 'whisper' | 'shout' | 'electronic' | 'sfx';
 
 interface LetterElement {
   id: string; kind: LetterKind;
+  text: string;
+  x: number; y: number;                      // center, 0..1 of the panel
+  tail?: { x: number; y: number };           // speech: tip, 0..1 of the panel; absent = no tail
+  autoWrap?: boolean;                        // false = break lines only where the text has newlines
+  style?: Partial<LetterStyle>;              // per-element overrides
+  // C3:
   lineId?: string;                           // script line it shows; text follows the line
-  text?: string;                             // custom text (detached from the line)
-  x: number; y: number;                      // top-left, 0..1 of the panel
-  wrapWidth?: number;                        // 0..1 of panel width; else from style
-  shape?: 'oval' | 'rounded' | 'box';
-  tail?: { x: number; y: number; targetCharacterId?: string } | null;
+  targetCharacterId?: string;                // tail aims at this character's mouth
   joinTo?: string;                           // connector to another balloon
-  style?: Partial<LetterStyleValues>;        // per-element overrides
-  auto: boolean;                             // placed automatically; false once moved by hand
+  auto?: boolean;                            // placed automatically; false once moved by hand
 }
 
-interface LetterStyleValues {
-  font: FontId; size: number;                // size in pt at print size, scaled to the panel
+// Lengths are thousandths of the panel width.
+interface LetterStyle {
+  font: string; size: number;                // family name: bundled or user-added
   bold: boolean; italic: boolean; dropCap: boolean;
-  padding: number; stroke: number;
+  padding: number; stroke: number; tailWidth: number;
+  shape: 'oval' | 'rounded';                 // speech; captions are boxes
   fill: string; ink: string;
+  maxWidth: number; minWidth: number;        // fractions of the panel width
   edgeTightness: number; minLines: number; maxLines: number;
-  maxWidthFrac: number; minWidthFrac: number;
 }
-type LetteringStyle = Record<LetterKind, LetterStyleValues>;
 
 interface ComicPage {
   id: string; template: PageTemplateId;
@@ -1071,8 +1077,9 @@ interface ComicPage {
 ```
 
 All edits go through the command bus (undo, assistant changes tagged), as
-everywhere else. Text sizes are stored relative to print size, not image
-pixels, so a page exported at 1600 or 2400 px looks the same.
+everywhere else. Positions are fractions of the panel and lengths are
+thousandths of its width, so a panel exported at 1600 or 2400 px looks the
+same.
 
 ### 13.11 Assistant
 
