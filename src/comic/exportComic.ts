@@ -46,7 +46,7 @@ export function comicsJsonEntry(project: Project, pages = pagesOf(project).lengt
  * has one) at the export width, with its lettering. One 3D renderer per
  * panel shape, made only if some panel needs it.
  */
-class PageRenderer {
+export class PageRenderer {
   private renderers = new Map<number, FilmRenderer>();
   private fallbackFont?: string;
   constructor(private project: Project, private width: number) {}

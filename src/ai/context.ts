@@ -1,5 +1,6 @@
 import type { Project, ScriptLine, Step } from '../state/schema';
 import { ASPECT_RATIOS, mediumOf, PROP_ITEMS, SET_ITEMS, PRIMITIVE_SHAPES } from '../state/schema';
+import { coverOf, pageName, pagesOf } from '../comic/pages';
 import { buildSequence } from '../shots/sequence';
 import { effectiveShots, sceneLineOf, shotLines, summaryLine } from '../shots/setup';
 import { speakerOf } from '../story/classify';
@@ -28,7 +29,7 @@ export const STEP_GUIDE: Record<Step, string> = {
 };
 
 /** Comics reuse shots as panels; the film-only parts don't apply. */
-export const COMIC_GUIDE = 'This project is a COMIC. Each shot is a panel: one frozen moment, read rather than watched. Use only the start keyframe: never set "end" positions or camera moves, durations or voices. Frame each panel so its dialogue balloons have room (usually above the heads). Panels go onto pages in the Pages step (one panel per page); there is no Previs.';
+export const COMIC_GUIDE = 'This project is a COMIC. Each shot is a panel: one frozen moment, read rather than watched. Use only the start keyframe: never set "end" positions or camera moves, durations or voices. Frame each panel so its dialogue balloons have room (usually above the heads). Lettering: letter_panels fills panels from the script and places balloons around the characters; edit_lettering changes them; rewrite_dialogue shortens lines; check_lettering finds problems; view_pages shows pages as read. Balloons the user moved by hand are theirs: keep them unless asked. Panels go onto pages (one panel per page; arrange_pages); there is no Previs.';
 
 /** A compact description of what the user is looking at, for the system prompt. */
 export function describeContext(project: Project, step: Step, opts: { shotId?: string; stageId?: string }): string {
@@ -85,7 +86,16 @@ export function describeContext(project: Project, step: Step, opts: { shotId?: s
       const cam = (k: typeof eff.camera.start) => `target [${k.target.map(r).join(', ')}], arc ${Math.round(k.azimuth)}°, angle ${Math.round(k.elevation)}°, distance ${r(k.distance)} m, lens ${Math.round(k.lens)} mm`;
       out.push(`Camera (${eff.camera.mode === 'moving' ? 'moving' : 'fixed'}): start ${cam(eff.camera.start)}${eff.camera.end && eff.camera.mode === 'moving' ? `; end ${cam(eff.camera.end)}` : ''}.`);
       out.push(`Stages available: ${project.stages.map((s) => s.name).join(', ')}.`);
+      if (mediumOf(project) === 'comic') out.push(describeLettering(project, shot));
     }
+  } else if (mediumOf(project) === 'comic' && (step === 'shots' || step === 'pages' || step === 'export')) {
+    const eff = effectiveShots(project);
+    out.push('Panels (number [stage, lettering] first line):\n' + project.shots.map((s) => {
+      const n = s.lettering?.length ?? 0;
+      return `${s.number} [${project.stages.find((x) => x.id === eff.get(s.id)?.stageId)?.name ?? 'no stage'}, ${n ? `${n} lettered` : 'no lettering'}${s.image ? ', has image' : ''}] ${summaryLine(project, s).slice(0, 70)}`;
+    }).join('\n'));
+    const number = (id?: string) => project.shots.find((s) => s.id === id)?.number;
+    out.push(`Pages: ${pagesOf(project).map((pg) => `${pageName(pg.number)}=panel ${number(pg.shotId)}`).join(', ') || 'none'}. Cover: panel ${number(coverOf(project)) ?? 'none'}.${project.comic?.leftOut?.length ? ` Left out: panels ${project.comic.leftOut.map(number).join(', ')}.` : ''}`);
   } else if (step === 'shots' || step === 'previs' || step === 'export') {
     const eff = effectiveShots(project);
     out.push('Shots: ' + project.shots.map((s) => {
@@ -94,6 +104,15 @@ export function describeContext(project: Project, step: Step, opts: { shotId?: s
     }).join('\n'));
   }
   return out.join('\n');
+}
+
+/** A panel's balloons and captions, numbered as edit_lettering expects. */
+export function describeLettering(project: Project, shot: Project['shots'][number]): string {
+  const list = shot.lettering ?? [];
+  if (!list.length) return `Panel ${shot.number} has no lettering yet (letter_panels adds it from the script).`;
+  const name = (id?: string) => project.characters.find((c) => c.id === id)?.name;
+  return `Lettering on panel ${shot.number} (number. kind, tail to, placed, center x,y as 0..1, text):\n` + list.map((e, i) =>
+    `${i + 1}. ${e.kind}${name(e.targetCharacterId) ? `, to ${name(e.targetCharacterId)}` : ''}, ${e.auto ? 'auto' : 'by hand'}, at ${r(e.x)},${r(e.y)}: "${e.text.slice(0, 120)}"`).join('\n');
 }
 
 function describeStage(stage: Project['stages'][number], overrides: Record<string, { position?: [number, number, number]; hidden?: boolean }> = {}): string {

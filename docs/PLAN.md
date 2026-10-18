@@ -848,6 +848,19 @@ AI tools only depend on M1.
   title and tags are edited on the screen and saved in the project
   (`comic.publish`), and the entry can be copied directly.
 
+- **C6 (Comic assistant) done:** in comic projects the assistant gets
+  `letter_panels` (all unlettered panels, or named ones re-placed),
+  `edit_lettering` (text, kind, size, bold, italic, remove, or add with a
+  speaker; automatic balloons re-placed, hand-placed ones kept),
+  `rewrite_dialogue` (changes the script line and the balloons showing it),
+  `check_lettering` (unlettered speech, more than 3 balloons or ~35 words,
+  crowded panels; not faces), `arrange_pages` (named panels first, leave
+  out, put back, cover) and `view_pages` (up to 6 lettered pages as one
+  image for the model). Film-only tools (camera moves, durations, voices)
+  are hidden. The prompt lists each panel's lettering state and the pages,
+  and the open panel's balloons numbered for `edit_lettering`; the starter
+  suggestions are comic ones.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or
