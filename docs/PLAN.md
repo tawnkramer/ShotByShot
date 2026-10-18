@@ -997,8 +997,8 @@ Later (multi-panel pages, milestone C7):
 
 - **Pages** as JPEG (default) or PNG at a chosen width (e.g. 1600 or 2400
   px) in a zip, and as a **PDF**. Files are named **`Page01.jpg`,
-  `Page02.jpg`, …** — two-digit page numbers; a book past 99 pages
-  continues `Page100`, `Page101`, …
+  `Page02.jpg`, …** — two-digit page numbers (comics are
+  expected to stay under 100 pages; Export warns past 99)
 - **Panels** one image per panel (lettered or clean).
 - **Site package:** a zip laid out for the user's own comic reader site:
   `comics/<slug>/` with the page images and a cover, plus the entry for its
@@ -1102,8 +1102,6 @@ produces panel art).
 
 ### 13.13 Open questions
 
-- Whether the comic site's reader sorts `Page100` correctly after
-  `Page99` (only matters past 99 pages).
 - **Wild Words licence:** the user's desktop licence lets them letter and
   export their own pages (exports are images and PDFs, and the font's
   embedding flag allows PDF embedding). Shipping it as a web font in the app
