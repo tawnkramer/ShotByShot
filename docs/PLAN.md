@@ -822,6 +822,18 @@ AI tools only depend on M1.
   letters every panel that has dialogue and no lettering, as one undo
   step.
 
+- **C4 (Pages, one panel per page) done:** comic projects gain a
+  **Pages** step after Panels. Pages follow panel order until reordered
+  (↑/↓ per page; `project.comic.pageOrder`, with panels added later
+  slotting in after the panel before them); panels can be left out
+  (`leftOut`) and any page made the cover (`coverId`, default the first
+  page). Pages are named Page01, Page02, … with a warning past 99. Each
+  card shows the panel as it will read (its image, or the previs frame
+  until it has one, with lettering drawn on) and whether it's still
+  previs or unlettered. **Read** opens a full-screen reader: swipe, tap
+  the sides, arrow keys or Previous/Next, with **Edit panel** to jump to
+  the panel editor.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or

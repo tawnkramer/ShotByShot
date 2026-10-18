@@ -17,12 +17,12 @@ describe('comic projects', () => {
   it('start with comic defaults and a shorter step list', () => {
     const comic = createProject('Strip', 'comic');
     expect(comic).toMatchObject({ medium: 'comic', aspect: '4:3', breakdownMode: 'panels', shotNumbering: 'sequential' });
-    expect(stepsFor(comic)).toEqual(['story', 'staging', 'characters', 'props', 'shots']);
+    expect(stepsFor(comic)).toEqual(['story', 'staging', 'characters', 'props', 'shots', 'pages']);
     expect(stepLabel('shots', comic)).toBe('Panels');
     const film = createProject('Film');
     expect(film.medium).toBeUndefined();
     expect(mediumOf(film)).toBe('film');
-    expect(stepsFor(film)).toEqual(STEPS);
+    expect(stepsFor(film)).toEqual(STEPS.filter((s) => s !== 'pages'));
     expect(stepLabel('shots', film)).toBe('Shots');
   });
 

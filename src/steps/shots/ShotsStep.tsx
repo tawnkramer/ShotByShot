@@ -1,5 +1,4 @@
-import { useBlobUrl } from '../../images/useBlobUrl';
-import { useLetteredUrl } from '../../comic/preview';
+import { usePanelPicture } from '../../comic/picture';
 import { letterEmptyPanels } from '../../comic/batch';
 import { setLetteringMany } from '../../comic/commands';
 import { Overlay } from '../../shell/Overlay';
@@ -9,7 +8,6 @@ import { useProjectStore } from '../../state/store';
 import { mediumOf, type Project, type Shot } from '../../state/schema';
 import { effectiveShots, shotLines } from '../../shots/setup';
 import { ScriptExcerpt } from '../common/ScriptExcerpt';
-import { renderShotThumbnail } from '../../shots/thumbnail';
 import { dialogueSplitPoints, mergeWithNext, splitShot } from '../../shots/commands';
 import { useLongPress } from '../../shell/useLongPress';
 import { frameAspect } from '../../shots/setup';
@@ -109,7 +107,7 @@ export function formatTime(sec: number): string {
   return m ? `${m}:${String(s).padStart(2, '0')}` : `${sec.toFixed(1)} s`;
 }
 
-function useVisible<T extends Element>(): [React.RefObject<T | null>, boolean] {
+export function useVisible<T extends Element>(): [React.RefObject<T | null>, boolean] {
   const ref = useRef<T>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -126,19 +124,8 @@ function useVisible<T extends Element>(): [React.RefObject<T | null>, boolean] {
 function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: Shot; onOpen: () => void; onMenu: () => void }) {
   const eff = effectiveShots(project).get(shot.id)!;
   const [ref, visible] = useVisible<HTMLButtonElement>();
-  const artwork = useBlobUrl(shot.image?.blob);
-  const [thumb, setThumb] = useState<string | null>(null);
   const press = useLongPress(onMenu, onOpen);
-  const picture = useLetteredUrl(artwork || thumb || undefined, shot.lettering, project.lettering, 960);
-
-  useEffect(() => {
-    if (!visible || artwork) return;
-    let cancelled = false;
-    void renderShotThumbnail(project, shot.id).then((u) => !cancelled && u && setThumb(u));
-    return () => {
-      cancelled = true;
-    };
-  }, [visible, project, shot.id, artwork]);
+  const { url: picture, artwork } = usePanelPicture(project, shot, visible);
 
   const stage = project.stages.find((s) => s.id === eff.stageId);
   const names = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId)?.name).filter(Boolean);

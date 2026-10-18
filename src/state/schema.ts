@@ -3,14 +3,15 @@ import { letterElementSchema, letteringDefaultsSchema } from '../comic/model';
 
 export const SCHEMA_VERSION = 1;
 
-export const STEPS = ['story', 'staging', 'characters', 'props', 'shots', 'previs', 'export'] as const;
+export const STEPS = ['story', 'staging', 'characters', 'props', 'shots', 'pages', 'previs', 'export'] as const;
 export type Step = (typeof STEPS)[number];
 
 export const MEDIA = ['film', 'comic'] as const;
 export type Medium = (typeof MEDIA)[number];
 
-/** Comics have no timeline, sound or video yet: panels are the last step. */
-const COMIC_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots'];
+const FILM_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots', 'previs', 'export'];
+/** Comics have no timeline, sound or video: panels go onto pages instead. */
+const COMIC_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots', 'pages'];
 
 /** Projects saved before comics existed have no medium: they're films. */
 export function mediumOf(project: Pick<Project, 'medium'>): Medium {
@@ -18,7 +19,7 @@ export function mediumOf(project: Pick<Project, 'medium'>): Medium {
 }
 
 export function stepsFor(project: Pick<Project, 'medium'>): readonly Step[] {
-  return mediumOf(project) === 'comic' ? COMIC_STEPS : STEPS;
+  return mediumOf(project) === 'comic' ? COMIC_STEPS : FILM_STEPS;
 }
 
 export function stepLabel(step: Step, project?: Pick<Project, 'medium'>): string {
@@ -31,6 +32,7 @@ export const STEP_LABELS: Record<Step, string> = {
   characters: 'Characters',
   props: 'Props',
   shots: 'Shots',
+  pages: 'Pages',
   previs: 'Previs',
   export: 'Export',
 };
@@ -305,6 +307,15 @@ export const projectSchema = z.object({
   props: z.array(propSchema),
   /** Spoken dialogue, by script line id. Valid while `sig` matches the line's current voice and text. */
   audio: z.record(z.string(), z.object({ sig: z.string(), blob: z.string(), durationSec: z.number().positive() })).default({}),
+  /** Comic projects: how panels become pages (one panel per page for now). */
+  comic: z.object({
+    /** Panel ids in page order, once pages have been reordered; panels not listed follow their panel order. */
+    pageOrder: z.array(z.string()).optional(),
+    /** Panels left out of the book. */
+    leftOut: z.array(z.string()).optional(),
+    /** The panel used for the cover; default the first page. */
+    coverId: z.string().optional(),
+  }).optional(),
   /** Lettering style defaults for this project, per kind. */
   lettering: letteringDefaultsSchema.optional(),
   createdAt: z.number(),

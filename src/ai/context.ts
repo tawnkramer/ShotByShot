@@ -22,12 +22,13 @@ export const STEP_GUIDE: Record<Step, string> = {
   characters: 'The user is defining characters: sex, height, build, age, notes, and voice. Choose voices that fit each character, and describe a speaking style when useful.',
   props: 'The user is making props. To model a prop, build it from simple shapes with model_prop at real-world size, front facing +Z, resting on the floor; combine several parts for recognizable silhouettes.',
   shots: 'The user is working on shots. In the shot editor, block characters (place_characters), frame the camera (frame_camera / set_camera), and make things move by setting an "end" keyframe. Keep characters out of furniture: check the stage objects and their footprints. For blocking or covering a whole scene or several shots at once, load the Shot by Shot skill (use_skill) and use block_shots or cover_shots; check the result with render_shots.',
+  pages: 'The user is arranging the comic into pages (one panel per page), choosing the cover and reading it through. Offer to fix panels (open_shot) when something reads wrong.',
   previs: 'The user is watching the whole film in sequence. Offer to adjust shots (open_shot) or the breakdown.',
   export: 'The user is exporting the film. Help with settings questions; open shots to fix problems they notice.',
 };
 
 /** Comics reuse shots as panels; the film-only parts don't apply. */
-export const COMIC_GUIDE = 'This project is a COMIC. Each shot is a panel: one frozen moment, read rather than watched. Use only the start keyframe: never set "end" positions or camera moves, durations or voices. Frame each panel so its dialogue balloons have room (usually above the heads). There is no Previs or Export step; Panels is the last step.';
+export const COMIC_GUIDE = 'This project is a COMIC. Each shot is a panel: one frozen moment, read rather than watched. Use only the start keyframe: never set "end" positions or camera moves, durations or voices. Frame each panel so its dialogue balloons have room (usually above the heads). Panels go onto pages in the Pages step (one panel per page); there is no Previs.';
 
 /** A compact description of what the user is looking at, for the system prompt. */
 export function describeContext(project: Project, step: Step, opts: { shotId?: string; stageId?: string }): string {
