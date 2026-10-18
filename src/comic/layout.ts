@@ -1,5 +1,5 @@
 import { type LetterElement, type LetterStyle } from './model';
-import { manualLines, wrapBalanced, wrapOval } from './wrap';
+import { hasLineBreaks, manualLines, wrapBalanced, wrapBroken, wrapOval } from './wrap';
 
 /**
  * Where a balloon or caption and its text go on a panel of a given size, in
@@ -45,9 +45,12 @@ export function layoutLetter(el: LetterElement, style: LetterStyle, width: numbe
   const font: FontSpec = { family: style.font, px: style.size * u, bold: style.bold, italic: style.italic };
   const dropCapFont: FontSpec = { ...font, px: font.px * DROP_CAP_SCALE };
   const m = (t: string) => measure(t, font);
+  // Line breaks the user typed always stand; only unbroken text is shaped automatically.
   const lines = el.autoWrap === false
     ? manualLines(el.text)
-    : el.kind === 'speech'
+    : hasLineBreaks(el.text)
+      ? wrapBroken(el.text, m, style.maxWidth * width)
+      : el.kind === 'speech'
       ? wrapOval(el.text, m, { minLines: style.minLines, maxLines: style.maxLines, maxWidth: style.maxWidth * width, minWidth: style.minWidth * width, edgeTightness: style.edgeTightness })
       : wrapBalanced(el.text, m, style.maxWidth * width);
   const lineWidth = (line: string, i: number) => i === 0 && style.dropCap && line.length > 1

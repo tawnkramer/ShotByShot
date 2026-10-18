@@ -1,4 +1,5 @@
 import { useBlobUrl } from '../../images/useBlobUrl';
+import { useLetteredUrl } from '../../comic/preview';
 import { Overlay } from '../../shell/Overlay';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -110,6 +111,7 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
   const artwork = useBlobUrl(shot.image?.blob);
   const [thumb, setThumb] = useState<string | null>(null);
   const press = useLongPress(onMenu, onOpen);
+  const picture = useLetteredUrl(artwork || thumb || undefined, shot.lettering, project.lettering, 960);
 
   useEffect(() => {
     if (!visible || artwork) return;
@@ -132,7 +134,7 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
   return (
     <button ref={ref} className={`shot-card ${portrait ? 'portrait' : ''}`} {...press}>
       <span className={`shot-thumb${artwork ? ' artwork' : ''}`} style={{ aspectRatio: String(aspect) }}>
-        {artwork || thumb ? <img src={artwork || thumb || undefined} alt="" draggable={false} /> : <span className="muted small">{stage ? '' : 'No stage yet'}</span>}
+        {picture ? <img src={picture} alt="" draggable={false} /> : <span className="muted small">{stage ? '' : 'No stage yet'}</span>}
         <span className="shot-number">{shot.number}</span>
         {comic ? shot.lettering?.length ? <span className="shot-duration">{shot.lettering.length} lettered</span> : null : <span className="shot-duration">{eff.durationSec.toFixed(1)} s</span>}
       </span>

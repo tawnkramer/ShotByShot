@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { manualLines, ovalProfile, wrapBalanced, wrapOval } from '../src/comic/wrap';
+import { manualLines, ovalProfile, wrapBalanced, wrapBroken, wrapOval } from '../src/comic/wrap';
+import { letteringSpeeches, speechesIn } from '../src/comic/script';
+import { speakerOf } from '../src/story/classify';
 import { clearTip, hitTest, layoutLetter, tailBase, type TextMeasurer } from '../src/comic/layout';
 import { BUILTIN_STYLES, resolveStyle, type LetterElement } from '../src/comic/model';
 import { fontFamilyName } from '../src/comic/fonts';
@@ -60,6 +62,15 @@ describe('wrapBalanced', () => {
     expect(Math.abs(a - b)).toBeLessThan(100);
   });
 
+  it('keeps typed line breaks, wrapping only lines that are too wide', () => {
+    expect(wrapBroken('One\nword\nper\nline', mono, 300)).toEqual(['One', 'word', 'per', 'line']);
+    const lines = wrapBroken('Wait.\n\nThis line is far too long to fit in one go', mono, 200);
+    expect(lines.slice(0, 2)).toEqual(['Wait.', '']);
+    expect(lines.slice(2).join(' ')).toBe('This line is far too long to fit in one go');
+    expect(lines.length).toBeGreaterThan(3);
+    for (const l of lines) expect(mono(l)).toBeLessThanOrEqual(200);
+  });
+
   it('manual lines keep the typed breaks', () => {
     expect(manualLines('\nOne\n  two words \n\n')).toEqual(['One', 'two words']);
   });
@@ -83,6 +94,11 @@ describe('layoutLetter', () => {
     const l = layoutLetter(balloon(), resolveStyle(balloon()), 1000, 600, monoFont);
     expect(l.box.x + l.box.w / 2).toBeCloseTo(500);
     expect(l.box.y + l.box.h / 2).toBeCloseTo(180);
+  });
+
+  it('lets typed line breaks override the oval shaping', () => {
+    const el = balloon({ text: 'I\ntold\nyou' });
+    expect(layoutLetter(el, resolveStyle(el), 1000, 600, monoFont).lines).toEqual(['I', 'told', 'you']);
   });
 
   it('captions are boxes without tails; manual text keeps its lines', () => {
@@ -233,5 +249,33 @@ describe('fontFamilyName', () => {
   it('gives up quietly on files that are not fonts', () => {
     expect(fontFamilyName(new ArrayBuffer(3))).toBeUndefined();
     expect(fontFamilyName(new TextEncoder().encode('not a font at all, really').buffer)).toBeUndefined();
+  });
+});
+
+describe('script lines for lettering', () => {
+  const project = createProject('Script');
+  const L = (id: string, type: 'scene' | 'action' | 'character' | 'dialogue', text: string) => ({ id, index: 0, type, text });
+  project.script = [
+    L('s1', 'scene', 'INT. BAR - NIGHT'), L('a1', 'action', 'Rain.'),
+    L('c1', 'character', 'MAYA'), L('d1', 'dialogue', 'You came back.'), L('p1', 'dialogue', '(beat)'), L('d2', 'dialogue', 'Why?'),
+    L('c2', 'character', 'LEO (O.S.)'), L('d3', 'dialogue', 'I forgot my hat.'),
+    L('c3', 'character', 'MAYA'), L('d4', 'dialogue', 'Of course.'),
+    L('s2', 'scene', 'EXT. STREET - NIGHT'), L('c4', 'character', 'LEO'), L('d5', 'dialogue', 'Taxi!'),
+  ];
+  project.shots = [
+    { id: 'p1', number: '1', lineIds: ['s1', 'a1', 'c1', 'd1', 'p1', 'd2'] },
+    { id: 'p2', number: '2', lineIds: ['c2', 'd3', 'c3', 'd4'] },
+  ];
+
+  it('joins a speech into one balloon text and skips parentheticals', () => {
+    expect(speechesIn(project.script, speakerOf(project.script)).map((s) => [s.speaker, s.text])).toEqual([
+      ['MAYA', 'You came back. Why?'], ['LEO', 'I forgot my hat.'], ['MAYA', 'Of course.'], ['LEO', 'Taxi!'],
+    ]);
+  });
+
+  it("lists the panel's dialogue, then the rest of its scene only", () => {
+    const { panel, scene } = letteringSpeeches(project, project.shots[1]);
+    expect(panel.map((s) => s.lineId)).toEqual(['d3', 'd4']);
+    expect(scene.map((s) => s.lineId)).toEqual(['d1']);
   });
 });
