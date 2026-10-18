@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { newId, STEP_LABELS, type Step } from '../state/schema';
+import { newId, stepLabel, type Step } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { useStagingUI } from '../staging/uiStore';
 import { addChat, getSetting, listChat, type ChatMessage } from '../storage/db';
@@ -177,7 +177,7 @@ export function ChatBar({ step, projectId, shotId }: Props) {
             )}
             {grouped.map(([s, msgs], i) => (
               <section key={i}>
-                <div className="chat-step muted small">{STEP_LABELS[s as Step] ?? s}</div>
+                <div className="chat-step muted small">{stepLabel(s as Step, project) ?? s}</div>
                 {msgs.map((m) => (
                   <div key={m.id} className={`bubble ${m.role} ${m.error ? 'error-bubble' : ''}`}>
                     {m.hasImage && <span className="muted small">📷 image · </span>}

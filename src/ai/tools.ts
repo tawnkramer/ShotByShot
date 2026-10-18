@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { Command } from '../state/commands';
 import {
-  AGE_BANDS, BUILDS, BREAKDOWN_MODES, COMPOSITE_SHAPES, LIBRARY_ITEMS, LINE_TYPES, POSES, PRIMITIVE_SHAPES, PROP_ITEMS, SEXES, STEPS,
-  newId, type ActorKey, type CameraState, type ObjectSource, type Project, type Shot, type Stage, type Step,
+  AGE_BANDS, BUILDS, BREAKDOWN_MODES, COMPOSITE_SHAPES, LIBRARY_ITEMS, LINE_TYPES, POSES, PRIMITIVE_SHAPES, PROP_ITEMS, SEXES, STEPS, stepsFor,
+  mediumOf, newId, type ActorKey, type CameraState, type ObjectSource, type Project, type Shot, type Stage, type Step,
 } from '../state/schema';
 import { applyBreakdown, editLineText, setLineTypes } from '../story/commands';
 import { isFrontMatter, numberShots } from '../story/breakdown';
@@ -11,7 +11,7 @@ import { addCharacters, updateCharacter, type CharacterPatch } from '../characte
 import { OPENAI_VOICES } from '../audio/voices';
 import { addProp, updateProp } from '../props/commands';
 import { addActor, addShotProp, mergeWithNext, setBlocking, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
-import { aspectOf, effectiveShot, effectiveShots, poseHeight, sceneLineOf, shotLines, subjectsFor, type EffectiveShot } from '../shots/setup';
+import { effectiveShot, frameAspect, effectiveShots, poseHeight, sceneLineOf, shotLines, subjectsFor, type EffectiveShot } from '../shots/setup';
 import { isContainer, objectExtent, worldRect, type Rect } from '../staging/placement';
 import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
 import { skillById, skillsFor } from './skills';
@@ -22,6 +22,15 @@ import { keyOf } from '../shots/timing';
 import { linesNeedingAudio } from '../audio/clips';
 import { useAudioJob } from '../audio/job';
 import { LIBRARY } from '../three/library';
+import { letterPanels } from '../comic/batch';
+import { setLetteringMany } from '../comic/commands';
+import { letteringWarnings, placePanel } from '../comic/auto';
+import { letteringMeasure } from '../comic/measure';
+import { LETTER_KINDS, type LetterElement } from '../comic/model';
+import { letteringSpeeches } from '../comic/script';
+import { coverOf, pageName, pageOrder, pagesOf } from '../comic/pages';
+import { PageRenderer } from '../comic/exportComic';
+import { PANEL_MAX_BALLOONS, PANEL_MAX_WORDS } from '../story/breakdown';
 
 
 /** What a tool can see and do. Everything it changes goes through `dispatch`, so it can be undone. */
@@ -118,6 +127,7 @@ function sourceFrom(o: { item?: string; shape?: string; size?: Record<string, nu
 // ---------- shared ----------
 
 const goToStep = tool('go_to_step', 'Switch the app to another workflow step.', z.object({ step: z.enum(STEPS) }), (a, ctx) => {
+  if (!stepsFor(ctx.project()).includes(a.step)) throw new Error(`This project has no ${a.step} step.`);
   ctx.navigate(`/p/${ctx.project().id}/${a.step}`);
   return `Opened ${a.step}. Its tools are available on your next message.`;
 });
@@ -171,7 +181,7 @@ const setShotBreaks = tool(
   },
 );
 
-const breakdownMode = tool('use_breakdown_mode', 'Re-run a rule-based breakdown: one shot per line, per two lines, or mixed.', z.object({ mode: z.enum(BREAKDOWN_MODES) }), (a, ctx) => {
+const breakdownMode = tool('use_breakdown_mode', 'Re-run a rule-based breakdown: one shot per line, per two lines, mixed (film), or panels (comics: up to three balloons between two people per panel).', z.object({ mode: z.enum(BREAKDOWN_MODES) }), (a, ctx) => {
   ctx.dispatch(applyBreakdown(a.mode));
   return `Broke the script down with "${a.mode}": ${ctx.project().shots.length} shots.`;
 });
@@ -462,7 +472,7 @@ const frameCamera = tool(
     const subjects = subjectsFor(p, eff.setup, ids, eff.stageId);
     if (!subjects.length) throw new Error('Nobody to frame: add characters to the shot first.');
     const elevation = a.height === 'high' ? 25 : a.height === 'low' ? -12 : undefined;
-    const cam = frameSubjects(subjects, a.size, aspectOf(p), { azimuth: subjects[0].yaw + (a.angle ?? 0), elevation, lens: a.lens });
+    const cam = frameSubjects(subjects, a.size, frameAspect(p, shot), { azimuth: subjects[0].yaw + (a.angle ?? 0), elevation, lens: a.lens });
     ctx.dispatch(setCamera(shot.id, a.at ?? 'start', cam));
     return `Camera: ${a.size} on ${a.subjects?.join(' and ') ?? 'everyone'}, ${Math.round(cam.lens)} mm at ${cam.distance.toFixed(1)} m.`;
   },
@@ -854,7 +864,7 @@ function frameShot(p: Project, eff: EffectiveShot, shotNumber: string, f: Framin
 }
 
 function frameUnclipped(p: Project, eff: EffectiveShot, shotNumber: string, f: Framing, which: 'start' | 'end', line?: { from: string; to: string; side: 'left' | 'right' }): CameraState {
-  const aspect = aspectOf(p);
+  const aspect = frameAspect(p, p.shots.find((s) => s.number === shotNumber));
   const charId = (n: string) => {
     const c = byName(p.characters, n);
     if (!c || !eff.setup.actors.some((a) => a.characterId === c.id)) throw new Error(`Shot ${shotNumber}: "${n}" isn't in the shot. Block them first.`);
@@ -1018,12 +1028,217 @@ const renderShots = tool(
   },
 );
 
+// ---------- comics ----------
+
+function panelsByNumber(p: Project, numbers?: string[]): Shot[] {
+  return numbers?.length ? numbers.map((n) => shotByNumber(p, n)) : p.shots;
+}
+
+const letterPanelsTool = tool(
+  'letter_panels',
+  'Letter comic panels from the script: a balloon for every speech without one (kind from parentheticals: whisper, shout, thought, phone/radio; (V.O.) narration becomes a caption), placed in reading order around the characters with tails on the speakers. Balloons the user moved by hand stay put. With no panels: every panel that has dialogue and no lettering. Naming panels also re-places their automatic balloons (e.g. after reframing).',
+  z.object({ panels: z.array(z.string()).optional().describe('Panel numbers exactly as listed') }),
+  async (a, ctx) => {
+    const p = ctx.project();
+    const ids = a.panels?.length ? panelsByNumber(p, a.panels).map((s) => s.id) : undefined;
+    const byShot = await letterPanels(p, ids);
+    if (!byShot.size) return a.panels?.length ? 'Nothing to letter in those panels (no dialogue).' : 'Every panel with dialogue already has lettering. Name panels to re-place them.';
+    ctx.dispatch(setLetteringMany(byShot, byShot.size === 1 ? 'Letter panel' : 'Letter panels'));
+    const numbers = p.shots.filter((s) => byShot.has(s.id)).map((s) => s.number);
+    const count = [...byShot.values()].reduce((n, l) => n + l.length, 0);
+    return `Lettered panel${numbers.length === 1 ? '' : 's'} ${numbers.join(', ')} (${count} balloons and captions).`;
+  },
+);
+
+const balloonChange = z.object({
+  balloon: z.number().int().min(1).describe('Number as listed for the panel'),
+  text: z.string().optional(),
+  kind: z.enum(LETTER_KINDS).optional(),
+  size: z.number().min(8).max(120).optional().describe('Text size in thousandths of the panel width (balloons default 27)'),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  remove: z.boolean().optional(),
+});
+
+const editLetteringTool = tool(
+  'edit_lettering',
+  'Change one panel\'s balloons and captions: edit text, kind (speech, thought, whisper, shout, electronic, caption), size, bold, italic, remove; or add new ones (placed automatically, tail on the named speaker). Automatic balloons are re-placed afterwards; ones the user moved by hand stay put.',
+  z.object({
+    panel: z.string(),
+    changes: z.array(balloonChange).optional(),
+    add: z.array(z.object({ text: z.string().min(1), kind: z.enum(LETTER_KINDS).optional(), speaker: z.string().optional().describe('Character name the tail points at') })).optional(),
+  }),
+  async (a, ctx) => {
+    const p = ctx.project();
+    const shot = shotByNumber(p, a.panel);
+    let list: LetterElement[] = (shot.lettering ?? []).map((e) => ({ ...e }));
+    const removed = new Set<string>();
+    for (const c of a.changes ?? []) {
+      const el = list[c.balloon - 1];
+      if (!el) throw new Error(`Panel ${shot.number} has ${list.length} balloons and captions; there is no ${c.balloon}.`);
+      if (c.remove) { removed.add(el.id); continue; }
+      if (c.text !== undefined) el.text = c.text;
+      if (c.kind) {
+        el.kind = c.kind;
+        if (c.kind === 'caption') delete el.tail;
+      }
+      const style = { ...el.style };
+      if (c.size !== undefined) style.size = c.size;
+      if (c.bold !== undefined) style.bold = c.bold;
+      if (c.italic !== undefined) style.italic = c.italic;
+      if (Object.keys(style).length) el.style = style;
+    }
+    list = list.filter((e) => !removed.has(e.id));
+    for (const n of a.add ?? []) {
+      const c = n.speaker ? byName(p.characters, n.speaker) : undefined;
+      if (n.speaker && !c) throw new Error(`No character named "${n.speaker}".`);
+      list.push({ id: newId(), kind: n.kind ?? 'speech', text: n.text, x: 0.5, y: 0.5, auto: true, ...(c ? { targetCharacterId: c.id } : {}) });
+    }
+    const placed = placePanel(p, shot, list, await letteringMeasure(p));
+    ctx.dispatch(setLetteringMany(new Map([[shot.id, placed]]), `Edit lettering on panel ${shot.number}`));
+    return `Panel ${shot.number} now has ${placed.length} balloons and captions.`;
+  },
+);
+
+const rewriteDialogue = tool(
+  'rewrite_dialogue',
+  'Rewrite a line of dialogue (e.g. shorten it to fit a panel): changes the script line and every balloon showing it, then re-places that panel\'s automatic lettering.',
+  z.object({ line: z.number().int().min(1).describe('Script line number'), text: z.string().min(1) }),
+  async (a, ctx) => {
+    const p = ctx.project();
+    const id = lineId(p, a.line);
+    const old = p.script[a.line - 1].text.trim();
+    if (p.script[a.line - 1].type !== 'dialogue') throw new Error(`Line ${a.line} is not dialogue.`);
+    const next: Project = { ...p, script: p.script.map((l) => (l.id === id ? { ...l, text: a.text } : l)) };
+    const opts = await letteringMeasure(p);
+    const byShot = new Map<string, LetterElement[]>();
+    for (const shot of p.shots) {
+      if (!shot.lettering?.some((e) => e.text.includes(old))) continue;
+      const list = shot.lettering.map((e) => (e.text.includes(old) ? { ...e, text: e.text.replace(old, a.text.trim()) } : e));
+      byShot.set(shot.id, placePanel(next, shot, list, opts));
+    }
+    ctx.dispatch({
+      label: `Rewrite line ${a.line}`,
+      apply: (d) => {
+        const l = d.script.find((x) => x.id === id);
+        if (l) l.text = a.text;
+        for (const s of d.shots) { const l2 = byShot.get(s.id); if (l2) s.lettering = l2; }
+      },
+    });
+    return `Line ${a.line} rewritten${byShot.size ? `; updated the balloon in panel ${p.shots.filter((s) => byShot.has(s.id)).map((s) => s.number).join(', ')}` : ''}.`;
+  },
+);
+
+const checkLetteringTool = tool(
+  'check_lettering',
+  'Check comic lettering: panels with dialogue not lettered yet, panels with too many balloons or words to read comfortably, and panels where lettering crowds the picture. Returns only problems, with a summary.',
+  z.object({ panels: z.array(z.string()).optional() }),
+  async (a, ctx) => {
+    const p = ctx.project();
+    const opts = await letteringMeasure(p);
+    const problems: string[] = [];
+    const shots = panelsByNumber(p, a.panels);
+    for (const shot of shots) {
+      const speeches = letteringSpeeches(p, shot).panel;
+      const placed = new Set((shot.lettering ?? []).map((e) => e.lineId));
+      const missing = speeches.filter((s) => !placed.has(s.lineId));
+      const words = speeches.reduce((n, s) => n + s.text.split(/\s+/).filter(Boolean).length, 0);
+      const found: string[] = [];
+      if (missing.length) found.push(`${missing.length} speech${missing.length === 1 ? '' : 'es'} not lettered (${missing.map((s) => `${s.speaker ?? '?'}: "${s.text.slice(0, 30)}"`).join('; ')})`);
+      if (speeches.length > PANEL_MAX_BALLOONS) found.push(`${speeches.length} balloons; more than ${PANEL_MAX_BALLOONS} is hard to read, consider splitting the panel`);
+      if (words > PANEL_MAX_WORDS) found.push(`${words} words; over ~${PANEL_MAX_WORDS}, consider splitting or shortening (rewrite_dialogue)`);
+      for (const w of letteringWarnings(p, shot, opts)) found.push(w.message);
+      if (found.length) problems.push(`Panel ${shot.number}: ${found.join('; ')}.`);
+    }
+    return problems.length ? `${problems.length} of ${shots.length} panels need attention:\n${problems.join('\n')}` : `All ${shots.length} panels look fine.`;
+  },
+);
+
+const arrangePages = tool(
+  'arrange_pages',
+  'Arrange the comic\'s pages (one panel per page): set the page order, leave panels out of the book or put them back, and choose the cover.',
+  z.object({
+    order: z.array(z.string()).optional().describe('Panel numbers for the first pages, in order; panels not named follow in their current order'),
+    leave_out: z.array(z.string()).optional(),
+    put_back: z.array(z.string()).optional(),
+    cover: z.string().optional().describe('Panel number for the cover'),
+  }),
+  (a, ctx) => {
+    const p = ctx.project();
+    const order = a.order?.map((n) => shotByNumber(p, n).id);
+    const out = a.leave_out?.map((n) => shotByNumber(p, n).id) ?? [];
+    const back = new Set(a.put_back?.map((n) => shotByNumber(p, n).id) ?? []);
+    const cover = a.cover ? shotByNumber(p, a.cover).id : undefined;
+    ctx.dispatch({
+      label: 'Arrange pages',
+      apply: (d) => {
+        const comic = { ...d.comic };
+        // Named panels first, in that order; the rest keep their current order after them.
+        if (order) comic.pageOrder = [...order, ...pageOrder(d as Project).filter((id) => !order.includes(id))];
+        const left = new Set([...(comic.leftOut ?? []), ...out].filter((id) => !back.has(id)));
+        if (left.size) comic.leftOut = [...left];
+        else delete comic.leftOut;
+        if (cover) comic.coverId = cover;
+        d.comic = comic;
+      },
+    });
+    const next = ctx.project();
+    const pages = pagesOf(next);
+    const number = (id: string) => next.shots.find((s) => s.id === id)?.number;
+    return `${pages.length} pages: ${pages.map((pg) => `${pageName(pg.number)}=panel ${number(pg.shotId)}`).join(', ')}. Cover: panel ${number(coverOf(next) ?? '')}.`;
+  },
+);
+
+const viewPages = tool(
+  'view_pages',
+  'Look at comic pages as a reader will see them (art or previs with lettering). Shows up to 6 pages side by side as an image.',
+  z.object({ pages: z.array(z.number().int().min(1)).min(1).max(6).describe('Page numbers') }),
+  async (a, ctx) => {
+    const p = ctx.project();
+    const pages = pagesOf(p);
+    const chosen = a.pages.map((n) => {
+      const pg = pages[n - 1];
+      if (!pg) throw new Error(`There are ${pages.length} pages; there is no page ${n}.`);
+      return pg;
+    });
+    const W = 480, cols = Math.min(3, chosen.length), renderer = new PageRenderer(p, W);
+    try {
+      await renderer.ready();
+      const bitmaps = [];
+      for (const pg of chosen) bitmaps.push(await createImageBitmap((await renderer.render(p.shots.find((s) => s.id === pg.shotId)!, { lettering: true, type: 'image/jpeg', quality: 0.85 })).blob));
+      const cellH = Math.max(...bitmaps.map((b) => (b.height * W) / b.width));
+      const sheet = document.createElement('canvas');
+      sheet.width = cols * W + (cols - 1) * 8;
+      sheet.height = Math.ceil(bitmaps.length / cols) * (cellH + 8);
+      const g = sheet.getContext('2d');
+      if (!g) throw new Error('This browser cannot draw pages.');
+      g.fillStyle = '#111'; g.fillRect(0, 0, sheet.width, sheet.height);
+      bitmaps.forEach((b, i) => g.drawImage(b, (i % cols) * (W + 8), Math.floor(i / cols) * (cellH + 8), W, (b.height * W) / b.width));
+      ctx.attachImage(sheet.toDataURL('image/jpeg', 0.8), `Pages ${a.pages.join(', ')}, left to right, top to bottom`);
+    } finally {
+      renderer.dispose();
+    }
+    return `Rendered pages ${a.pages.join(', ')}; the image follows.`;
+  },
+);
+
+const COMIC_TOOLS = [letterPanelsTool, editLetteringTool, rewriteDialogue, checkLetteringTool];
+/** Film-only tools that make no sense for a comic panel. */
+const FILM_ONLY = new Set(['camera_mode', 'set_duration', 'voice_dialogue']);
+
 // ---------- per step ----------
 
 const SHARED = [goToStep, openShot];
 const SHOT_LIST = [mergeTool, splitTool, shotStage, voiceTool];
 
-export function toolsFor(step: Step, inShotEditor: boolean): Tool[] {
+export function toolsFor(step: Step, inShotEditor: boolean, project?: Pick<Project, 'medium'>): Tool[] {
+  const tools = toolsForStep(step, inShotEditor);
+  if (!project || mediumOf(project) !== 'comic') return tools;
+  const comic = tools.filter((t) => !FILM_ONLY.has(t.name));
+  return step === 'shots' || step === 'pages' || step === 'export' ? [...comic, ...COMIC_TOOLS, arrangePages, viewPages] : comic;
+}
+
+function toolsForStep(step: Step, inShotEditor: boolean): Tool[] {
   switch (step) {
     case 'story':
       return [...SHARED, setTypes, setShotBreaks, breakdownMode, editLine];

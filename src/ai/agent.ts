@@ -68,7 +68,7 @@ export async function assistantModel(keys: { openai?: string; gemini?: string } 
 export async function runTurn(o: TurnOptions): Promise<string> {
   const { provider, key, model } = await assistantModel({ openai: o.apiKey, gemini: o.geminiApiKey });
   const stream = provider === 'gemini' ? streamGeminiChat : streamChat;
-  const tools = toolsFor(o.step, !!o.shotId);
+  const tools = toolsFor(o.step, !!o.shotId, o.getProject());
   const specs = toolSpecs(tools);
   const pendingImages: { url: string; caption: string }[] = [];
   // A request that clearly asks for a skill loads it up front; the model can also load one with use_skill.

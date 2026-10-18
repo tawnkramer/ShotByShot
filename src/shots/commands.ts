@@ -1,6 +1,6 @@
 import { current, isDraft, type Draft } from 'immer';
 import type { Command } from '../state/commands';
-import { newId, type ActorKey, type CameraState, type Placement, type Project, type Shot, type StageOverride } from '../state/schema';
+import { newId, type ActorKey, type AspectRatioId, type CameraState, type Placement, type Project, type Shot, type StageOverride } from '../state/schema';
 import { numberShots, toggleBreakBefore } from '../story/breakdown';
 import { effectiveShot, shotLines } from './setup';
 import { withKey } from './timing';
@@ -240,5 +240,14 @@ export function setShotVideoPrompt(shotId: string, prompt: string): Command {
 export function setShotVideo(shotId: string, video: Shot['video']): Command {
   return {label:'Save shot video',apply:(d) => {
     const shot = d.shots.find((s) => s.id === shotId); if (shot) { if (video) shot.video = video; else delete shot.video; }
+  }};
+}
+
+/** Comic panels: the panel's shape; undefined goes back to the project's default. */
+export function setPanelShape(shotId: string, shape: AspectRatioId | undefined): Command {
+  return {label:'Change panel shape',apply:(d) => {
+    const shot = d.shots.find((s) => s.id === shotId); if (!shot) return;
+    if (shape) shot.panel = { ...shot.panel, shape };
+    else if (shot.panel) { delete shot.panel.shape; if (!Object.keys(shot.panel).length) delete shot.panel; }
   }};
 }

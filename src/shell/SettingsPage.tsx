@@ -9,6 +9,7 @@ import { AUTO_CHAT_MODEL_SETTING, CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, cha
 import { AUTO_GEMINI_MODEL_SETTING, GEMINI_KEY_SETTING, PREFERRED_GEMINI_MODELS, rememberGeminiModels, testGeminiKey } from '../ai/gemini';
 import { ComfySettings } from '../comfy/ComfySettings';
 import { OpenArtSettings } from '../openart/OpenArtSettings';
+import { LetteringFontsSettings } from '../comic/LetteringFontsSettings';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -138,6 +139,7 @@ export function SettingsPage() {
 
           <ComfySettings />
           <OpenArtSettings />
+          <LetteringFontsSettings />
 
           <section className="panel">
             <h2>Storage</h2>

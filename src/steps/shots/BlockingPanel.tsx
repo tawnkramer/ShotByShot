@@ -1,4 +1,4 @@
-import { newId, POSES, type Project, type Shot } from '../../state/schema';
+import { mediumOf, newId, POSES, type Project, type Shot } from '../../state/schema';
 import { useProjectStore } from '../../state/store';
 import type { EffectiveShot } from '../../shots/setup';
 import { addActor, addShotProp, removeActor, removeShotProp, setActorKey, setActorStill, setShotStage, setStageOverride } from '../../shots/commands';
@@ -30,7 +30,9 @@ export function BlockingPanel({ project, shot, eff, editKey, selected, onSelect 
   return (
     <div className="inspector">
       <p className="muted small">
-        {editKey === 'start'
+        {mediumOf(project) === 'comic'
+          ? 'Tap someone or something in the frame to move, turn or pose it.'
+          : editKey === 'start'
           ? 'Tap someone or something in the frame to move it. Switch to End to make it move during the shot.'
           : 'Editing the END of the shot. Moving something here makes it travel from its Start position.'}
       </p>

@@ -29,6 +29,7 @@ through the same commands the UI uses, so all its actions can be undone.
 | Aspect ratios | All common film ratios (2.39, 2.20, 2.00, 1.85, 1.66, 1.43, 1.37:1), TV 4:3, **16:9**, **YouTube Short 9:16**; set per project |
 | Publishing | Repo goes public when ready; the site lives at `tawnkramer.github.io/ShotByShot/` (no custom domain) |
 | Audio | **Text-to-speech** for dialogue, voice per character, included in previs and the MP4 |
+| Comics | Same app, same project format: a project's **medium** is `film` or `comic`. Comics swap timing, audio and video for panels, pages and lettering (§13) |
 
 ---
 
@@ -759,6 +760,108 @@ AI tools only depend on M1.
   DAY 12", "12A. EXT. …", Fountain "#12A#"), otherwise they count up from the
   last number. Older projects switch to scene.shot when opened.
 
+- **C2 (Comic lettering core) done, ahead of C1:** `src/comic/` ports the
+  comic text editor: measured oval wrapping (line count 2–7, sine width
+  profile, ~90 % fill scoring, word rebalancing), balanced caption wrapping,
+  the tail geometry (base points on the outline, inset under the stroke, tips
+  pushed clear of the balloon) and Canvas 2D drawing, with drop caps.
+  Lettering is stored on the shot (`shot.lettering`): centers are 0–1 of the
+  panel and lengths are thousandths of the panel width, so the same lettering
+  exports identically at any resolution. Styles layer built-in defaults,
+  project defaults (`project.lettering`, set with **Make default**) and
+  per-element overrides. The editor opens from the shot's Image tab (**Add
+  Lettering**) on the shot image, or on the previs frame until there is one:
+  + Balloon / + Caption, drag to move (one undo step), a large offset handle
+  to aim tails, text sheet with automatic or typed line breaks, size, bold,
+  italic, font, oval/rounded, tail on/off, delete, and **Save PNG** at the
+  art's full size. Fonts: Comic Neue, Bangers, Permanent Marker, Architects
+  Daughter and Covered By Your Grace are bundled (OFL, precached for
+  offline); **Settings → Lettering fonts** adds the user's own licensed fonts
+  (e.g. Wild Words), kept in IndexedDB, never in project files; the first one
+  is the default lettering font. After the first round of feedback: the
+  editor lists the panel's dialogue (or the whole scene's), one speech per
+  line with parentheticals dropped; tapping one, or **+ Balloon**, adds a
+  balloon with that text (`lineId` remembers the source, the text stays
+  editable), placed down the panel in reading order. Typed line breaks
+  always stand; only unbroken text is shaped automatically. Lettering shows
+  outside the editor too: baked onto the shot image in the frame and on
+  the list thumbnails, and drawn over the previs frame on the Image tab.
+
+- **C1 (Comic projects) done:** **New project** asks Film or Comic (also
+  switchable in Project settings; film-only data is kept, just hidden).
+  `project.medium` is `'comic'` for comics and absent for films, so older
+  projects stay films. Comics run Story → Staging → Characters → Props →
+  **Panels**; Previs and Export are hidden until C4/C5. Defaults: Standard
+  4:3 panels, sequential numbers, and the **Panels** breakdown (dialogue
+  packs into a panel up to three balloons, ~35 words and two speakers;
+  action gets its own panel; the scene's establishing panel can carry one
+  short action line). The panel editor has no timeline, audio, Start/End
+  keys or moving camera; the Camera tab has **Panel shape** (Wide 2:1, Wide
+  16:9, Standard 4:3, Square, Tall 3:4, Tall 9:16) stored per panel
+  (`shot.panel.shape`) and used by the viewport, thumbnails, framing tools,
+  image generation and lettering. Lists, menus and the Image tab say
+  "panel"; the assistant is told it's a comic (start keys only, leave room
+  for balloons).
+
+- **C3 (Script-driven lettering) done:** balloon kinds speech, thought
+  (cloud and bubble trail), whisper (dashed), shout (burst, bold, larger)
+  and phone/radio (zig-zag tail), read from cue extensions and
+  parentheticals: (whispers), (shouting), all-caps lines with "!",
+  (thinking), (on phone), (V.O.) narration as a caption, (O.S.) with a tail
+  to the panel edge; the kind can be changed in the editor. `panelHeads`
+  projects every character's head and mouth through the panel's camera
+  (pure math, no rendering). `placeLettering` puts items in reading order
+  on a grid of candidate spots, scoring face overlap, overlap with other
+  lettering, reading order, height in the panel and distance above the
+  speaker's mouth; tails stop just short of the mouth, or point to the
+  edge for speakers out of frame or off panel. Auto-placed elements carry
+  `auto: true` and `targetCharacterId`; moving one or its tail by hand
+  pins it, and **Auto letter** adds missing dialogue and re-places only
+  the unpinned ones. Tapping a line or **+ Balloon** places that balloon
+  the same way. A warning in the editor when lettering fills almost
+  half the panel (covering a face is sometimes intended, so it isn't
+  flagged). **Letter all panels** on the Panels list
+  letters every panel that has dialogue and no lettering, as one undo
+  step.
+
+- **C4 (Pages, one panel per page) done:** comic projects gain a
+  **Pages** step after Panels. Pages follow panel order until reordered
+  (↑/↓ per page; `project.comic.pageOrder`, with panels added later
+  slotting in after the panel before them); panels can be left out
+  (`leftOut`) and any page made the cover (`coverId`, default the first
+  page). Pages are named Page01, Page02, … with a warning past 99. Each
+  card shows the panel as it will read (its image, or the previs frame
+  until it has one, with lettering drawn on) and whether it's still
+  previs or unlettered. **Read** opens a full-screen reader: swipe, tap
+  the sides, arrow keys or Previous/Next, with **Edit panel** to jump to
+  the panel editor.
+
+- **C5 (Comic export) done:** comics get an **Export** step after Pages.
+  Each page is drawn at the chosen width (1200/1600/2400 px): the panel's
+  image, or a previs render of panels without one (one offscreen renderer
+  per panel shape), with its lettering in the loaded fonts. **Make page
+  images** zips `Page01.jpg…` and `cover.jpg` (JPEG or PNG; lettering on the
+  cover is optional, off by default). **Make PDF** writes the cover then
+  every page with a small built-in PDF writer that embeds the JPEGs as-is
+  (pages 8.5 in wide). **Make site package** zips `comics/<slug>/` with the
+  pages and cover, `comics-entry.json` (slug, title, cover path, page
+  count, tags, ready for the site's `comics.json`) and a README; slug,
+  title and tags are edited on the screen and saved in the project
+  (`comic.publish`), and the entry can be copied directly.
+
+- **C6 (Comic assistant) done:** in comic projects the assistant gets
+  `letter_panels` (all unlettered panels, or named ones re-placed),
+  `edit_lettering` (text, kind, size, bold, italic, remove, or add with a
+  speaker; automatic balloons re-placed, hand-placed ones kept),
+  `rewrite_dialogue` (changes the script line and the balloons showing it),
+  `check_lettering` (unlettered speech, more than 3 balloons or ~35 words,
+  crowded panels; not faces), `arrange_pages` (named panels first, leave
+  out, put back, cover) and `view_pages` (up to 6 lettered pages as one
+  image for the model). Film-only tools (camera moves, durations, voices)
+  are hidden. The prompt lists each panel's lettering state and the pages,
+  and the open panel's balloons numbered for `edit_lettering`; the starter
+  suggestions are comic ones.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or
@@ -810,3 +913,310 @@ its own. Transitions ("CUT TO:") end the shot before them.
 - Until then, test on a phone with `npm run dev`, which serves on the local
   network (`--host`). Over plain http the offline service worker and the share
   sheet are unavailable, but everything else works.
+
+---
+
+## 13. Comics
+
+A second kind of project for making comics from the same script work. The
+flow is the film flow with the time axis taken out: script → panels →
+blocking and camera per panel → panel art → lettering → pages. Nothing moves
+and nothing is spoken; instead each panel gets speech balloons and caption
+boxes, and panels are laid out on pages.
+
+### 13.1 One app, one project format
+
+- `Project.medium: 'film' | 'comic'`, chosen in **New project** and shown on
+  the Projects home card. Default `film`; older projects read as film.
+- The medium decides the step list, the labels and which controls show. It
+  does not fork the code: Story, Staging, Characters, Props, the shot rig,
+  the camera tools, coverage checks and the assistant are shared.
+- A **shot is a panel**. The type stays `Shot` in code; the UI says
+  "Panel" in comic projects. Numbering defaults to **page.panel** (3.2)
+  once panels are on pages, and to sequential before that.
+- Switching medium later is allowed (Project settings): film-only data
+  (motion end keys, durations, audio) is kept but hidden, so switching back
+  loses nothing.
+
+### 13.2 Workflow
+
+```
+Story → Staging → Characters → Props → Panels → Lettering → Pages → Export
+```
+
+| Step | Comic version | Change from film |
+|---|---|---|
+| **Story** | Import, line labels, breakdown into panels | Breakdown packs more per panel (§13.3); optional page breaks |
+| **Staging / Characters / Props** | Unchanged | Voices hidden. Character concept images matter more: they are the references for panel art |
+| **Panels** | Card list and editor, one frozen moment per panel | No Start/End, no timeline, no audio. Blocking + Camera tabs stay. Panel shape (§13.4) replaces the project aspect |
+| **Lettering** (new) | Balloons and captions over each panel's art | Replaces Previs |
+| **Pages** (new) | Arrange panels on pages | Replaces the film timeline |
+| **Export** | Page images, PDF, site package, project file | Replaces MP4 |
+
+### 13.3 Story: breaking a script into panels
+
+Same parser and labels. The breakdown differs because a panel holds a
+moment, not a span of time:
+
+- A panel holds **up to ~3 balloons / ~35 words** (setting). Longer runs
+  of dialogue split at a speaker change, then at sentence ends.
+- An exchange of two short lines stays in one panel (both speakers in
+  frame) — the comics equivalent of the film "two-shot" rule.
+- Action lines become their own panel when they describe something visible
+  happening; scene headings start a new page when **Scene starts a page**
+  is on, and give the scene's first panel an establishing frame.
+- Narration (`description` lines, `(V.O.)` dialogue) becomes **caption
+  boxes**, not balloons.
+- `(O.S.)` dialogue gets a balloon whose tail points to the panel edge;
+  parentheticals like `(whispers)` / `(shouts)` pick the balloon style
+  (§13.6).
+- Optional page breaks: a line like `PAGE 4` or `=== page ===` in the script
+  forces a page; otherwise pages are filled by the Pages step.
+
+### 13.4 Panels
+
+- **Panel shape** is per panel: a ratio (wide 2:1, standard 4:3, square,
+  tall 3:4, full-bleed splash) set in the editor or taken from the page
+  template slot it lands in. The shot viewport letterboxes to it exactly as
+  it does to the project aspect today.
+- One keyframe: `setup` and `camera` keep the `Keyframed` type with
+  `mode: 'static'` (only `start` is used). Durations, moves and walk cycles
+  are not shown.
+- **Pose matters more than in film**, since there is no motion to tell the
+  story. The editor keeps the pose presets and the assistant's posing.
+- **Headroom for lettering:** a "leave room for balloons" toggle (default on
+  for panels with dialogue) frames people lower and wider, so text doesn't
+  cover faces. The assistant's framing tools take it into account.
+- **Panel art** comes from one of: the grey render (fine for thumbnails and
+  roughs), an AI image made from the render (the existing shot image flow,
+  `shot.image`), or an uploaded drawing. Lettering sits on whichever is
+  current.
+
+### 13.5 Lettering
+
+The core of this is the user's existing comic text editor (desktop and
+mobile versions), ported into the app as a TypeScript module. What it does
+today and what carries over:
+
+| In the existing editor | In ShotByShot |
+|---|---|
+| Two element types: **caption** box (cream `#f4e4a6`, black rule) and speech **bubble** (oval or rounded box) with one tail point | Same two, plus thought, whisper, shout and off-panel variants (§13.6) |
+| Per element: text, font, size, bold/italic, padding, stroke width, drop cap (first letter +2 px) | Same fields, but defaults come from a **project lettering style**, so a whole book changes in one place; per-element values are overrides |
+| Measured oval wrapping (mobile): tries 2–7 lines, each line's width follows a sine profile (`edgeTightness`), scores fill ≈ 90 % and narrow top/bottom lines, then rebalances words between lines | Kept as is — it's the best part. Moved to `src/comic/wrap.ts` with unit tests; width limits stay relative to panel width (`maxWidthFrac` 0.38, `minWidthFrac` 0.22, cap) |
+| Caption wrap by ~20 characters per line | Replaced by measured wrapping on a rectangular profile (same scorer) |
+| Tail: base points found on the ellipse (or box edge), pulled inward by 0.7 × stroke to hide the seam; tip pushed out if it ends up inside the balloon | Kept. Tail drawn as a curved wedge as an option; tip can aim at a character (§13.7) |
+| Positions in image pixels | **Normalized to the panel (0–1)**, so lettering survives re-rendering the art at another size or replacing it |
+| Text typed by hand or pasted | Comes from the script lines (§13.7); editing a balloon edits the line, or detaches it with a "custom text" toggle |
+| Mobile: large tail handle drawn 200 px below the tip | Same idea, but the offset is in **screen** pixels, not image pixels (today it changes with image size) |
+| Hidden textarea for typing on the canvas | The app's own bottom sheet with a real text field (works with the iOS keyboard and the chat bar) |
+| Settings in `localStorage` | Lettering style in the project; nothing in `localStorage` |
+| Fonts: Wild Words (self-hosted TTF), Bangers, Permanent Marker, Architects Daughter, Covered By Your Grace from Google Fonts | Free fonts (Google Fonts, OFL) bundled with the app (no third-party requests; see §4.4 CSP). **Wild Words is not bundled**: it is Comicraft's commercial *CC Wild Words Roman* (© 1995, all rights reserved), so it can't go in the public repo or the Pages site. Instead, **Settings → Lettering fonts → Add font** lets the user load their own licensed TTF/OTF; it is stored in IndexedDB (like API keys, never in project files), registered with `FontFace`, and is then the default lettering font. Projects name fonts by family, with a bundled fallback (Comic Neue) when the font isn't installed on this device. Fonts are loaded with `document.fonts.load` **before** any wrapping, so measurements are stable |
+| Export: one PNG of one image | Page and panel export through the shared renderer (§13.9) |
+
+**Rendering:** one function, `drawLettering(ctx, panelRect, elements, style)`,
+used by the Lettering editor, panel thumbnails, the Pages view and Export,
+so what you see is what exports. It's Canvas 2D like the original, so the
+original's drawing code ports almost line for line.
+
+**Editor UI (mobile-first, same shell):** the panel's art fills the
+viewport; balloons are tappable; selected balloon shows the tail handle and
+a bottom toolbar (style, size −/+, bold, font, edit text, delete), taken from
+the mobile editor. Drag to move; pinch on a balloon to change its wrap
+width. Prev/next panel arrows; the panel's script lines are listed below
+with a "placed / not placed" mark so no line gets lost.
+
+### 13.6 Balloon and caption kinds
+
+| Kind | Look | From the script |
+|---|---|---|
+| Speech | Oval / rounded box, pointed tail | Dialogue |
+| Thought | Cloud outline, trail of small circles | `(thinks)`, `(thought)` |
+| Whisper | Dashed outline, grey text | `(whispers)`, `(quietly)` |
+| Shout | Spiky burst outline, bold, larger | `(shouts)`, `(yells)`, all-caps line |
+| Off-panel | Speech balloon, tail to the panel edge | `(O.S.)`, speaker not in frame |
+| Electronic | Zig-zag tail | `(on phone)`, `(radio)`, `(V.O.)` from a device |
+| Caption | Box, no tail | Narration, `(V.O.)`, description lines |
+| Sound effect | Free-standing styled text, no box | Action lines in CAPS like "BANG", optional |
+
+Balloons of the same speaker that follow each other in a panel can be
+**joined** (connector), as letterers do.
+
+### 13.7 Automatic placement (from the 3D scene)
+
+The app knows where every character's head is in each panel, which a
+hand-lettering tool doesn't. `ShotCanvas` already captures each character's
+screen position (`framing`, used for image prompts); extend it to the head
+and mouth point, for the panel's single keyframe.
+
+- **Fill:** each dialogue line in the panel becomes a balloon with the
+  speaker's line, in script order. Narration becomes captions.
+- **Reading order:** balloons are placed top-left to bottom-right in script
+  order (Western reading order; right-to-left is a setting for manga).
+  The first speaker's balloon goes nearest the top-left even if they stand
+  on the right, and the tail crosses — that's normal lettering.
+- **Tails:** each tail aims at the speaker's mouth, stopping short of it
+  by a few percent of the panel height. Off-panel speakers aim at the panel
+  edge nearest where they are in 3D.
+- **Avoid faces:** placement scores candidate spots by overlap with every
+  character's head box (from the same projection), overlap with other
+  balloons, distance from the panel edge, and tail length; then it picks the
+  best in reading order. Balloons may break the panel border only when the
+  style allows it.
+- **Keep it editable:** auto-placed elements are marked `auto`; moving one by
+  hand pins it. **Re-place** re-runs only the unpinned ones (for example after
+  changing the camera).
+- **Fit check:** if a panel's text won't fit without covering a face, the
+  panel shows a warning with fixes: frame wider, split the panel, or shorten
+  the line (assistant).
+
+### 13.8 Pages
+
+**First version: one panel per page.** Each panel is a page, in panel
+order, at the panel's own shape; there are no gutters or page templates,
+and the page count is the panel count. This matches how the comic site
+reads today (one image per screen) and keeps the first release small. The
+Pages step is then a reorderable strip of lettered panels with a
+read-through mode, plus page-count and cover choice.
+
+Later (multi-panel pages, milestone C7):
+
+- A book has a **page size** (US comic 6.625 × 10.25 in, manga B6, A4,
+  square, and **vertical scroll / webtoon** with no fixed height) and
+  margins, gutter width and bleed.
+- **Page templates**: rows of slots (1, 2, 3, 4, 6 panels; splash;
+  wide-top; L-shapes). Panels fill slots in order; drag a panel to another
+  slot, merge two slots, or nudge a gutter. A slot's shape becomes the
+  panel's shape (§13.4), and the panel's framing is kept by re-fitting the
+  lens or distance.
+- **Auto paginate** fills pages from the panel list: big moments (scene
+  openers, single action panels) get bigger slots, dialogue runs go in
+  rows, and a page turn is preferred before a reveal. The assistant can do
+  it with direction ("make the reveal a splash on a right-hand page").
+- Read-through mode (in the first version too): swipe through pages full
+  screen — the comic's version of Previs.
+
+### 13.9 Export
+
+- **Pages** as JPEG (default) or PNG at a chosen width (e.g. 1600 or 2400
+  px) in a zip, and as a **PDF**. Files are named **`Page01.jpg`,
+  `Page02.jpg`, …** — two-digit page numbers (comics are
+  expected to stay under 100 pages; Export warns past 99)
+- **Panels** one image per panel (lettered or clean).
+- **Site package:** a zip laid out for the user's own comic reader site:
+  `comics/<slug>/` with the page images and a cover, plus the entry for its
+  `comics.json`:
+  ```json
+  { "slug": "com_07", "title": "Complicated - 07 - …", "cover": "/comics/com_07/cover.jpg", "pages": 18, "tags": ["new"] }
+  ```
+  Pages use the `PageNN` names above; the cover is a chosen panel (default
+  the first) saved as `cover.jpg`. Slug, title and tags are set in Export
+  and remembered in the project.
+- The project file (`.sbs.zip`) carries panels, lettering, pages and art,
+  as it does for film.
+
+### 13.10 Data model additions
+
+Lettering (C2, built) lives on the shot and the project, so it works in
+film projects too; the comic-only fields come with C1 and later.
+
+```ts
+interface Project {
+  // …existing fields
+  medium: 'film' | 'comic';                 // C1; default 'film'
+  lettering?: { speech?: Partial<LetterStyle>; caption?: Partial<LetterStyle> };  // C2: project defaults
+  comic?: {                                 // C1+
+    page: { size: PageSizeId; widthIn: number; heightIn?: number;   // no height = vertical scroll
+            marginIn: number; gutterIn: number; bleedIn: number };
+    pages?: ComicPage[];                    // C7; until then each panel is a page, in panel order
+    readingOrder: 'ltr' | 'rtl';
+    publish?: { slug: string; title: string; tags: string[] };
+  };
+}
+
+interface Shot {                             // a panel in comic projects
+  // …existing fields
+  lettering?: LetterElement[];               // C2, in drawing order
+  panel?: {                                  // C1+
+    ratio: number;                           // width / height; from the page slot if placed
+    art: 'render' | 'image' | 'upload';      // which art is current
+    upload?: { blob: string; name: string };
+    leaveRoom?: boolean;                     // frame for lettering
+  };
+}
+
+// C2 has speech and caption; the rest arrive with C3 (§13.6).
+type LetterKind = 'speech' | 'caption' | 'thought' | 'whisper' | 'shout' | 'electronic' | 'sfx';
+
+interface LetterElement {
+  id: string; kind: LetterKind;
+  text: string;
+  x: number; y: number;                      // center, 0..1 of the panel
+  tail?: { x: number; y: number };           // speech: tip, 0..1 of the panel; absent = no tail
+  autoWrap?: boolean;                        // false = break lines only where the text has newlines
+  style?: Partial<LetterStyle>;              // per-element overrides
+  // C3:
+  lineId?: string;                           // script line it shows; text follows the line
+  targetCharacterId?: string;                // tail aims at this character's mouth
+  joinTo?: string;                           // connector to another balloon
+  auto?: boolean;                            // placed automatically; false once moved by hand
+}
+
+// Lengths are thousandths of the panel width.
+interface LetterStyle {
+  font: string; size: number;                // family name: bundled or user-added
+  bold: boolean; italic: boolean; dropCap: boolean;
+  padding: number; stroke: number; tailWidth: number;
+  shape: 'oval' | 'rounded';                 // speech; captions are boxes
+  fill: string; ink: string;
+  maxWidth: number; minWidth: number;        // fractions of the panel width
+  edgeTightness: number; minLines: number; maxLines: number;
+}
+
+interface ComicPage {
+  id: string; template: PageTemplateId;
+  slots: { panelId?: string; rect: [x: number, y: number, w: number, h: number] }[];  // 0..1 of the live area
+}
+```
+
+All edits go through the command bus (undo, assistant changes tagged), as
+everywhere else. Positions are fractions of the panel and lengths are
+thousandths of its width, so a panel exported at 1600 or 2400 px looks the
+same.
+
+### 13.11 Assistant
+
+Comic projects get their own tools on top of the shared ones:
+`place_lettering(panels?)`, `set_balloon(id, kind|text|style)`,
+`shorten_line(lineId, maxWords)` (edits the script line, undoable),
+`paginate(direction?)`, `set_page_template(page, template)`, and a
+**lettering check** like the coverage check: covered faces, wrong reading
+order, too many words in a panel, lines not placed. Snapshots for the model
+include the lettered panel, so it can see what it did.
+
+### 13.12 Milestones
+
+| # | Milestone | Scope | Exit criteria |
+|---|---|---|---|
+| **C1** | Medium switch | `medium` field + migration, New project choice, comic step list and labels, Panels step = Shots without timing/audio/motion, panel ratio | Make a comic project; break a script into panels; frame them |
+| **C2** | Lettering core | Port the editor's wrap, measure and draw code to `src/comic/` (TypeScript, unit tests on wrapping and tail geometry), bundled free fonts + user-added fonts (Wild Words), lettering style, Lettering step with manual balloons and captions | Letter a panel by hand on a phone, matching the old tool's output |
+| **C3** | Script-driven lettering | Balloons from script lines, kinds from parentheticals, head/mouth projection, auto placement with face avoidance, pin/re-place, fit warnings | A dialogue scene letters itself with tails on the right people |
+| **C4** | Pages (one panel per page) | Page order from panel order, reorder, cover choice, read-through | Swipe through a lettered scene as pages |
+| **C5** | Export | `Page01.jpg…` zip, PDF, site package with `cover.jpg` and the `comics.json` entry | Export drops into the comic site and reads correctly |
+| **C6** | Assistant | Comic tools and the lettering check | "Letter these pages and fix anything covering a face" works and can be undone |
+| **C7** | Multi-panel pages | Page sizes, templates, slot fitting, auto paginate | A 6-page scene laid out without manual work, then adjusted |
+
+C2 doesn't need C1 and can start first: it's a self-contained port with
+tests, and it can be tried on any image (the shot image flow already
+produces panel art).
+
+### 13.13 Open questions
+
+- **Wild Words licence:** the user's desktop licence lets them letter and
+  export their own pages (exports are images and PDFs, and the font's
+  embedding flag allows PDF embedding). Shipping it as a web font in the app
+  would need Comicraft's web-font licence; until then it is a user-added
+  font only (§13.5).
+- **Art style consistency** across panels for AI images (same character
+  references help; a per-project style prompt may be needed).
+- Whether lettering should also be offered to film projects as burned-in
+  titles or storyboard captions (cheap once C2 exists).

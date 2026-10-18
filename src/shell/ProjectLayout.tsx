@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useProjectStore } from '../state/store';
-import { STEPS, type Step } from '../state/schema';
+import { STEPS, stepsFor, type Step } from '../state/schema';
 import { loadProject } from '../storage/db';
 import { Header } from './Header';
 import { ChatBar } from './ChatBar';
@@ -37,14 +37,16 @@ export function ProjectLayout() {
 
   // Remember the current step so reopening the project lands here.
   useEffect(() => {
-    if (project?.id === projectId && validStep) setStep(step as Step);
-  }, [project?.id, projectId, step, validStep, setStep]);
+    if (project?.id === projectId && validStep && stepsFor(project).includes(step as Step)) setStep(step as Step);
+  }, [project?.id, project?.medium, projectId, step, validStep, setStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (missing) return <Navigate to="/" replace />;
   if (!validStep) return <Navigate to={`/p/${projectId}/story`} replace />;
   if (!project || project.id !== projectId) return <div className="app center muted">Loading project…</div>;
 
   const current = step as Step;
+  // Comics have no Previs or Export yet.
+  if (!stepsFor(project).includes(current)) return <Navigate to={`/p/${projectId}/${stepsFor(project).at(-1)}`} replace />;
   const goTo = (s: Step) => navigate(`/p/${projectId}/${s}`);
 
   // The shot editor lives at /p/:id/shots/:shotId. Done (and back) return to

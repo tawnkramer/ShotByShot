@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { CameraState, Project, Shot } from '../../state/schema';
+import { ASPECT_RATIOS, mediumOf, PANEL_SHAPES, type CameraState, type Project, type Shot } from '../../state/schema';
 import { useProjectStore } from '../../state/store';
-import { aspectOf, subjectsFor, type EffectiveShot } from '../../shots/setup';
-import { resetCamera, setCamera, setCameraFixed } from '../../shots/commands';
+import { frameAspect, subjectsFor, type EffectiveShot } from '../../shots/setup';
+import { resetCamera, setCamera, setCameraFixed, setPanelShape } from '../../shots/commands';
 import { frameSubjects, SHOT_SIZES, type ShotSize } from '../../three/camera';
 import { Slider } from '../staging/fields';
 
@@ -28,11 +28,29 @@ export function CameraPanel({ project, shot, eff, editKey, current }: Props) {
   const frame = (size: ShotSize) => {
     const subjects = subjectsFor(project, eff.setup, subject ? [subject] : undefined, eff.stageId);
     // Keep the current angle so changing size feels like zooming, not jumping.
-    dispatch(setCamera(shot.id, key, frameSubjects(subjects, size, aspectOf(project), { azimuth: current.azimuth, elevation: current.elevation, lens: current.lens })));
+    dispatch(setCamera(shot.id, key, frameSubjects(subjects, size, frameAspect(project, shot), { azimuth: current.azimuth, elevation: current.elevation, lens: current.lens })));
   };
+
+  const comic = mediumOf(project) === 'comic';
+  const shape = shot.panel?.shape ?? project.aspect;
+  const defaultLabel = (PANEL_SHAPES.find((p) => p.id === project.aspect) ?? ASPECT_RATIOS.find((a) => a.id === project.aspect))?.label;
 
   return (
     <div className="inspector">
+      {comic ? (
+        <div className="field">
+          <span>Panel shape</span>
+          <div className="type-buttons" role="radiogroup" aria-label="Panel shape">
+            {PANEL_SHAPES.map((p) => (
+              <button key={p.id} role="radio" aria-checked={shape === p.id} className={`chip tag ${shape === p.id ? 'current-tag' : ''}`}
+                onClick={() => dispatch(setPanelShape(shot.id, p.id === project.aspect ? undefined : p.id))}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {shot.panel?.shape && shot.panel.shape !== project.aspect && <span className="muted small">The project's default is {defaultLabel}.</span>}
+        </div>
+      ) : <>
       <div className="segmented" role="radiogroup" aria-label="Camera movement">
         <button role="radio" aria-checked={!moving} className={!moving ? 'on' : ''} onClick={() => moving && dispatch(setCameraFixed(shot.id))}>
           Fixed
@@ -42,6 +60,7 @@ export function CameraPanel({ project, shot, eff, editKey, current }: Props) {
         </button>
       </div>
       {moving && <p className="muted small">The camera moves from its Start to its End framing. Pick Start or End above the tabs, then frame the shot.</p>}
+      </>}
 
       <div className="field">
         <span>Frame</span>

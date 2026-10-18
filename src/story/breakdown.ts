@@ -93,6 +93,9 @@ export function toBeats(lines: ScriptLine[]): Beat[] {
 }
 
 const SHORT_SPEECH_WORDS = 8;
+/** A comic panel holds a moment: a few balloons between at most two people. */
+export const PANEL_MAX_BALLOONS = 3;
+export const PANEL_MAX_WORDS = 35;
 
 /**
  * Groups beats into shots. Shots never cross a scene heading, and a camera
@@ -123,6 +126,13 @@ function fits(current: Beat[], beat: Beat, mode: BreakdownMode): boolean {
       return false;
     case 'pair':
       return current.length < 2;
+    case 'panels': {
+      if (beat.kind === 'action' || prev.kind === 'action') return establishing(current, beat);
+      // Dialogue packs into a panel: up to three balloons, ~35 words, two speakers.
+      const speakers = new Set([...current, beat].map((b) => b.speaker).filter(Boolean));
+      const words = current.reduce((n, b) => n + b.words, beat.words);
+      return current.length < PANEL_MAX_BALLOONS && words <= PANEL_MAX_WORDS && speakers.size <= 2;
+    }
     case 'mixed':
       // Action sequences cut fast: one beat per shot.
       if (beat.kind === 'action' || prev.kind === 'action') {
@@ -135,6 +145,12 @@ function fits(current: Beat[], beat: Beat, mode: BreakdownMode): boolean {
       if (current.length < 2 && prev.words <= SHORT_SPEECH_WORDS && beat.words <= SHORT_SPEECH_WORDS) return true;
       return false;
   }
+}
+
+/** The establishing beat of a scene can carry one short action line. */
+function establishing(current: Beat[], beat: Beat): boolean {
+  const prev = current[current.length - 1];
+  return current.length === 1 && prev.sceneStart && prev.kind === 'action' && beat.kind === 'action' && beat.words <= 12;
 }
 
 /** Builds new shots from scratch for the whole script. */

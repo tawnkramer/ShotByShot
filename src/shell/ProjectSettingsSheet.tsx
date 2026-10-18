@@ -1,5 +1,5 @@
 import { Overlay } from './Overlay';
-import { ASPECT_RATIOS, type AspectRatioId } from '../state/schema';
+import { ASPECT_RATIOS, mediumOf, PANEL_SHAPES, type AspectRatioId, type Medium } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { NUMBERING_INFO, SHOT_NUMBERINGS } from '../story/numbering';
 import { setShotNumbering } from '../story/commands';
@@ -9,6 +9,14 @@ const FPS_OPTIONS = [24, 25, 30];
 export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
   const project = useProjectStore((s) => s.project)!;
   const dispatch = useProjectStore((s) => s.dispatch);
+  const comic = mediumOf(project) === 'comic';
+  // Comics choose among panel shapes; films among film and video frames.
+  const shapes = comic ? PANEL_SHAPES.map((p) => ({ id: p.id, label: p.label, ratio: ASPECT_RATIOS.find((a) => a.id === p.id)!.ratio })) : ASPECT_RATIOS.filter((a) => a.id !== '1:1' && a.id !== '3:4');
+  const setMedium = (m: Medium) => dispatch({
+    label: m === 'comic' ? 'Make a comic' : 'Make a film',
+    // Film-only data (motion, timing, audio) is kept, just hidden, so switching back loses nothing.
+    apply: (d) => { if (m === 'comic') d.medium = 'comic'; else delete d.medium; },
+  });
 
   return (
     <Overlay>
@@ -31,9 +39,19 @@ export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
           />
         </label>
         <div className="field">
-          <span>Aspect ratio</span>
+          <span>Kind</span>
+          <div className="segmented" role="radiogroup" aria-label="Kind of project">
+            {(['film', 'comic'] as const).map((m) => (
+              <button key={m} role="radio" aria-checked={mediumOf(project) === m} className={mediumOf(project) === m ? 'on' : ''} onClick={() => mediumOf(project) !== m && setMedium(m)}>
+                {m === 'film' ? 'Film' : 'Comic'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <span>{comic ? 'Default panel shape' : 'Aspect ratio'}</span>
           <div className="aspect-grid">
-            {ASPECT_RATIOS.map((a) => (
+            {shapes.map((a) => (
               <button
                 key={a.id}
                 className={`aspect-option ${project.aspect === a.id ? 'selected' : ''}`}
@@ -66,7 +84,7 @@ export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
           </div>
           <p className="muted small">Numbered scene headings in the script (like “12 INT. CAFE - DAY 12”) are used as scene numbers.</p>
         </div>
-        <label className="field">
+        {!comic && <label className="field">
           <span>Frame rate</span>
           <select
             value={project.fps}
@@ -78,7 +96,7 @@ export function ProjectSettingsSheet({ onClose }: { onClose: () => void }) {
               </option>
             ))}
           </select>
-        </label>
+        </label>}
       </div>
     </Overlay>
   );
