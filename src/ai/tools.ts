@@ -1057,16 +1057,27 @@ const balloonChange = z.object({
   size: z.number().min(8).max(120).optional().describe('Text size in thousandths of the panel width (balloons default 27)'),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
+  font: z.string().optional().describe('Font family, e.g. Bangers, Permanent Marker, Comic Neue'),
+  color: z.string().optional().describe('Text colour as #rrggbb (sound effects and titles)'),
+  outline: z.number().min(0).max(40).optional().describe('Text outline width (sfx default 7; 0 for none)'),
+  outline_color: z.string().optional(),
+  shadow: z.number().min(0).max(40).optional().describe('Drop shadow offset (0 for none, ~6 typical)'),
+  rotation: z.number().min(-180).max(180).optional().describe('Degrees clockwise (sfx only)'),
+  x: z.number().min(0).max(1).optional().describe('Center, 0..1 of the panel width; pins it'),
+  y: z.number().min(0).max(1).optional(),
   remove: z.boolean().optional(),
 });
 
 const editLetteringTool = tool(
   'edit_lettering',
-  'Change one panel\'s balloons and captions: edit text, kind (speech, thought, whisper, shout, electronic, caption), size, bold, italic, remove; or add new ones (placed automatically, tail on the named speaker). Automatic balloons are re-placed afterwards; ones the user moved by hand stay put.',
+  'Change one panel\'s balloons, captions and text: edit text, kind (speech, thought, whisper, shout, electronic, caption, sfx = free text for sound effects and titles), size, font, bold, italic, and for sfx colour, outline, shadow and rotation; move (x, y), remove; or add new ones. New balloons are placed automatically with the tail on the named speaker; new sfx go where x, y say (default center). Automatic balloons are re-placed afterwards; ones the user moved by hand stay put.',
   z.object({
     panel: z.string(),
     changes: z.array(balloonChange).optional(),
-    add: z.array(z.object({ text: z.string().min(1), kind: z.enum(LETTER_KINDS).optional(), speaker: z.string().optional().describe('Character name the tail points at') })).optional(),
+    add: z.array(z.object({
+      text: z.string().min(1), kind: z.enum(LETTER_KINDS).optional(), speaker: z.string().optional().describe('Character name the tail points at'),
+      x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), rotation: z.number().min(-180).max(180).optional(),
+    })).optional(),
   }),
   async (a, ctx) => {
     const p = ctx.project();
@@ -1086,13 +1097,24 @@ const editLetteringTool = tool(
       if (c.size !== undefined) style.size = c.size;
       if (c.bold !== undefined) style.bold = c.bold;
       if (c.italic !== undefined) style.italic = c.italic;
+      if (c.font !== undefined) style.font = c.font;
+      if (c.color !== undefined) style.ink = c.color;
+      if (c.outline !== undefined) style.outline = c.outline;
+      if (c.outline_color !== undefined) style.outlineColor = c.outline_color;
+      if (c.shadow !== undefined) style.shadow = c.shadow;
+      if (c.rotation !== undefined) el.rotation = c.rotation || undefined;
+      if (c.x !== undefined || c.y !== undefined) { el.x = c.x ?? el.x; el.y = c.y ?? el.y; delete el.auto; }
+      if (el.kind === 'sfx') delete el.tail;
       if (Object.keys(style).length) el.style = style;
     }
     list = list.filter((e) => !removed.has(e.id));
     for (const n of a.add ?? []) {
       const c = n.speaker ? byName(p.characters, n.speaker) : undefined;
       if (n.speaker && !c) throw new Error(`No character named "${n.speaker}".`);
-      list.push({ id: newId(), kind: n.kind ?? 'speech', text: n.text, x: 0.5, y: 0.5, auto: true, ...(c ? { targetCharacterId: c.id } : {}) });
+      const kind = n.kind ?? 'speech';
+      // Sound effects and titles go where they're put; balloons are placed automatically.
+      if (kind === 'sfx') list.push({ id: newId(), kind, text: n.text, x: n.x ?? 0.5, y: n.y ?? 0.5, ...(n.rotation ? { rotation: n.rotation } : {}) });
+      else list.push({ id: newId(), kind, text: n.text, x: 0.5, y: 0.5, auto: true, ...(c ? { targetCharacterId: c.id } : {}) });
     }
     const placed = placePanel(p, shot, list, await letteringMeasure(p));
     ctx.dispatch(setLetteringMany(new Map([[shot.id, placed]]), `Edit lettering on panel ${shot.number}`));

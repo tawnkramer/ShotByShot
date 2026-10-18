@@ -169,3 +169,37 @@ it('auto letters the panel, and moving a balloon by hand pins it', async () => {
   expect(letters()!.find((e) => e.id === first.id)).toMatchObject({ x: moved.x, y: moved.y });
   expect(letters()).toHaveLength(2);
 });
+
+it('adds a sound effect: colour, outline, shadow, turn and duplicate', async () => {
+  await open();
+  await act(async () => button('+ Text').click());
+  expect(letters()![0]).toMatchObject({ kind: 'sfx', x: 0.5, y: 0.5 });
+  await act(async () => type(document.querySelector<HTMLTextAreaElement>('.lettering-text-sheet textarea')!, 'BLAM!'));
+  await act(async () => button('Done').click());
+  const set = (label: string, value: string) => {
+    const el = document.querySelector<HTMLInputElement | HTMLSelectElement>(`[aria-label="${label}"]`)!;
+    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, value);
+    el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
+  };
+  await act(async () => set('Text colour', '#ff0000'));
+  await act(async () => set('Outline', '12'));
+  await act(async () => button('Shadow').click());
+  expect(letters()![0].style).toMatchObject({ ink: '#ff0000', outline: 12, shadow: 6 });
+  // Turn it with the handle: dragging straight right of the center is a quarter turn.
+  const art = document.querySelector('[data-testid="lettering-art"]')!;
+  vi.spyOn(art, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} });
+  const handle = document.querySelector('.lettering-rotate-handle')!;
+  await act(async () => {
+    pointer(handle, 'pointerdown', 400, 200);
+    pointer(art, 'pointermove', 600, 302);
+    pointer(art, 'pointerup', 600, 302);
+  });
+  expect(letters()![0].rotation).toBe(90);
+  await act(async () => button('Duplicate').click());
+  expect(letters()).toHaveLength(2);
+  expect(letters()![1]).toMatchObject({ kind: 'sfx', text: 'BLAM!', rotation: 90, x: 0.53, style: { ink: '#ff0000' } });
+  expect(letters()![1].y).toBeGreaterThan(letters()![0].y + 0.02);
+  await act(async () => button('Level').click());
+  expect(letters()![1].rotation).toBeUndefined();
+});

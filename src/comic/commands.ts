@@ -128,3 +128,25 @@ export function setLetteringDefault(kind: LetterKind, style: Partial<LetterStyle
     },
   };
 }
+
+/**
+ * Copies a balloon, caption or text a little down and to the right, e.g.
+ * for a repeated sound effect. The copy is placed by hand (not automatic)
+ * and isn't tied to a script line.
+ */
+export function duplicateLetter(shotId: string, id: string, newId: string, offset = { dx: 0.05, dy: 0.05 }): Command {
+  return {
+    label: 'Duplicate lettering',
+    apply: (d) => {
+      const list = letters(d, shotId);
+      const el = list?.find((e) => e.id === id);
+      if (!list || !el) return;
+      const sx = (v: number) => Math.min(0.97, v + offset.dx), sy = (v: number) => Math.min(0.97, v + offset.dy);
+      const copy: LetterElement = { ...JSON.parse(JSON.stringify(el)), id: newId, x: sx(el.x), y: sy(el.y) };
+      if (copy.tail) copy.tail = { x: sx(copy.tail.x), y: sy(copy.tail.y) };
+      delete copy.auto;
+      delete copy.lineId;
+      list.push(copy);
+    },
+  };
+}

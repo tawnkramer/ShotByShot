@@ -3,7 +3,7 @@ import { saveFile } from '../shell/download';
 import { mediumOf, newId, type Shot } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { safeFileName } from '../storage/projectFile';
-import { addLetter, raiseLetter, removeLetter, setLettering, setLetteringDefault, styleLetter, updateLetter } from './commands';
+import { addLetter, duplicateLetter, raiseLetter, removeLetter, setLettering, setLetteringDefault, styleLetter, updateLetter } from './commands';
 import { autoLetter, letteringWarnings, placePanel, speechElement, type AutoOptions } from './auto';
 import { canvasMeasurer, drawLettering } from './draw';
 import { BUILTIN_FONTS, defaultLetteringFont, ensureFonts, listUserFonts } from './fonts';
@@ -54,7 +54,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [tailDir, setTailDir] = useState<number>();
-  const drag = useRef<{ id: string; mode: 'move' | 'tail'; dir: number; dx: number; dy: number; moved: boolean; wasSelected: boolean; raise?: boolean } | null>(null);
+  const drag = useRef<{ id: string; mode: 'move' | 'tail' | 'rotate'; dir: number; dx: number; dy: number; moved: boolean; wasSelected: boolean; raise?: boolean } | null>(null);
 
   useEffect(() => {
     const d = dialog.current;
@@ -127,8 +127,8 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
       setEditingText(false);
       return;
     }
-    const el: LetterElement = kind === 'caption'
-      ? { id: newId(), kind, text: '', x: 0.5, y: 0.08 }
+    const el: LetterElement = kind === 'caption' || kind === 'sfx'
+      ? { id: newId(), kind, text: '', x: 0.5, y: kind === 'sfx' ? 0.5 : 0.08 }
       : { id: newId(), kind, text: '', x: 0.5, y: 0.22, tail: { x: 0.5, y: 0.42 } };
     dispatch(addLetter(shot.id, el));
     setSelectedId(el.id);
@@ -174,11 +174,29 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
     surface.current?.setPointerCapture?.(e.pointerId);
   };
 
+  const onRotateDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!selected) return;
+    e.stopPropagation();
+    drag.current = { id: selected.el.id, mode: 'rotate', dir: 1, dx: 0, dy: 0, moved: false, wasSelected: true };
+    surface.current?.setPointerCapture?.(e.pointerId);
+  };
+
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
     const p = toPanel(e);
     d.moved = true;
+    if (d.mode === 'rotate') {
+      // The handle sits above the center, so straight up is no turn. Snaps to 5°, and to level near 0°.
+      const el = lettering.find((x) => x.id === d.id);
+      const r = surface.current!.getBoundingClientRect();
+      if (!el) return;
+      const deg = (Math.atan2(e.clientY - (r.top + el.y * r.height), e.clientX - (r.left + el.x * r.width)) * 180) / Math.PI + 90;
+      let snapped = Math.round(normalizeDeg(deg) / 5) * 5;
+      if (Math.abs(snapped) <= 5) snapped = 0;
+      dispatch(updateLetter(shot.id, d.id, { rotation: snapped || undefined }, 'Turn text', `letter-rotate:${d.id}`));
+      return;
+    }
     if (d.mode === 'move') {
       // Whatever is picked up comes to the front.
       if (d.raise) { d.raise = false; dispatch(raiseLetter(shot.id, d.id, `letter-move:${d.id}`)); }
@@ -234,6 +252,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
         <div className="lettering-actions">
           <button className="btn" onClick={() => add('speech', nextSpeech)} disabled={!art} title={nextSpeech ? `Adds ${nextSpeech.speaker ?? 'the next line'}: “${nextSpeech.text}”` : undefined}>+ Balloon</button>
           <button className="btn" onClick={() => add('caption')} disabled={!art}>+ Caption</button>
+          <button className="btn" onClick={() => add('sfx')} disabled={!art} title="Sound effect or title: letters with no balloon">+ Text</button>
           <button className="btn" onClick={letterPanel} disabled={!art} title="Adds the panel's dialogue and places every balloon you haven't moved by hand around the characters">Auto letter</button>
           <button className="btn" onClick={() => void exportPng()} disabled={!art || saving}>{saving ? 'Saving…' : 'Save PNG'}</button>
         </div>
@@ -244,11 +263,11 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
             data-testid="lettering-art">
             <canvas ref={canvas} width={art.width} height={art.height} aria-label={`${unit} ${shot.number} with lettering`} role="img" />
-            {selected && <Selection layout={selected} width={art.width} height={art.height} dir={tailDir} onTailDown={onTailDown} />}
+            {selected && <Selection layout={selected} width={art.width} height={art.height} dir={tailDir} onTailDown={onTailDown} onRotateDown={onRotateDown} />}
           </div>
         )}
         {!art && !error && <p className="muted">Opening art…</p>}
-        {lettering.length === 0 && art && <p className="lettering-hint small muted">Add a balloon or caption, then drag it into place.</p>}
+        {lettering.length === 0 && art && <p className="lettering-hint small muted">Add a balloon, caption or text, then drag it into place.</p>}
       </div>
       {error && <p className="error small lettering-error" role="alert">{error}</p>}
       {!sel && art && warnings.length > 0 && (
@@ -289,16 +308,33 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
             {(sel.kind === 'speech' || sel.kind === 'whisper' || sel.kind === 'electronic') && <button className="btn" onClick={() => restyle({ shape: selStyle.shape === 'oval' ? 'rounded' : 'oval' })}>{selStyle.shape === 'oval' ? 'Oval' : 'Rounded'}</button>}
             <button className="btn" onClick={() => dispatch(updateLetter(shot.id, sel.id, { tail: sel.tail ? undefined : { x: sel.x, y: Math.min(1, sel.y + 0.2) } }, sel.tail ? 'Remove tail' : 'Add tail'))}>{sel.tail ? 'No tail' : 'Tail'}</button>
           </>}
+          {sel.kind === 'sfx' && <>
+            <label className="lettering-color" title="Text colour"><input type="color" aria-label="Text colour" value={hexColor(selStyle.ink)} onChange={(e) => restyle({ ink: e.target.value }, 'ink')} /></label>
+            <select aria-label="Outline" value={OUTLINES.reduce((best, o) => (Math.abs(o.width - selStyle.outline) < Math.abs(best.width - selStyle.outline) ? o : best)).width} onChange={(e) => restyle({ outline: Number(e.target.value) })}>
+              {OUTLINES.map((o) => <option key={o.width} value={o.width}>{o.label}</option>)}
+            </select>
+            {selStyle.outline > 0 && <label className="lettering-color" title="Outline colour"><input type="color" aria-label="Outline colour" value={hexColor(selStyle.outlineColor)} onChange={(e) => restyle({ outlineColor: e.target.value }, 'outline-color')} /></label>}
+            <button className={`btn${selStyle.shadow > 0 ? ' primary' : ''}`} aria-pressed={selStyle.shadow > 0} onClick={() => restyle({ shadow: selStyle.shadow > 0 ? 0 : 6 })}>Shadow</button>
+            {selStyle.shadow > 0 && <label className="lettering-color" title="Shadow colour"><input type="color" aria-label="Shadow colour" value={hexColor(selStyle.shadowColor)} onChange={(e) => restyle({ shadowColor: e.target.value }, 'shadow-color')} /></label>}
+            <button className="btn" aria-label="Level" title="Drag the round handle above the text to turn it; tap here to level it" onClick={() => dispatch(updateLetter(shot.id, sel.id, { rotation: undefined }, 'Level text'))}>↻ {Math.round(sel.rotation ?? 0)}°</button>
+          </>}
+          <button className="btn" onClick={() => {
+            // The copy goes just below the original (one box height), so repeats stack instead of overlapping.
+            const id = newId();
+            const dy = selected && art ? Math.min(0.3, selected.box.h / art.height + 0.02) : 0.05;
+            dispatch(duplicateLetter(shot.id, sel.id, id, { dx: 0.03, dy }));
+            setSelectedId(id);
+          }}>Duplicate</button>
           <button className="btn" title="Use this look for every balloon or caption in the project" disabled={!sel.style} onClick={() => sel.style && dispatch(setLetteringDefault(sel.kind, sel.style))}>Make default</button>
           <button className="btn danger" onClick={() => dispatch(removeLetter(shot.id, sel.id))}>Delete</button>
         </div>
       )}
       {sel && editingText && (
         <div className="lettering-text-sheet">
-          <textarea autoFocus rows={3} aria-label={isBalloon(sel.kind) ? 'Balloon text' : 'Caption text'} placeholder={isBalloon(sel.kind) ? 'What they say…' : 'Caption…'} value={sel.text} maxLength={4000}
+          <textarea autoFocus rows={3} aria-label={isBalloon(sel.kind) ? 'Balloon text' : sel.kind === 'sfx' ? 'Text' : 'Caption text'} placeholder={isBalloon(sel.kind) ? 'What they say…' : sel.kind === 'sfx' ? 'BLAM!, KNOCK KNOCK, or a title…' : 'Caption…'} value={sel.text} maxLength={4000}
             onChange={(e) => dispatch(updateLetter(shot.id, sel.id, { text: e.target.value }, 'Edit lettering text', `letter-text:${sel.id}`))} />
           <div className="row gap">
-            <span className="small muted grow">Your line breaks are kept. Without any, lines are shaped to fit the {isBalloon(sel.kind) ? 'balloon' : 'caption'}.</span>
+            <span className="small muted grow">{sel.kind === 'sfx' ? 'Lines break only where you type them.' : `Your line breaks are kept. Without any, lines are shaped to fit the ${isBalloon(sel.kind) ? 'balloon' : 'caption'}.`}</span>
             <button className="btn primary" onClick={finishText}>Done</button>
           </div>
         </div>
@@ -307,10 +343,31 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   );
 }
 
-function Selection({ layout, width, height, dir, onTailDown }: { layout: LetterLayout; width: number; height: number; dir?: number; onTailDown: (e: ReactPointerEvent<HTMLDivElement>) => void }) {
+const OUTLINES = [{ width: 0, label: 'No outline' }, { width: 4, label: 'Thin outline' }, { width: 7, label: 'Outline' }, { width: 12, label: 'Thick outline' }];
+
+/** Color inputs need #rrggbb. */
+function hexColor(c: string): string {
+  return /^#[0-9a-f]{6}$/i.test(c) ? c : /^#[0-9a-f]{3}$/i.test(c) ? `#${[...c.slice(1)].map((x) => x + x).join('')}` : '#000000';
+}
+
+function normalizeDeg(d: number): number {
+  return ((((d + 180) % 360) + 360) % 360) - 180;
+}
+
+function Selection({ layout, width, height, dir, onTailDown, onRotateDown }: { layout: LetterLayout; width: number; height: number; dir?: number; onTailDown: (e: ReactPointerEvent<HTMLDivElement>) => void; onRotateDown: (e: ReactPointerEvent<HTMLDivElement>) => void }) {
   const { box, tail } = layout;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   const below = dir ?? handleOffset(layout);
+  if (layout.shape === 'text') {
+    // Turned with the text; the round handle above turns it.
+    return (
+      <div className="lettering-selection-turn" style={{ left: pct(box.x, width), top: pct(box.y, height), width: pct(box.w, width), height: pct(box.h, height), transform: `rotate(${layout.rotation}rad)` }}>
+        <div className="lettering-selection" style={{ inset: 0 }} />
+        <div className="lettering-rotate-link" />
+        <div className="lettering-rotate-handle" role="button" aria-label="Drag to turn the text" onPointerDown={onRotateDown} />
+      </div>
+    );
+  }
   return <>
     <div className={`lettering-selection${layout.shape === 'oval' ? ' oval' : ''}`} style={{ left: pct(box.x, width), top: pct(box.y, height), width: pct(box.w, width), height: pct(box.h, height) }} />
     {tail && <>

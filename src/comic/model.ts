@@ -9,13 +9,13 @@ import { z } from 'zod';
  * in thousandths of the panel width.
  */
 
-export const LETTER_KINDS = ['speech', 'caption', 'thought', 'whisper', 'shout', 'electronic'] as const;
+export const LETTER_KINDS = ['speech', 'caption', 'thought', 'whisper', 'shout', 'electronic', 'sfx'] as const;
 export type LetterKind = (typeof LETTER_KINDS)[number];
 /** Kinds drawn as balloons (with a tail toward the speaker); captions are boxes. */
 export const BALLOON_KINDS = ['speech', 'thought', 'whisper', 'shout', 'electronic'] as const satisfies readonly LetterKind[];
-export const isBalloon = (kind: LetterKind) => kind !== 'caption';
+export const isBalloon = (kind: LetterKind) => kind !== 'caption' && kind !== 'sfx';
 export const KIND_LABELS: Record<LetterKind, string> = {
-  speech: 'Speech', thought: 'Thought', whisper: 'Whisper', shout: 'Shout', electronic: 'Phone / radio', caption: 'Caption',
+  speech: 'Speech', thought: 'Thought', whisper: 'Whisper', shout: 'Shout', electronic: 'Phone / radio', caption: 'Caption', sfx: 'Text',
 };
 
 export const BALLOON_SHAPES = ['oval', 'rounded'] as const;
@@ -44,6 +44,12 @@ export const letterStyleSchema = z.object({
   maxLines: z.number().int().min(1).max(20),
   /** Half the width of a tail where it meets the balloon. */
   tailWidth: z.number().min(1).max(100),
+  /** Text (sound effects, titles): outline around the letters, 0 for none. */
+  outline: z.number().min(0).max(40),
+  outlineColor: z.string(),
+  /** Text: drop shadow offset down and right, 0 for none. */
+  shadow: z.number().min(0).max(40),
+  shadowColor: z.string(),
 });
 export type LetterStyle = z.infer<typeof letterStyleSchema>;
 
@@ -64,6 +70,8 @@ export const letterElementSchema = z.object({
   lineId: z.string().optional(),
   /** Wrap the text to a balloon shape (default; typed line breaks always stand). Off: only typed breaks. */
   autoWrap: z.boolean().optional(),
+  /** Turned clockwise, in degrees (text only). */
+  rotation: z.number().optional(),
   /** Overrides on top of the project's style for this kind. */
   style: letterStyleSchema.partial().optional(),
 });
@@ -73,6 +81,7 @@ export type LetterElement = z.infer<typeof letterElementSchema>;
 export const letteringDefaultsSchema = z.object({
   speech: letterStyleSchema.partial().optional(),
   caption: letterStyleSchema.partial().optional(),
+  sfx: letterStyleSchema.partial().optional(),
 });
 export type LetteringDefaults = z.infer<typeof letteringDefaultsSchema>;
 
@@ -86,6 +95,7 @@ const SPEECH: LetterStyle = {
   font: DEFAULT_FONT, size: 27, bold: false, italic: false, dropCap: true,
   padding: 42, stroke: 2.5, shape: 'oval', fill: '#ffffff', ink: '#000000',
   maxWidth: 0.38, minWidth: 0.22, edgeTightness: 0.58, minLines: 2, maxLines: 7, tailWidth: 12,
+  outline: 0, outlineColor: '#000000', shadow: 0, shadowColor: '#000000',
 };
 
 export const BUILTIN_STYLES: Record<LetterKind, LetterStyle> = {
@@ -98,21 +108,28 @@ export const BUILTIN_STYLES: Record<LetterKind, LetterStyle> = {
     font: DEFAULT_FONT, size: 27, bold: false, italic: false, dropCap: true,
     padding: 25, stroke: 2.5, shape: 'rounded', fill: '#f4e4a6', ink: '#000000',
     maxWidth: 0.45, minWidth: 0.1, edgeTightness: 0.58, minLines: 1, maxLines: 10, tailWidth: 12,
+    outline: 0, outlineColor: '#000000', shadow: 0, shadowColor: '#000000',
+  },
+  // Sound effects and titles: big display letters with a black outline, no box.
+  sfx: {
+    ...SPEECH, font: 'Bangers', size: 80, dropCap: false, padding: 0, stroke: 0, fill: 'transparent', ink: '#ffd21f',
+    maxWidth: 1, outline: 7, outlineColor: '#000000', shadow: 0, shadowColor: '#000000',
   },
 };
 
 /** The style an element is drawn with: built-in, then project defaults, then its own overrides. */
 export function resolveStyle(el: Pick<LetterElement, 'kind' | 'style'>, defaults?: LetteringDefaults, fallbackFont?: string): LetterStyle {
-  const base = { ...BUILTIN_STYLES[el.kind], ...(fallbackFont ? { font: fallbackFont } : {}) };
+  // The default lettering font is for dialogue; sound effects keep their display font.
+  const base = { ...BUILTIN_STYLES[el.kind], ...(fallbackFont && el.kind !== 'sfx' ? { font: fallbackFont } : {}) };
   // Every kind of balloon shares the project's balloon style; the kind's own look stays on top where it differs.
   const project = defined(defaults?.[defaultsKey(el.kind)]);
-  const own = el.kind === 'speech' || el.kind === 'caption' ? {} : kindLook(el.kind, project);
+  const own = el.kind === 'speech' || el.kind === 'caption' || el.kind === 'sfx' ? {} : kindLook(el.kind, project);
   return { ...base, ...project, ...own, ...defined(el.style) };
 }
 
 /** Which project defaults a kind uses. */
-export function defaultsKey(kind: LetterKind): 'speech' | 'caption' {
-  return kind === 'caption' ? 'caption' : 'speech';
+export function defaultsKey(kind: LetterKind): 'speech' | 'caption' | 'sfx' {
+  return kind === 'caption' || kind === 'sfx' ? kind : 'speech';
 }
 
 /** What makes a kind look like itself, kept even when the project's balloon style changes size or weight. */

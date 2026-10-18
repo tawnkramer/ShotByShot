@@ -9,6 +9,7 @@ export function drawLettering(ctx: CanvasRenderingContext2D, layouts: LetterLayo
 }
 
 export function drawLetter(ctx: CanvasRenderingContext2D, l: LetterLayout): void {
+  if (l.shape === 'text') return drawFreeText(ctx, l);
   const { style, stroke } = l;
   const kind = l.el.kind;
   ctx.save();
@@ -110,6 +111,46 @@ function zigzag(ctx: CanvasRenderingContext2D, l: LetterLayout): void {
   ctx.strokeStyle = l.style.ink;
   ctx.lineWidth = Math.max(1, l.stroke * 1.3);
   ctx.stroke();
+}
+
+/**
+ * Sound effects and titles: letters with no balloon, turned about their
+ * center, with an optional drop shadow and outline under the fill.
+ */
+function drawFreeText(ctx: CanvasRenderingContext2D, l: LetterLayout): void {
+  const { box, lines, lineHeight, style, rotation } = l;
+  const u = l.font.px / style.size;
+  const outline = style.outline * u, shadow = style.shadow * u;
+  ctx.save();
+  ctx.translate(box.x + box.w / 2, box.y + box.h / 2);
+  if (rotation) ctx.rotate(rotation);
+  ctx.font = cssFont(l.font);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  const top = -(lines.length * lineHeight) / 2;
+  const at = (i: number) => top + (i + 0.5) * lineHeight;
+  if (shadow > 0) {
+    // Down and to the right on the page, however the text is turned.
+    const c = Math.cos(-rotation), s = Math.sin(-rotation);
+    const ox = shadow * c - shadow * s, oy = shadow * s + shadow * c;
+    ctx.fillStyle = ctx.strokeStyle = style.shadowColor;
+    ctx.lineWidth = outline * 2;
+    lines.forEach((line, i) => {
+      if (outline > 0) ctx.strokeText(line, ox, at(i) + oy);
+      ctx.fillText(line, ox, at(i) + oy);
+    });
+  }
+  if (outline > 0) {
+    // Stroked at twice the width: the inner half is covered by the fill.
+    ctx.strokeStyle = style.outlineColor;
+    ctx.lineWidth = outline * 2;
+    lines.forEach((line, i) => ctx.strokeText(line, 0, at(i)));
+  }
+  ctx.fillStyle = style.ink;
+  lines.forEach((line, i) => ctx.fillText(line, 0, at(i)));
+  ctx.restore();
 }
 
 function drawText(ctx: CanvasRenderingContext2D, l: LetterLayout): void {
