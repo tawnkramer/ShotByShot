@@ -817,8 +817,9 @@ AI tools only depend on M1.
   `auto: true` and `targetCharacterId`; moving one or its tail by hand
   pins it, and **Auto letter** adds missing dialogue and re-places only
   the unpinned ones. Tapping a line or **+ Balloon** places that balloon
-  the same way. Warnings in the editor when lettering covers a face or
-  fills almost half the panel. **Letter all panels** on the Panels list
+  the same way. A warning in the editor when lettering fills almost
+  half the panel (covering a face is sometimes intended, so it isn't
+  flagged). **Letter all panels** on the Panels list
   letters every panel that has dialogue and no lettering, as one undo
   step.
 
