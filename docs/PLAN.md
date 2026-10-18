@@ -969,6 +969,15 @@ and mouth point, for the panel's single keyframe.
 
 ### 13.8 Pages
 
+**First version: one panel per page.** Each panel is a page, in panel
+order, at the panel's own shape; there are no gutters or page templates,
+and the page count is the panel count. This matches how the comic site
+reads today (one image per screen) and keeps the first release small. The
+Pages step is then a reorderable strip of lettered panels with a
+read-through mode, plus page-count and cover choice.
+
+Later (multi-panel pages, milestone C7):
+
 - A book has a **page size** (US comic 6.625 × 10.25 in, manga B6, A4,
   square, and **vertical scroll / webtoon** with no fixed height) and
   margins, gutter width and bleed.
@@ -981,13 +990,15 @@ and mouth point, for the panel's single keyframe.
   openers, single action panels) get bigger slots, dialogue runs go in
   rows, and a page turn is preferred before a reveal. The assistant can do
   it with direction ("make the reveal a splash on a right-hand page").
-- Read-through mode: swipe through pages full screen — the comic's version
-  of Previs.
+- Read-through mode (in the first version too): swipe through pages full
+  screen — the comic's version of Previs.
 
 ### 13.9 Export
 
-- **Pages** as PNG or JPEG at a chosen width (e.g. 1600 or 2400 px) in a
-  zip, and as a **PDF**.
+- **Pages** as JPEG (default) or PNG at a chosen width (e.g. 1600 or 2400
+  px) in a zip, and as a **PDF**. Files are named **`Page01.jpg`,
+  `Page02.jpg`, …** — two-digit page numbers; a book past 99 pages
+  continues `Page100`, `Page101`, …
 - **Panels** one image per panel (lettered or clean).
 - **Site package:** a zip laid out for the user's own comic reader site:
   `comics/<slug>/` with the page images and a cover, plus the entry for its
@@ -995,9 +1006,9 @@ and mouth point, for the panel's single keyframe.
   ```json
   { "slug": "com_07", "title": "Complicated - 07 - …", "cover": "/comics/com_07/cover.jpg", "pages": 18, "tags": ["new"] }
   ```
-  Slug, title and tags are set in Export and remembered in the project. Page
-  file names follow whatever the reader expects (to confirm: zero-padded
-  `001.jpg…`, or the reader sorts what it finds).
+  Pages use the `PageNN` names above; the cover is a chosen panel (default
+  the first) saved as `cover.jpg`. Slug, title and tags are set in Export
+  and remembered in the project.
 - The project file (`.sbs.zip`) carries panels, lettering, pages and art,
   as it does for film.
 
@@ -1011,7 +1022,7 @@ interface Project {
     page: { size: PageSizeId; widthIn: number; heightIn?: number;   // no height = vertical scroll
             marginIn: number; gutterIn: number; bleedIn: number };
     lettering: LetteringStyle;              // project-wide defaults
-    pages: ComicPage[];
+    pages?: ComicPage[];                   // C7; until then each panel is a page, in panel order
     readingOrder: 'ltr' | 'rtl';
     publish?: { slug: string; title: string; tags: string[] };
   };
@@ -1080,9 +1091,10 @@ include the lettered panel, so it can see what it did.
 | **C1** | Medium switch | `medium` field + migration, New project choice, comic step list and labels, Panels step = Shots without timing/audio/motion, panel ratio | Make a comic project; break a script into panels; frame them |
 | **C2** | Lettering core | Port the editor's wrap, measure and draw code to `src/comic/` (TypeScript, unit tests on wrapping and tail geometry), bundled free fonts + user-added fonts (Wild Words), lettering style, Lettering step with manual balloons and captions | Letter a panel by hand on a phone, matching the old tool's output |
 | **C3** | Script-driven lettering | Balloons from script lines, kinds from parentheticals, head/mouth projection, auto placement with face avoidance, pin/re-place, fit warnings | A dialogue scene letters itself with tails on the right people |
-| **C4** | Pages | Page sizes, templates, slot fitting, auto paginate, read-through | A 6-page scene laid out without manual work, then adjusted |
-| **C5** | Export | Page PNG/JPEG zip, PDF, panel images, site package with `comics.json` entry | Export drops into the comic site and reads correctly |
+| **C4** | Pages (one panel per page) | Page order from panel order, reorder, cover choice, read-through | Swipe through a lettered scene as pages |
+| **C5** | Export | `Page01.jpg…` zip, PDF, site package with `cover.jpg` and the `comics.json` entry | Export drops into the comic site and reads correctly |
 | **C6** | Assistant | Comic tools and the lettering check | "Letter these pages and fix anything covering a face" works and can be undone |
+| **C7** | Multi-panel pages | Page sizes, templates, slot fitting, auto paginate | A 6-page scene laid out without manual work, then adjusted |
 
 C2 doesn't need C1 and can start first: it's a self-contained port with
 tests, and it can be tried on any image (the shot image flow already
@@ -1090,10 +1102,8 @@ produces panel art).
 
 ### 13.13 Open questions
 
-- **Page file names** the comic site's reader expects, and whether it shows
-  whole pages or one panel per screen (com_06 has 79 "pages", which looks
-  like panel-per-screen). That decides whether the default export is pages
-  or panels-as-pages.
+- Whether the comic site's reader sorts `Page100` correctly after
+  `Page99` (only matters past 99 pages).
 - **Wild Words licence:** the user's desktop licence lets them letter and
   export their own pages (exports are images and PDFs, and the font's
   embedding flag allows PDF embedding). Shipping it as a web font in the app
