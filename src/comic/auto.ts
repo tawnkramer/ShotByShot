@@ -1,9 +1,9 @@
 import { newId, type Project, type Shot } from '../state/schema';
 import { frameAspect } from '../shots/setup';
-import { panelHeads, type HeadSpot } from './heads';
+import { panelHeads } from './heads';
 import { layoutLetter, type TextMeasurer } from './layout';
 import { isBalloon, resolveStyle, type LetterElement } from './model';
-import { coveredFaces, placeLettering, type Fixed, type PlaceItem } from './place';
+import { placeLettering, type Fixed, type PlaceItem } from './place';
 import { letteringSpeeches, type Speech } from './script';
 
 /** A new, automatically placed balloon (or caption, for narration) for a speech. */
@@ -65,18 +65,18 @@ export function autoLetter(project: Project, shot: Shot, opts: AutoOptions): Let
   return placePanel(project, shot, [...current, ...added], opts);
 }
 
-export interface LetteringWarning { kind: 'face' | 'crowded'; message: string }
+export interface LetteringWarning { kind: 'crowded'; message: string }
 
-/** Problems a reader would notice: faces covered, or too much text for the panel. */
-export function letteringWarnings(project: Project, shot: Shot, opts: AutoOptions, heads: HeadSpot[] = panelHeads(project, shot)): LetteringWarning[] {
+/**
+ * Too much text for the panel. Covering part of someone is sometimes what
+ * the panel needs, so that isn't flagged; automatic placement still avoids faces.
+ */
+export function letteringWarnings(project: Project, shot: Shot, opts: AutoOptions): LetteringWarning[] {
   const lettering = shot.lettering ?? [];
   if (!lettering.length) return [];
   const aspect = frameAspect(project, shot);
   const boxes = lettering.map((e) => ({ x: e.x, y: e.y, ...sizeOf(project, e, aspect, opts) }));
-  const out: LetteringWarning[] = coveredFaces(boxes, heads, aspect).map((id) => ({
-    kind: 'face' as const,
-    message: `Lettering covers ${project.characters.find((c) => c.id === id)?.name ?? 'a face'}. Move it, frame wider, or shorten the line.`,
-  }));
+  const out: LetteringWarning[] = [];
   const covered = boxes.reduce((n, b) => n + b.w * b.h, 0);
   if (covered > 0.45) out.push({ kind: 'crowded', message: 'Lettering fills almost half the panel. Split the panel or shorten the lines.' });
   return out;

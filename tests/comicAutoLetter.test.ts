@@ -147,10 +147,10 @@ describe('autoLetter', () => {
     expect(again.find((e) => e.id === pinned.id)).toMatchObject({ x: 0.12, y: 0.9 });
   });
 
-  it('warns when lettering covers a face', () => {
+  it("doesn't warn about lettering over a face (sometimes the panel needs it)", () => {
     const p = twoHander();
     const [maya] = panelHeads(p, p.shots[0]);
     const shot = { ...p.shots[0], lettering: placePanel(p, p.shots[0], [], { measure }).concat([{ id: 'z', kind: 'speech', text: 'Covering you up', x: maya.x, y: maya.y }]) };
-    expect(letteringWarnings(p, shot, { measure }).map((w) => w.kind)).toContain('face');
+    expect(letteringWarnings(p, shot, { measure })).toEqual([]);
   });
 });
