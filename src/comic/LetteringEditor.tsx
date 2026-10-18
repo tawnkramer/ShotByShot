@@ -3,11 +3,12 @@ import { saveFile } from '../shell/download';
 import { mediumOf, newId, type Shot } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { safeFileName } from '../storage/projectFile';
-import { addLetter, raiseLetter, removeLetter, setLetteringDefault, styleLetter, updateLetter } from './commands';
+import { addLetter, raiseLetter, removeLetter, setLettering, setLetteringDefault, styleLetter, updateLetter } from './commands';
+import { autoLetter, letteringWarnings, placePanel, speechElement, type AutoOptions } from './auto';
 import { canvasMeasurer, drawLettering } from './draw';
 import { BUILTIN_FONTS, defaultLetteringFont, ensureFonts, listUserFonts } from './fonts';
 import { hitTest, layoutLetter, type LetterLayout, type TextMeasurer } from './layout';
-import { resolveStyle, type LetterElement, type LetterKind } from './model';
+import { BALLOON_KINDS, isBalloon, KIND_LABELS, resolveStyle, type LetterElement, type LetterKind } from './model';
 import { letteringSpeeches, type Speech } from './script';
 
 const EMPTY: LetterElement[] = [];
@@ -85,7 +86,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   }, []);
 
   const styles = useMemo(() => lettering.map((el) => resolveStyle(el, defaults, fallbackFont)), [lettering, defaults, fallbackFont]);
-  const familyKey = [...new Set(styles.map((s) => s.font))].sort().join('|');
+  const familyKey = [...new Set([...styles.map((s) => s.font), ...(fallbackFont ? [fallbackFont] : [])])].sort().join('|');
   useEffect(() => {
     let active = true;
     void ensureFonts(familyKey ? familyKey.split('|') : []).then(() => { if (active) setFontTick((t) => t + 1); });
@@ -114,19 +115,34 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   const placed = new Set(lettering.map((e) => e.lineId).filter(Boolean));
   const nextSpeech = speeches.panel.find((s) => !placed.has(s.lineId));
 
+  // Automatic placement measures with the fonts the lettering will be drawn in.
+  const autoOpts = (): AutoOptions => ({ measure: measurer(), fallbackFont });
+
   const add = (kind: LetterKind, speech?: Speech) => {
-    // Balloons from the script go down the panel in reading order, alternating sides.
-    const k = lettering.filter((e) => e.kind === 'speech').length;
-    const x = k % 2 ? 0.7 : 0.3, y = Math.min(0.8, 0.16 + 0.15 * k);
-    const el: LetterElement = kind === 'speech'
-      ? speech
-        ? { id: newId(), kind, text: speech.text, lineId: speech.lineId, x, y, tail: { x, y: Math.min(1, y + 0.2) } }
-        : { id: newId(), kind, text: '', x: 0.5, y: 0.22, tail: { x: 0.5, y: 0.42 } }
-      : { id: newId(), kind, text: '', x: 0.5, y: 0.08 };
+    if (speech && project) {
+      // From the script: placed around the characters, tail on the speaker.
+      const el = speechElement(project, speech);
+      dispatch(setLettering(shot.id, placePanel(project, shot, [...lettering, el], autoOpts()), el.kind === 'caption' ? 'Add caption' : 'Add balloon'));
+      setSelectedId(el.id);
+      setEditingText(false);
+      return;
+    }
+    const el: LetterElement = kind === 'caption'
+      ? { id: newId(), kind, text: '', x: 0.5, y: 0.08 }
+      : { id: newId(), kind, text: '', x: 0.5, y: 0.22, tail: { x: 0.5, y: 0.42 } };
     dispatch(addLetter(shot.id, el));
     setSelectedId(el.id);
-    setEditingText(!speech);
+    setEditingText(true);
   };
+
+  const letterPanel = () => {
+    if (!project) return;
+    dispatch(setLettering(shot.id, autoLetter(project, shot, autoOpts()), 'Letter panel'));
+    setSelectedId(undefined);
+  };
+
+  const warnings = useMemo(() => project && art ? letteringWarnings(project, shot, { measure: measurer(), fallbackFont }) : [],
+    [project, shot, art, fallbackFont, fontTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const finishText = () => {
     setEditingText(false);
@@ -166,10 +182,11 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
     if (d.mode === 'move') {
       // Whatever is picked up comes to the front.
       if (d.raise) { d.raise = false; dispatch(raiseLetter(shot.id, d.id, `letter-move:${d.id}`)); }
-      dispatch(updateLetter(shot.id, d.id, { x: clamp01(p.x + d.dx), y: clamp01(p.y + d.dy) }, 'Move lettering', `letter-move:${d.id}`));
+      // Moving by hand pins it: automatic placement leaves it alone from now on.
+      dispatch(updateLetter(shot.id, d.id, { x: clamp01(p.x + d.dx), y: clamp01(p.y + d.dy), auto: undefined }, 'Move lettering', `letter-move:${d.id}`));
     } else {
       const offset = d.dir * HANDLE_OFFSET_PX / p.h;
-      dispatch(updateLetter(shot.id, d.id, { tail: { x: clamp01(p.x), y: clamp01(p.y - offset) } }, 'Aim tail', `letter-tail:${d.id}`));
+      dispatch(updateLetter(shot.id, d.id, { tail: { x: clamp01(p.x), y: clamp01(p.y - offset) }, auto: undefined }, 'Aim tail', `letter-tail:${d.id}`));
     }
   };
 
@@ -217,6 +234,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
         <div className="lettering-actions">
           <button className="btn" onClick={() => add('speech', nextSpeech)} disabled={!art} title={nextSpeech ? `Adds ${nextSpeech.speaker ?? 'the next line'}: “${nextSpeech.text}”` : undefined}>+ Balloon</button>
           <button className="btn" onClick={() => add('caption')} disabled={!art}>+ Caption</button>
+          <button className="btn" onClick={letterPanel} disabled={!art} title="Adds the panel's dialogue and places every balloon you haven't moved by hand around the characters">Auto letter</button>
           <button className="btn" onClick={() => void exportPng()} disabled={!art || saving}>{saving ? 'Saving…' : 'Save PNG'}</button>
         </div>
       </header>
@@ -233,6 +251,11 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
         {lettering.length === 0 && art && <p className="lettering-hint small muted">Add a balloon or caption, then drag it into place.</p>}
       </div>
       {error && <p className="error small lettering-error" role="alert">{error}</p>}
+      {!sel && art && warnings.length > 0 && (
+        <ul className="lettering-warnings" aria-label="Lettering problems">
+          {warnings.map((w) => <li key={w.message} className="small">⚠ {w.message}</li>)}
+        </ul>
+      )}
       {!sel && art && (speeches.panel.length > 0 || speeches.scene.length > 0) && (
         <div className="lettering-script" aria-label="Dialogue to letter">
           <div className="row gap small muted">
@@ -259,8 +282,11 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
           <select aria-label="Font" value={selStyle.font} onChange={(e) => restyle({ font: e.target.value })}>
             {fonts.map((f) => <option key={f.family} value={f.family}>{f.label}</option>)}
           </select>
-          {sel.kind === 'speech' && <>
-            <button className="btn" onClick={() => restyle({ shape: selStyle.shape === 'oval' ? 'rounded' : 'oval' })}>{selStyle.shape === 'oval' ? 'Oval' : 'Rounded'}</button>
+          {isBalloon(sel.kind) && <>
+            <select aria-label="Balloon kind" value={sel.kind} onChange={(e) => dispatch(updateLetter(shot.id, sel.id, { kind: e.target.value as LetterKind }, 'Change balloon kind'))}>
+              {BALLOON_KINDS.map((k) => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
+            </select>
+            {(sel.kind === 'speech' || sel.kind === 'whisper' || sel.kind === 'electronic') && <button className="btn" onClick={() => restyle({ shape: selStyle.shape === 'oval' ? 'rounded' : 'oval' })}>{selStyle.shape === 'oval' ? 'Oval' : 'Rounded'}</button>}
             <button className="btn" onClick={() => dispatch(updateLetter(shot.id, sel.id, { tail: sel.tail ? undefined : { x: sel.x, y: Math.min(1, sel.y + 0.2) } }, sel.tail ? 'Remove tail' : 'Add tail'))}>{sel.tail ? 'No tail' : 'Tail'}</button>
           </>}
           <button className="btn" title="Use this look for every balloon or caption in the project" disabled={!sel.style} onClick={() => sel.style && dispatch(setLetteringDefault(sel.kind, sel.style))}>Make default</button>
@@ -269,10 +295,10 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
       )}
       {sel && editingText && (
         <div className="lettering-text-sheet">
-          <textarea autoFocus rows={3} aria-label={sel.kind === 'speech' ? 'Balloon text' : 'Caption text'} placeholder={sel.kind === 'speech' ? 'What they say…' : 'Caption…'} value={sel.text} maxLength={4000}
+          <textarea autoFocus rows={3} aria-label={isBalloon(sel.kind) ? 'Balloon text' : 'Caption text'} placeholder={isBalloon(sel.kind) ? 'What they say…' : 'Caption…'} value={sel.text} maxLength={4000}
             onChange={(e) => dispatch(updateLetter(shot.id, sel.id, { text: e.target.value }, 'Edit lettering text', `letter-text:${sel.id}`))} />
           <div className="row gap">
-            <span className="small muted grow">Your line breaks are kept. Without any, lines are shaped to fit the {sel.kind === 'speech' ? 'balloon' : 'caption'}.</span>
+            <span className="small muted grow">Your line breaks are kept. Without any, lines are shaped to fit the {isBalloon(sel.kind) ? 'balloon' : 'caption'}.</span>
             <button className="btn primary" onClick={finishText}>Done</button>
           </div>
         </div>

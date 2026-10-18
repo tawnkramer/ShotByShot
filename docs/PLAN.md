@@ -802,6 +802,26 @@ AI tools only depend on M1.
   "panel"; the assistant is told it's a comic (start keys only, leave room
   for balloons).
 
+- **C3 (Script-driven lettering) done:** balloon kinds speech, thought
+  (cloud and bubble trail), whisper (dashed), shout (burst, bold, larger)
+  and phone/radio (zig-zag tail), read from cue extensions and
+  parentheticals: (whispers), (shouting), all-caps lines with "!",
+  (thinking), (on phone), (V.O.) narration as a caption, (O.S.) with a tail
+  to the panel edge; the kind can be changed in the editor. `panelHeads`
+  projects every character's head and mouth through the panel's camera
+  (pure math, no rendering). `placeLettering` puts items in reading order
+  on a grid of candidate spots, scoring face overlap, overlap with other
+  lettering, reading order, height in the panel and distance above the
+  speaker's mouth; tails stop just short of the mouth, or point to the
+  edge for speakers out of frame or off panel. Auto-placed elements carry
+  `auto: true` and `targetCharacterId`; moving one or its tail by hand
+  pins it, and **Auto letter** adds missing dialogue and re-places only
+  the unpinned ones. Tapping a line or **+ Balloon** places that balloon
+  the same way. Warnings in the editor when lettering covers a face or
+  fills almost half the panel. **Letter all panels** on the Panels list
+  letters every panel that has dialogue and no lettering, as one undo
+  step.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or

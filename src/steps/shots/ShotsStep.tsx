@@ -1,5 +1,7 @@
 import { useBlobUrl } from '../../images/useBlobUrl';
 import { useLetteredUrl } from '../../comic/preview';
+import { letterEmptyPanels } from '../../comic/batch';
+import { setLetteringMany } from '../../comic/commands';
 import { Overlay } from '../../shell/Overlay';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -33,6 +35,18 @@ export function ShotsStep() {
 
   const comic = mediumOf(project) === 'comic';
   const unit = comic ? 'panel' : 'shot';
+  const dispatch = useProjectStore((s) => s.dispatch);
+  const [lettering, setLettering] = useState<string>();
+  const letterAll = async () => {
+    setLettering('Lettering…');
+    try {
+      const byShot = await letterEmptyPanels(useProjectStore.getState().project!);
+      if (byShot.size) dispatch(setLetteringMany(byShot));
+      setLettering(byShot.size ? `Lettered ${byShot.size} panel${byShot.size === 1 ? '' : 's'}. Open one to adjust it.` : 'Every panel with dialogue is already lettered.');
+    } catch (e) {
+      setLettering(e instanceof Error ? e.message : String(e));
+    }
+  };
   if (!project.shots.length) {
     return (
       <div className="page empty">
@@ -59,7 +73,11 @@ export function ShotsStep() {
         <button className="btn" disabled={running} onClick={() => submit('Plan the camera.')}>
           Plan cameras
         </button>
+        {comic && <button className="btn" disabled={lettering === 'Lettering…'} onClick={() => void letterAll()}>
+          Letter all panels
+        </button>}
       </div>
+      {lettering && <p className="muted small" role="status">{lettering}</p>}
       {!comic && <AudioPanel project={project} />}
       <ol className="shot-list">
         {project.shots.map((shot) => (

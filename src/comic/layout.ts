@@ -1,4 +1,4 @@
-import { type LetterElement, type LetterStyle } from './model';
+import { isBalloon, type LetterElement, type LetterStyle } from './model';
 import { hasLineBreaks, manualLines, wrapBalanced, wrapBroken, wrapOval } from './wrap';
 
 /**
@@ -21,7 +21,8 @@ export interface LetterLayout {
   lines: string[];
   /** Outer bounds of the balloon or caption, top-left origin. */
   box: Rect;
-  shape: 'oval' | 'rounded' | 'box';
+  /** cloud (thought) and burst (shout) are drawn around the same ellipse as oval. */
+  shape: 'oval' | 'rounded' | 'box' | 'cloud' | 'burst';
   cornerRadius: number;
   stroke: number;
   tail?: { tip: Point; base: [Point, Point] };
@@ -50,7 +51,7 @@ export function layoutLetter(el: LetterElement, style: LetterStyle, width: numbe
     ? manualLines(el.text)
     : hasLineBreaks(el.text)
       ? wrapBroken(el.text, m, style.maxWidth * width)
-      : el.kind === 'speech'
+      : isBalloon(el.kind)
       ? wrapOval(el.text, m, { minLines: style.minLines, maxLines: style.maxLines, maxWidth: style.maxWidth * width, minWidth: style.minWidth * width, edgeTightness: style.edgeTightness })
       : wrapBalanced(el.text, m, style.maxWidth * width);
   const lineWidth = (line: string, i: number) => i === 0 && style.dropCap && line.length > 1
@@ -60,27 +61,33 @@ export function layoutLetter(el: LetterElement, style: LetterStyle, width: numbe
   const textW = lines.length ? Math.max(...lines.map(lineWidth)) : font.px * 4;
   const textH = Math.max(1, lines.length) * lineHeight;
   const pad = style.padding * u;
-  const shape = el.kind === 'caption' ? 'box' : style.shape;
+  const shape = el.kind === 'caption' ? 'box' : el.kind === 'thought' ? 'cloud' : el.kind === 'shout' ? 'burst' : style.shape;
   // Same proportions as the original editor: ovals need more room at the sides.
-  const w = shape === 'oval' ? textW + pad * 2 : textW + pad;
-  const h = shape === 'oval' ? textH + pad * 1.3 : textH + pad;
+  const round = isRound(shape);
+  const w = round ? textW + pad * 2 : textW + pad;
+  const h = round ? textH + pad * 1.3 : textH + pad;
   const box = { x: el.x * width - w / 2, y: el.y * height - h / 2, w, h };
   const stroke = style.stroke * u;
   const layout: LetterLayout = {
     el, style, font, dropCapFont, lineHeight, lines, box, shape, stroke,
     cornerRadius: shape === 'rounded' ? Math.min(CORNER_RADIUS * u, w / 2, h / 2) : 0,
   };
-  if (el.kind === 'speech' && el.tail) {
+  if (isBalloon(el.kind) && el.tail) {
     const tip = clearTip(box, shape, { x: el.tail.x * width, y: el.tail.y * height }, TAIL_CLEARANCE * u);
     layout.tail = { tip, base: tailBase(box, shape, tip, style.tailWidth * u, stroke) };
   }
   return layout;
 }
 
+/** Shapes laid out around an ellipse. */
+export function isRound(shape: LetterLayout['shape']): boolean {
+  return shape === 'oval' || shape === 'cloud' || shape === 'burst';
+}
+
 /** Keeps a tail tip outside its balloon, pushing it out past the edge if it ended up inside. */
 export function clearTip(box: Rect, shape: LetterLayout['shape'], tip: Point, margin: number): Point {
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-  if (shape === 'oval') {
+  if (isRound(shape)) {
     const a = box.w / 2, b = box.h / 2;
     const dx = tip.x - cx, dy = tip.y - cy;
     if ((dx * dx) / (a * a) + (dy * dy) / (b * b) >= 1.2) return tip;
@@ -105,7 +112,7 @@ export function tailBase(box: Rect, shape: LetterLayout['shape'], tip: Point, ha
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
   const angle = Math.atan2(tip.y - cy, tip.x - cx);
   const inset = stroke * 0.7;
-  if (shape === 'oval') {
+  if (isRound(shape)) {
     const a = box.w / 2, b = box.h / 2;
     const offset = Math.atan2(halfWidth, Math.hypot(tip.x - cx, tip.y - cy));
     const onEllipse = (theta: number): Point => {

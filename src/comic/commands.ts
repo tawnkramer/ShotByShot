@@ -1,7 +1,7 @@
 import type { Draft } from 'immer';
 import type { Command } from '../state/commands';
 import type { Project } from '../state/schema';
-import type { LetterElement, LetterKind, LetterStyle } from './model';
+import { defaultsKey, type LetterElement, type LetterKind, type LetterStyle } from './model';
 
 function letters(d: Draft<Project>, shotId: string): Draft<LetterElement>[] | undefined {
   const shot = d.shots.find((s) => s.id === shotId);
@@ -12,7 +12,7 @@ function letters(d: Draft<Project>, shotId: string): Draft<LetterElement>[] | un
 
 export function addLetter(shotId: string, el: LetterElement): Command {
   return {
-    label: el.kind === 'speech' ? 'Add balloon' : 'Add caption',
+    label: el.kind === 'caption' ? 'Add caption' : 'Add balloon',
     apply: (d) => { letters(d, shotId)?.push(el); },
   };
 }
@@ -21,7 +21,7 @@ export function addLetter(shotId: string, el: LetterElement): Command {
  * Changes one balloon or caption. Pass a mergeKey for continuous edits
  * (dragging, typing) so they become one undo step.
  */
-export function updateLetter(shotId: string, id: string, patch: Partial<Omit<LetterElement, 'id' | 'kind'>>, label = 'Edit lettering', mergeKey?: string): Command {
+export function updateLetter(shotId: string, id: string, patch: Partial<Omit<LetterElement, 'id'>>, label = 'Edit lettering', mergeKey?: string): Command {
   return {
     label,
     mergeKey,
@@ -67,6 +67,32 @@ export function removeLetter(shotId: string, id: string): Command {
   };
 }
 
+/** Replaces a panel's lettering in one step, e.g. after placing it automatically. */
+export function setLettering(shotId: string, lettering: LetterElement[], label = 'Letter panel'): Command {
+  return {
+    label,
+    apply: (d) => {
+      const shot = d.shots.find((s) => s.id === shotId);
+      if (!shot) return;
+      if (lettering.length) shot.lettering = lettering;
+      else delete shot.lettering;
+    },
+  };
+}
+
+/** Letters several panels at once, as one undo step. */
+export function setLetteringMany(byShot: Map<string, LetterElement[]>, label = 'Letter panels'): Command {
+  return {
+    label,
+    apply: (d) => {
+      for (const shot of d.shots) {
+        const lettering = byShot.get(shot.id);
+        if (lettering) shot.lettering = lettering;
+      }
+    },
+  };
+}
+
 /** Moves an element to the top (drawn last), e.g. when it's picked up. */
 export function raiseLetter(shotId: string, id: string, mergeKey?: string): Command {
   return {
@@ -88,12 +114,14 @@ export function raiseLetter(shotId: string, id: string, mergeKey?: string): Comm
  */
 export function setLetteringDefault(kind: LetterKind, style: Partial<LetterStyle>): Command {
   return {
-    label: kind === 'speech' ? 'Set balloon style' : 'Set caption style',
+    label: kind === 'caption' ? 'Set caption style' : 'Set balloon style',
     apply: (d) => {
+      // All kinds of balloon share one project style.
+      const key = defaultsKey(kind);
       d.lettering ??= {};
-      d.lettering[kind] = { ...d.lettering[kind], ...style };
+      d.lettering[key] = { ...d.lettering[key], ...style };
       for (const shot of d.shots) for (const el of shot.lettering ?? []) {
-        if (el.kind !== kind || !el.style) continue;
+        if (defaultsKey(el.kind) !== key || !el.style) continue;
         for (const key of Object.keys(style) as (keyof LetterStyle)[]) delete el.style[key];
         if (!Object.keys(el.style).length) delete el.style;
       }
