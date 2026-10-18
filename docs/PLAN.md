@@ -862,6 +862,19 @@ AI tools only depend on M1.
   and the open panel's balloons numbered for `edit_lettering`; the starter
   suggestions are comic ones.
 
+- **Sound effects and titles:** a **Text** lettering kind (`sfx`): free
+  letters with no balloon, breaking lines only where typed. Style adds a
+  text colour, an outline (none/thin/normal/thick, with colour) and a drop
+  shadow (with colour) that falls down-right on the page whatever the
+  turn; elements gain `rotation` (degrees), set with a round handle above
+  the selection (snaps to 5°, levels near 0°) or by the assistant. Text
+  defaults to Bangers in yellow with a black outline and keeps its display
+  font when a user lettering font is the default; it has its own project
+  defaults. **Duplicate** copies any balloon, caption or text just below
+  the original (hand-placed, not tied to a script line), for repeated
+  sound effects. `edit_lettering` can add text at a position and set its
+  colour, outline, shadow, font and rotation.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or

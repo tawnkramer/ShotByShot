@@ -22,15 +22,20 @@ export interface LetterLayout {
   /** Outer bounds of the balloon or caption, top-left origin. */
   box: Rect;
   /** cloud (thought) and burst (shout) are drawn around the same ellipse as oval. */
-  shape: 'oval' | 'rounded' | 'box' | 'cloud' | 'burst';
+  /** text: free letters with no balloon (sound effects, titles). */
+  shape: 'oval' | 'rounded' | 'box' | 'cloud' | 'burst' | 'text';
   cornerRadius: number;
   stroke: number;
+  /** Clockwise turn about the box center, in radians (text only). */
+  rotation: number;
   tail?: { tip: Point; base: [Point, Point] };
 }
 
 /** The first letter of a drop-capped line is this much larger. */
 export const DROP_CAP_SCALE = 1.07;
 const LINE_HEIGHT = 1.3;
+/** Display lettering sits tighter. */
+const TEXT_LINE_HEIGHT = 1.05;
 /** How far a tail tip is kept outside its balloon, in thousandths of the panel width. */
 const TAIL_CLEARANCE = 17;
 const CORNER_RADIUS = 17;
@@ -46,8 +51,10 @@ export function layoutLetter(el: LetterElement, style: LetterStyle, width: numbe
   const font: FontSpec = { family: style.font, px: style.size * u, bold: style.bold, italic: style.italic };
   const dropCapFont: FontSpec = { ...font, px: font.px * DROP_CAP_SCALE };
   const m = (t: string) => measure(t, font);
+  const text = el.kind === 'sfx';
   // Line breaks the user typed always stand; only unbroken text is shaped automatically.
-  const lines = el.autoWrap === false
+  // Sound effects and titles break only where typed.
+  const lines = el.autoWrap === false || text
     ? manualLines(el.text)
     : hasLineBreaks(el.text)
       ? wrapBroken(el.text, m, style.maxWidth * width)
@@ -57,19 +64,22 @@ export function layoutLetter(el: LetterElement, style: LetterStyle, width: numbe
   const lineWidth = (line: string, i: number) => i === 0 && style.dropCap && line.length > 1
     ? measure(line[0], dropCapFont) + m(line.slice(1))
     : m(line);
-  const lineHeight = font.px * LINE_HEIGHT;
+  const lineHeight = font.px * (text ? TEXT_LINE_HEIGHT : LINE_HEIGHT);
   const textW = lines.length ? Math.max(...lines.map(lineWidth)) : font.px * 4;
   const textH = Math.max(1, lines.length) * lineHeight;
   const pad = style.padding * u;
-  const shape = el.kind === 'caption' ? 'box' : el.kind === 'thought' ? 'cloud' : el.kind === 'shout' ? 'burst' : style.shape;
+  const shape = text ? 'text' : el.kind === 'caption' ? 'box' : el.kind === 'thought' ? 'cloud' : el.kind === 'shout' ? 'burst' : style.shape;
   // Same proportions as the original editor: ovals need more room at the sides.
   const round = isRound(shape);
-  const w = round ? textW + pad * 2 : textW + pad;
-  const h = round ? textH + pad * 1.3 : textH + pad;
+  // Text has no balloon: its box is the letters plus their outline and shadow.
+  const edge = text ? (style.outline + style.shadow) * u : 0;
+  const w = text ? textW + edge * 2 : round ? textW + pad * 2 : textW + pad;
+  const h = text ? textH + edge * 2 : round ? textH + pad * 1.3 : textH + pad;
   const box = { x: el.x * width - w / 2, y: el.y * height - h / 2, w, h };
   const stroke = style.stroke * u;
   const layout: LetterLayout = {
     el, style, font, dropCapFont, lineHeight, lines, box, shape, stroke,
+    rotation: text ? ((el.rotation ?? 0) * Math.PI) / 180 : 0,
     cornerRadius: shape === 'rounded' ? Math.min(CORNER_RADIUS * u, w / 2, h / 2) : 0,
   };
   if (isBalloon(el.kind) && el.tail) {
@@ -142,7 +152,15 @@ export function tailBase(box: Rect, shape: LetterLayout['shape'], tip: Point, ha
 /** The topmost element under a point. */
 export function hitTest(layouts: LetterLayout[], p: Point): LetterLayout | undefined {
   for (let i = layouts.length - 1; i >= 0; i--) {
-    const { box } = layouts[i];
+    const { box, rotation } = layouts[i];
+    // Turned text is tested in its own frame.
+    if (rotation) {
+      const cx = box.x + box.w / 2, cy = box.y + box.h / 2, c = Math.cos(-rotation), s = Math.sin(-rotation);
+      const dx = p.x - cx, dy = p.y - cy;
+      const x = cx + dx * c - dy * s, y = cy + dx * s + dy * c;
+      if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) return layouts[i];
+      continue;
+    }
     if (p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h) return layouts[i];
   }
   return undefined;

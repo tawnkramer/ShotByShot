@@ -112,7 +112,7 @@ export function describeLettering(project: Project, shot: Project['shots'][numbe
   if (!list.length) return `Panel ${shot.number} has no lettering yet (letter_panels adds it from the script).`;
   const name = (id?: string) => project.characters.find((c) => c.id === id)?.name;
   return `Lettering on panel ${shot.number} (number. kind, tail to, placed, center x,y as 0..1, text):\n` + list.map((e, i) =>
-    `${i + 1}. ${e.kind}${name(e.targetCharacterId) ? `, to ${name(e.targetCharacterId)}` : ''}, ${e.auto ? 'auto' : 'by hand'}, at ${r(e.x)},${r(e.y)}: "${e.text.slice(0, 120)}"`).join('\n');
+    `${i + 1}. ${e.kind}${name(e.targetCharacterId) ? `, to ${name(e.targetCharacterId)}` : ''}, ${e.auto ? 'auto' : 'by hand'}, at ${r(e.x)},${r(e.y)}${e.rotation ? `, turned ${Math.round(e.rotation)}°` : ''}: "${e.text.slice(0, 120)}"`).join('\n');
 }
 
 function describeStage(stage: Project['stages'][number], overrides: Record<string, { position?: [number, number, number]; hidden?: boolean }> = {}): string {
