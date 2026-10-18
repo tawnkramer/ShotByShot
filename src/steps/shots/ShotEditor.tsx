@@ -1,6 +1,7 @@
 import { useBlobUrl } from '../../images/useBlobUrl';
 import { ZoomableImage } from '../../images/ImagePreview';
 import { ShotImagePanel } from './ShotImagePanel';
+import { LetteringOverlay, useLetteredUrl } from '../../comic/preview';
 import type { ShotCapture } from '../../images/shotImages';
 import { useCallback } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -33,6 +34,8 @@ export function ShotEditor({ shotId }: { shotId: string }) {
   const [capture, setCapture] = useState<(() => Promise<ShotCapture>) | null>(null);
   const onCaptureReady = useCallback((fn: (() => Promise<ShotCapture>) | null) => setCapture(() => fn), []);
   const artwork = useBlobUrl(shot.image?.blob);
+  // The shot image as it will read, with its balloons and captions.
+  const lettered = useLetteredUrl(artwork, shot.lettering, project.lettering);
   const [showPrevis, setShowPrevis] = useState(false);
   const [mode, setMode] = useState<Mode>('blocking');
   useEffect(() => { setShowPrevis(false); }, [mode, shotId, shot.image?.blob]);
@@ -117,7 +120,8 @@ export function ShotEditor({ shotId }: { shotId: string }) {
             gizmo={gizmo}
             onGizmoEnd={onGizmoEnd}
           /></div>
-          {showingArtwork && <ZoomableImage className="character-artwork" src={artwork!} alt={`Artwork for shot ${shot.number}`} />}
+          {mode === 'image' && !showingArtwork && shot.lettering?.length ? <LetteringOverlay lettering={shot.lettering} defaults={project.lettering} /> : null}
+          {showingArtwork && <ZoomableImage className="character-artwork" src={lettered ?? artwork!} alt={`Artwork for shot ${shot.number}`} />}
           {mode === 'image' && artwork && <div className="frame-tools"><button className="btn small-btn" onClick={() => setShowPrevis((value) => !value)}>{showingArtwork ? 'Previs' : 'Shot image'}</button></div>}
           {mode === 'camera' && !playing && (
             <CameraPad

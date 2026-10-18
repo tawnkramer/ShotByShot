@@ -8,6 +8,7 @@ import { canvasMeasurer, drawLettering } from './draw';
 import { BUILTIN_FONTS, defaultLetteringFont, ensureFonts, listUserFonts } from './fonts';
 import { hitTest, layoutLetter, type LetterLayout, type TextMeasurer } from './layout';
 import { resolveStyle, type LetterElement, type LetterKind } from './model';
+import { letteringSpeeches, type Speech } from './script';
 
 const EMPTY: LetterElement[] = [];
 /** The tail handle sits this far from the tip so a finger doesn't hide what it points at. */
@@ -39,6 +40,9 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   const shot = useProjectStore((s) => s.project?.shots.find((x) => x.id === initial.id)) ?? initial;
   const defaults = useProjectStore((s) => s.project?.lettering);
   const lettering = shot.lettering ?? EMPTY;
+  const project = useProjectStore((s) => s.project);
+  const speeches = useMemo(() => project ? letteringSpeeches(project, shot) : { panel: [], scene: [] }, [project?.script, shot.lineIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [wholeScene, setWholeScene] = useState(false);
   const [art, setArt] = useState<Art>();
   const [fallbackFont, setFallbackFont] = useState<string>();
   const [userFonts, setUserFonts] = useState<string[]>([]);
@@ -106,13 +110,21 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   const selected = layouts.find((l) => l.el.id === selectedId);
   useEffect(() => { if (selectedId && !lettering.some((e) => e.id === selectedId)) { setSelectedId(undefined); setEditingText(false); } }, [lettering, selectedId]);
 
-  const add = (kind: LetterKind) => {
+  const placed = new Set(lettering.map((e) => e.lineId).filter(Boolean));
+  const nextSpeech = speeches.panel.find((s) => !placed.has(s.lineId));
+
+  const add = (kind: LetterKind, speech?: Speech) => {
+    // Balloons from the script go down the panel in reading order, alternating sides.
+    const k = lettering.filter((e) => e.kind === 'speech').length;
+    const x = k % 2 ? 0.7 : 0.3, y = Math.min(0.8, 0.16 + 0.15 * k);
     const el: LetterElement = kind === 'speech'
-      ? { id: newId(), kind, text: '', x: 0.5, y: 0.22, tail: { x: 0.5, y: 0.42 } }
+      ? speech
+        ? { id: newId(), kind, text: speech.text, lineId: speech.lineId, x, y, tail: { x, y: Math.min(1, y + 0.2) } }
+        : { id: newId(), kind, text: '', x: 0.5, y: 0.22, tail: { x: 0.5, y: 0.42 } }
       : { id: newId(), kind, text: '', x: 0.5, y: 0.08 };
     dispatch(addLetter(shot.id, el));
     setSelectedId(el.id);
-    setEditingText(true);
+    setEditingText(!speech);
   };
 
   const finishText = () => {
@@ -202,7 +214,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
           <button className="btn ghost" onClick={onClose}>Close</button>
         </div>
         <div className="lettering-actions">
-          <button className="btn" onClick={() => add('speech')} disabled={!art}>+ Balloon</button>
+          <button className="btn" onClick={() => add('speech', nextSpeech)} disabled={!art} title={nextSpeech ? `Adds ${nextSpeech.speaker ?? 'the next line'}: “${nextSpeech.text}”` : undefined}>+ Balloon</button>
           <button className="btn" onClick={() => add('caption')} disabled={!art}>+ Caption</button>
           <button className="btn" onClick={() => void exportPng()} disabled={!art || saving}>{saving ? 'Saving…' : 'Save PNG'}</button>
         </div>
@@ -220,6 +232,22 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
         {lettering.length === 0 && art && <p className="lettering-hint small muted">Add a balloon or caption, then drag it into place.</p>}
       </div>
       {error && <p className="error small lettering-error" role="alert">{error}</p>}
+      {!sel && art && (speeches.panel.length > 0 || speeches.scene.length > 0) && (
+        <div className="lettering-script" aria-label="Dialogue to letter">
+          <div className="row gap small muted">
+            <span className="grow">{wholeScene ? 'Dialogue in this scene' : 'Dialogue in this panel'} · tap a line to add its balloon</span>
+            {speeches.scene.length > 0 && <button className="link-btn" onClick={() => setWholeScene((w) => !w)}>{wholeScene ? 'This panel only' : 'Whole scene'}</button>}
+          </div>
+          <div className="lettering-lines">
+            {[...speeches.panel, ...(wholeScene ? speeches.scene : [])].map((s) => (
+              <button key={s.lineId} className={`btn lettering-line${placed.has(s.lineId) ? ' placed' : ''}`} onClick={() => add('speech', s)} title={placed.has(s.lineId) ? 'Already lettered; tap to add it again' : undefined}>
+                <span>{placed.has(s.lineId) && <span aria-label="lettered">✓ </span>}{s.speaker && <strong>{s.speaker}</strong>}{s.speaker && ' '}{s.text}</span>
+              </button>
+            ))}
+            {!speeches.panel.length && !wholeScene && <span className="small muted">No dialogue in this panel.</span>}
+          </div>
+        </div>
+      )}
       {sel && selStyle && !editingText && (
         <div className="lettering-tools" role="toolbar" aria-label="Selected lettering">
           <button className="btn" onClick={() => setEditingText(true)}>Edit text</button>
@@ -243,7 +271,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
           <textarea autoFocus rows={3} aria-label={sel.kind === 'speech' ? 'Balloon text' : 'Caption text'} placeholder={sel.kind === 'speech' ? 'What they say…' : 'Caption…'} value={sel.text} maxLength={4000}
             onChange={(e) => dispatch(updateLetter(shot.id, sel.id, { text: e.target.value }, 'Edit lettering text', `letter-text:${sel.id}`))} />
           <div className="row gap">
-            <label className="row gap small grow"><input type="checkbox" checked={sel.autoWrap !== false} onChange={(e) => dispatch(updateLetter(shot.id, sel.id, { autoWrap: e.target.checked ? undefined : false }))} /> Shape lines automatically</label>
+            <span className="small muted grow">Your line breaks are kept. Without any, lines are shaped to fit the {sel.kind === 'speech' ? 'balloon' : 'caption'}.</span>
             <button className="btn primary" onClick={finishText}>Done</button>
           </div>
         </div>

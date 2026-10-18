@@ -50,7 +50,9 @@ export const letterElementSchema = z.object({
   y: z.number(),
   /** Speech only: where the tail points, 0..1 of the panel. Absent = no tail. */
   tail: z.object({ x: z.number(), y: z.number() }).optional(),
-  /** Wrap the text to a balloon shape (default). Off: lines break where the text has newlines. */
+  /** The script line the text was taken from. The text is a copy and can be edited freely. */
+  lineId: z.string().optional(),
+  /** Wrap the text to a balloon shape (default; typed line breaks always stand). Off: only typed breaks. */
   autoWrap: z.boolean().optional(),
   /** Overrides on top of the project's style for this kind. */
   style: letterStyleSchema.partial().optional(),

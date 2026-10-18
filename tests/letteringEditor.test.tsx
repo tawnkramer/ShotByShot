@@ -71,6 +71,31 @@ it('adds a balloon, takes its text, restyles and deletes it', async () => {
   expect(letters()).toBeUndefined();
 });
 
+it("seeds balloons from the panel's dialogue", async () => {
+  const project = createProject('Comic');
+  project.script = [
+    { id: 'c1', index: 0, type: 'character', text: 'MAYA' }, { id: 'd1', index: 1, type: 'dialogue', text: 'You came back.' },
+    { id: 'c2', index: 2, type: 'character', text: 'LEO' }, { id: 'd2', index: 3, type: 'dialogue', text: 'I never left.' },
+  ];
+  project.shots.push({ id: 's', number: '1', lineIds: ['c1', 'd1', 'c2', 'd2'] });
+  useProjectStore.getState().open(project);
+  host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+  await act(async () => root.render(<LetteringEditor shot={project.shots[0]} art={new Blob(['png'])} artLabel="shot image" onClose={() => {}} />));
+  await settle();
+  const lines = () => [...document.querySelectorAll<HTMLButtonElement>('.lettering-line')];
+  expect(lines().map((b) => b.textContent)).toEqual(['MAYA You came back.', 'LEO I never left.']);
+  await act(async () => button('+ Balloon').click());
+  expect(letters()![0]).toMatchObject({ text: 'You came back.', lineId: 'd1' });
+  // Seeded balloons don't open the keyboard; deselect to see the lines again.
+  expect(document.querySelector('.lettering-text-sheet')).toBeNull();
+  await act(async () => { document.querySelector<HTMLElement>('.lettering-stage')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })); });
+  expect(lines()[0].classList.contains('placed')).toBe(true);
+  await act(async () => lines()[1].click());
+  expect(letters()!.map((e) => e.text)).toEqual(['You came back.', 'I never left.']);
+  expect(letters()![1].x).toBeGreaterThan(letters()![0].x);
+  expect(letters()![1].y).toBeGreaterThan(letters()![0].y);
+});
+
 it('drops a caption left empty', async () => {
   await open();
   await act(async () => button('+ Caption').click());

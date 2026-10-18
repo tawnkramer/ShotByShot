@@ -160,6 +160,18 @@ export function wrapBalanced(text: string, measure: Measure, maxWidth: number): 
   return wrapGreedy(words, measure, hi);
 }
 
+export function hasLineBreaks(text: string): boolean {
+  return text.trim().includes('\n');
+}
+
+/**
+ * Text the user broke into lines: every typed break stands (blank lines
+ * too), and a line only wraps further if it's wider than maxWidth.
+ */
+export function wrapBroken(text: string, measure: Measure, maxWidth: number): string[] {
+  return manualLines(text).flatMap((line) => (line ? wrapBalanced(line, measure, maxWidth) : ['']));
+}
+
 /** Lines exactly as typed: newlines break, nothing else. */
 export function manualLines(text: string): string[] {
   const lines = text.split('\n').map((l) => l.trim());

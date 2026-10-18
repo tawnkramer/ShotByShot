@@ -777,7 +777,14 @@ AI tools only depend on M1.
   Daughter and Covered By Your Grace are bundled (OFL, precached for
   offline); **Settings → Lettering fonts** adds the user's own licensed fonts
   (e.g. Wild Words), kept in IndexedDB, never in project files; the first one
-  is the default lettering font.
+  is the default lettering font. After the first round of feedback: the
+  editor lists the panel's dialogue (or the whole scene's), one speech per
+  line with parentheticals dropped; tapping one, or **+ Balloon**, adds a
+  balloon with that text (`lineId` remembers the source, the text stays
+  editable), placed down the panel in reading order. Typed line breaks
+  always stand; only unbroken text is shaped automatically. Lettering shows
+  outside the editor too: baked onto the shot image in the frame and on
+  the list thumbnails, and drawn over the previs frame on the Image tab.
 
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
