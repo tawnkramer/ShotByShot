@@ -8,6 +8,7 @@ import { buildLabel } from '../version';
 import { AUTO_CHAT_MODEL_SETTING, CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, chatModel as resolveChatModel, chosenChatModel } from '../ai/chat';
 import { ComfySettings } from '../comfy/ComfySettings';
 import { OpenArtSettings } from '../openart/OpenArtSettings';
+import { LetteringFontsSettings } from '../comic/LetteringFontsSettings';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -142,6 +143,7 @@ export function SettingsPage() {
 
           <ComfySettings />
           <OpenArtSettings />
+          <LetteringFontsSettings />
 
           <section className="panel">
             <h2>Storage</h2>

@@ -759,6 +759,26 @@ AI tools only depend on M1.
   DAY 12", "12A. EXT. …", Fountain "#12A#"), otherwise they count up from the
   last number. Older projects switch to scene.shot when opened.
 
+- **C2 (Comic lettering core) done, ahead of C1:** `src/comic/` ports the
+  comic text editor: measured oval wrapping (line count 2–7, sine width
+  profile, ~90 % fill scoring, word rebalancing), balanced caption wrapping,
+  the tail geometry (base points on the outline, inset under the stroke, tips
+  pushed clear of the balloon) and Canvas 2D drawing, with drop caps.
+  Lettering is stored on the shot (`shot.lettering`): centers are 0–1 of the
+  panel and lengths are thousandths of the panel width, so the same lettering
+  exports identically at any resolution. Styles layer built-in defaults,
+  project defaults (`project.lettering`, set with **Make default**) and
+  per-element overrides. The editor opens from the shot's Image tab (**Add
+  Lettering**) on the shot image, or on the previs frame until there is one:
+  + Balloon / + Caption, drag to move (one undo step), a large offset handle
+  to aim tails, text sheet with automatic or typed line breaks, size, bold,
+  italic, font, oval/rounded, tail on/off, delete, and **Save PNG** at the
+  art's full size. Fonts: Comic Neue, Bangers, Permanent Marker, Architects
+  Daughter and Covered By Your Grace are bundled (OFL, precached for
+  offline); **Settings → Lettering fonts** adds the user's own licensed fonts
+  (e.g. Wild Words), kept in IndexedDB, never in project files; the first one
+  is the default lettering font.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or

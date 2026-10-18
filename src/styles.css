@@ -708,3 +708,24 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .video-group-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .video-group-item .video-slot-media { max-height: 72px; }
 .video-group-item audio { flex-basis: 100%; }
+
+/* Comic lettering editor (comic/LetteringEditor.tsx) */
+.lettering-dialog { width: min(1200px, 100%); height: var(--image-editor-height, var(--app-height, 100dvh)); }
+.lettering-head { display: flex; flex-direction: column; gap: 8px; }
+.lettering-head h2 { margin: 0; }
+.lettering-actions { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.lettering-actions .btn { flex: none; }
+.lettering-stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; container-type: size; background: #0b0b0c; position: relative; }
+.lettering-art { position: relative; max-width: 100%; max-height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.lettering-art canvas { display: block; width: 100%; height: 100%; }
+.lettering-hint { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; pointer-events: none; }
+.lettering-selection { position: absolute; outline: 2px solid #4a9eff; outline-offset: 3px; pointer-events: none; }
+.lettering-selection.oval { border-radius: 50%; }
+.lettering-tail-link { position: absolute; width: 0; border-left: 2px dashed #4a9eff; pointer-events: none; }
+.lettering-tail-handle { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: #4a9eff; border: 3px solid #fff; box-shadow: 0 1px 6px rgb(0 0 0 / 0.5); cursor: grab; touch-action: none; }
+.lettering-tools { flex: none; display: flex; gap: 6px; padding: 10px 12px max(10px, env(safe-area-inset-bottom)); overflow-x: auto; border-top: 1px solid var(--border); scrollbar-width: none; }
+.lettering-tools > * { flex: none; }
+.lettering-tools select { max-width: 160px; min-height: 40px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
+.lettering-text-sheet { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+.lettering-text-sheet textarea { width: 100%; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; resize: none; font-size: 16px; }
+.lettering-error { margin: 0; padding: 6px 12px; }

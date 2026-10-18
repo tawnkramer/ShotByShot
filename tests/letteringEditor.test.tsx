@@ -1,0 +1,108 @@
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { LetteringEditor } from '../src/comic/LetteringEditor';
+import { createProject } from '../src/state/schema';
+import { useProjectStore } from '../src/state/store';
+
+(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+let root: ReturnType<typeof createRoot>, host: HTMLDivElement;
+
+beforeEach(() => {
+  vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 800, height: 600, close() {} })));
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+});
+afterEach(async () => {
+  if (root) await act(async () => root.unmount());
+  host?.remove();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  await useProjectStore.getState().close();
+});
+
+const letters = () => useProjectStore.getState().project!.shots[0].lettering;
+const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label || b.getAttribute('aria-label') === label)!;
+const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+function type(el: HTMLTextAreaElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(el, value);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function pointer(target: Element, type: string, x: number, y: number) {
+  target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }));
+}
+
+async function open() {
+  const project = createProject('Comic');
+  project.shots.push({ id: 's', number: '1.1', lineIds: ['l'] });
+  useProjectStore.getState().open(project);
+  host = document.createElement('div');
+  document.body.append(host);
+  root = createRoot(host);
+  const onClose = vi.fn();
+  await act(async () => root.render(<LetteringEditor shot={project.shots[0]} art={new Blob(['png'])} artLabel="shot image" onClose={onClose} />));
+  await settle();
+  return onClose;
+}
+
+it('adds a balloon, takes its text, restyles and deletes it', async () => {
+  await open();
+  expect(document.querySelector('canvas')?.getAttribute('width')).toBe('800');
+  await act(async () => button('+ Balloon').click());
+  expect(letters()).toHaveLength(1);
+  expect(letters()![0]).toMatchObject({ kind: 'speech', text: '', tail: { x: 0.5 } });
+  const text = document.querySelector<HTMLTextAreaElement>('.lettering-text-sheet textarea')!;
+  await act(async () => type(text, 'Where were you last night?'));
+  expect(letters()![0].text).toBe('Where were you last night?');
+  await act(async () => button('Done').click());
+  expect(document.querySelector('.lettering-text-sheet')).toBeNull();
+  expect(document.querySelector('[role="toolbar"]')).not.toBeNull();
+  await act(async () => button('Larger text').click());
+  expect(letters()![0].style).toEqual({ size: 29 });
+  await act(async () => button('Oval').click());
+  expect(letters()![0].style?.shape).toBe('rounded');
+  await act(async () => button('No tail').click());
+  expect(letters()![0].tail).toBeUndefined();
+  await act(async () => button('Make default').click());
+  expect(useProjectStore.getState().project!.lettering?.speech).toEqual({ size: 29, shape: 'rounded' });
+  expect(letters()![0].style).toBeUndefined();
+  await act(async () => button('Delete').click());
+  expect(letters()).toBeUndefined();
+});
+
+it('drops a caption left empty', async () => {
+  await open();
+  await act(async () => button('+ Caption').click());
+  expect(letters()).toHaveLength(1);
+  await act(async () => button('Done').click());
+  expect(letters()).toBeUndefined();
+});
+
+it('drags a balloon as one undo step, and aims its tail', async () => {
+  await open();
+  await act(async () => button('+ Balloon').click());
+  await act(async () => type(document.querySelector<HTMLTextAreaElement>('.lettering-text-sheet textarea')!, 'Hey!'));
+  await act(async () => button('Done').click());
+  const art = document.querySelector('[data-testid="lettering-art"]')!;
+  vi.spyOn(art, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} });
+  const before = useProjectStore.getState().history.past.length;
+  await act(async () => {
+    pointer(art, 'pointerdown', 400, 132);
+    pointer(art, 'pointermove', 440, 150);
+    pointer(art, 'pointermove', 480, 162);
+    pointer(art, 'pointerup', 480, 162);
+  });
+  expect(letters()![0].x).toBeCloseTo(0.6);
+  expect(letters()![0].y).toBeCloseTo(0.27);
+  expect(useProjectStore.getState().history.past.length).toBe(before + 1);
+  const handle = document.querySelector('.lettering-tail-handle')!;
+  await act(async () => {
+    pointer(handle, 'pointerdown', 400, 300);
+    pointer(art, 'pointermove', 200, 456);
+    pointer(art, 'pointerup', 200, 456);
+  });
+  // The handle sits 56 px below the tip, so the tip lands above the finger.
+  expect(letters()![0].tail!.x).toBeCloseTo(0.25);
+  expect(letters()![0].tail!.y).toBeCloseTo(400 / 600);
+});

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { letterElementSchema, letteringDefaultsSchema } from '../comic/model';
 
 export const SCHEMA_VERSION = 1;
 
@@ -248,6 +249,8 @@ export const shotSchema = z.looseObject({
   durationSec: z.number().positive().optional(),
   /** Set when the duration was typed in, so it isn't re-estimated. */
   durationLocked: z.boolean().optional(),
+  /** Comic lettering over the shot's art, in drawing order. */
+  lettering: z.array(letterElementSchema).optional(),
 });
 
 export const projectSchema = z.object({
@@ -266,6 +269,8 @@ export const projectSchema = z.object({
   props: z.array(propSchema),
   /** Spoken dialogue, by script line id. Valid while `sig` matches the line's current voice and text. */
   audio: z.record(z.string(), z.object({ sig: z.string(), blob: z.string(), durationSec: z.number().positive() })).default({}),
+  /** Lettering style defaults for this project, per kind. */
+  lettering: letteringDefaultsSchema.optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
