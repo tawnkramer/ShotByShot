@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { saveFile } from '../shell/download';
-import { newId, type Shot } from '../state/schema';
+import { mediumOf, newId, type Shot } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { safeFileName } from '../storage/projectFile';
 import { addLetter, raiseLetter, removeLetter, setLetteringDefault, styleLetter, updateLetter } from './commands';
@@ -39,6 +39,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
   const shot = useProjectStore((s) => s.project?.shots.find((x) => x.id === initial.id)) ?? initial;
   const defaults = useProjectStore((s) => s.project?.lettering);
   const lettering = shot.lettering ?? EMPTY;
+  const unit = useProjectStore((s) => s.project && mediumOf(s.project) === 'comic') ? 'Panel' : 'Shot';
   const [art, setArt] = useState<Art>();
   const [fallbackFont, setFallbackFont] = useState<string>();
   const [userFonts, setUserFonts] = useState<string[]>([]);
@@ -180,7 +181,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
       drawLettering(ctx, lettering.map((el, i) => layoutLetter(el, styles[i], art.width, art.height, canvasMeasurer(ctx))));
       const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('Could not make the PNG.');
-      await saveFile(blob, `${safeFileName(`Shot ${shot.number}`)}_lettered.png`, 'image/png');
+      await saveFile(blob, `${safeFileName(`${unit} ${shot.number}`)}_lettered.png`, 'image/png');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -198,7 +199,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
     <dialog ref={dialog} className="character-image-dialog lettering-dialog" aria-labelledby="lettering-title" onCancel={(e) => { e.preventDefault(); if (editingText) finishText(); else onClose(); }}>
       <header className="image-editor-head lettering-head">
         <div className="row gap">
-          <div className="grow"><h2 id="lettering-title">Shot {shot.number} · Lettering</h2><span className="small muted">On the {artLabel}</span></div>
+          <div className="grow"><h2 id="lettering-title">{unit} {shot.number} · Lettering</h2><span className="small muted">On the {artLabel}</span></div>
           <button className="btn ghost" onClick={onClose}>Close</button>
         </div>
         <div className="lettering-actions">
@@ -212,7 +213,7 @@ export function LetteringEditor({ shot: initial, art: artBlob, artLabel, onClose
           <div ref={surface} className="lettering-art" style={{ aspectRatio: `${art.width} / ${art.height}`, width: `min(100cqw, calc(100cqh * ${art.width / art.height}))` }}
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
             data-testid="lettering-art">
-            <canvas ref={canvas} width={art.width} height={art.height} aria-label={`Shot ${shot.number} with lettering`} role="img" />
+            <canvas ref={canvas} width={art.width} height={art.height} aria-label={`${unit} ${shot.number} with lettering`} role="img" />
             {selected && <Selection layout={selected} width={art.width} height={art.height} dir={tailDir} onTailDown={onTailDown} />}
           </div>
         )}

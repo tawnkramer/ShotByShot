@@ -3,13 +3,13 @@ import { Overlay } from '../../shell/Overlay';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProjectStore } from '../../state/store';
-import type { Project, Shot } from '../../state/schema';
+import { mediumOf, type Project, type Shot } from '../../state/schema';
 import { effectiveShots, shotLines } from '../../shots/setup';
 import { ScriptExcerpt } from '../common/ScriptExcerpt';
 import { renderShotThumbnail } from '../../shots/thumbnail';
 import { dialogueSplitPoints, mergeWithNext, splitShot } from '../../shots/commands';
 import { useLongPress } from '../../shell/useLongPress';
-import { aspectOf } from '../../shots/setup';
+import { frameAspect } from '../../shots/setup';
 import { AudioPanel } from '../common/AudioPanel';
 import { useChatUI } from '../../shell/chatUI';
 
@@ -30,11 +30,13 @@ export function ShotsStep() {
     if (id) document.getElementById(`shot-${id}`)?.scrollIntoView({ block: 'center' });
   }, []);
 
+  const comic = mediumOf(project) === 'comic';
+  const unit = comic ? 'panel' : 'shot';
   if (!project.shots.length) {
     return (
       <div className="page empty">
-        <p>No shots yet.</p>
-        <p className="muted small">Import a script in Story to break it into shots.</p>
+        <p>No {unit}s yet.</p>
+        <p className="muted small">Import a script in Story to break it into {unit}s.</p>
       </div>
     );
   }
@@ -45,7 +47,9 @@ export function ShotsStep() {
   return (
     <div className="page shots-page">
       <p className="muted small">
-        {project.shots.length} shots · {formatTime(totalSec)} · Tap a shot to edit it. Press and hold to merge or split.
+        {comic
+          ? `${project.shots.length} panels · Tap a panel to edit it. Press and hold to merge or split.`
+          : `${project.shots.length} shots · ${formatTime(totalSec)} · Tap a shot to edit it. Press and hold to merge or split.`}
       </p>
       <div className="row plan-row">
         <button className="btn" disabled={running} onClick={() => submit('Plan the blocking.')}>
@@ -55,7 +59,7 @@ export function ShotsStep() {
           Plan cameras
         </button>
       </div>
-      <AudioPanel project={project} />
+      {!comic && <AudioPanel project={project} />}
       <ol className="shot-list">
         {project.shots.map((shot) => (
           <li key={shot.id} id={`shot-${shot.id}`}>
@@ -120,7 +124,8 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
   const names = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId)?.name).filter(Boolean);
   const lines = shotLines(project, shot);
   const moving = eff.camera.mode === 'moving';
-  const aspect = aspectOf(project);
+  const comic = mediumOf(project) === 'comic';
+  const aspect = frameAspect(project, shot);
   // Tall frames (9:16) sit beside the script instead of filling the screen above it.
   const portrait = aspect < 1;
 
@@ -129,12 +134,12 @@ function ShotCard({ project, shot, onOpen, onMenu }: { project: Project; shot: S
       <span className={`shot-thumb${artwork ? ' artwork' : ''}`} style={{ aspectRatio: String(aspect) }}>
         {artwork || thumb ? <img src={artwork || thumb || undefined} alt="" draggable={false} /> : <span className="muted small">{stage ? '' : 'No stage yet'}</span>}
         <span className="shot-number">{shot.number}</span>
-        <span className="shot-duration">{eff.durationSec.toFixed(1)} s</span>
+        {comic ? shot.lettering?.length ? <span className="shot-duration">{shot.lettering.length} lettered</span> : null : <span className="shot-duration">{eff.durationSec.toFixed(1)} s</span>}
       </span>
       <span className="shot-info">
         <span className="shot-meta small">
           <strong>{stage?.name ?? 'No stage'}</strong>
-          <span className="muted">{moving ? 'Moving camera' : 'Fixed camera'}</span>
+          {!comic && <span className="muted">{moving ? 'Moving camera' : 'Fixed camera'}</span>}
         </span>
         {names.length > 0 && <span className="muted small">{names.join(', ')}</span>}
         <ScriptExcerpt lines={lines} />
@@ -147,18 +152,20 @@ function ShotMenu({ project, shot, onClose, onEdit, onSplit }: { project: Projec
   const dispatch = useProjectStore((s) => s.dispatch);
   const i = project.shots.findIndex((s) => s.id === shot.id);
   const next = project.shots[i + 1];
+  const Unit = mediumOf(project) === 'comic' ? 'Panel' : 'Shot';
+  const unit = Unit.toLowerCase();
   return (
     <Overlay>
       <div className="scrim" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-label={`Shot ${shot.number}`}>
+      <div className="sheet" role="dialog" aria-label={`${Unit} ${shot.number}`}>
         <div className="sheet-head">
-          <strong>Shot {shot.number}</strong>
+          <strong>{Unit} {shot.number}</strong>
           <button className="btn ghost" onClick={onClose}>
             Close
           </button>
         </div>
         <button className="btn" onClick={onEdit}>
-          Edit shot
+          Edit {unit}
         </button>
         <button
           className="btn"
@@ -168,10 +175,10 @@ function ShotMenu({ project, shot, onClose, onEdit, onSplit }: { project: Projec
             onClose();
           }}
         >
-          {next ? `Merge with shot ${next.number} below` : 'Merge with shot below'}
+          {next ? `Merge with ${unit} ${next.number} below` : `Merge with ${unit} below`}
         </button>
         <button className="btn" disabled={shot.lineIds.length < 2} onClick={onSplit}>
-          Split shot…
+          Split {unit}…
         </button>
       </div>
     </Overlay>
@@ -182,6 +189,7 @@ function SplitSheet({ project, shot, onClose }: { project: Project; shot: Shot; 
   const dispatch = useProjectStore((s) => s.dispatch);
   const lines = shotLines(project, shot);
   const [cuts, setCuts] = useState(() => new Set(dialogueSplitPoints(project, shot)));
+  const unit = mediumOf(project) === 'comic' ? 'panel' : 'shot';
   const toggle = (id: string) =>
     setCuts((c) => {
       const n = new Set(c);
@@ -192,9 +200,9 @@ function SplitSheet({ project, shot, onClose }: { project: Project; shot: Shot; 
   return (
     <Overlay>
       <div className="scrim" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-label="Split shot">
+      <div className="sheet" role="dialog" aria-label={`Split ${unit}`}>
         <div className="sheet-head">
-          <strong>Split shot {shot.number}</strong>
+          <strong>Split {unit} {shot.number}</strong>
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>
@@ -222,7 +230,7 @@ function SplitSheet({ project, shot, onClose }: { project: Project; shot: Shot; 
             onClose();
           }}
         >
-          {cuts.size ? `Split into ${cuts.size + 1} shots` : 'Choose where to cut'}
+          {cuts.size ? `Split into ${cuts.size + 1} ${unit}s` : 'Choose where to cut'}
         </button>
       </div>
     </Overlay>

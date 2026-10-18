@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Project, Shot } from '../../state/schema';
+import { mediumOf, type Project, type Shot } from '../../state/schema';
 import { useProjectStore } from '../../state/store';
 import { setShotImagePrompt } from '../../shots/commands';
-import { aspectOf } from '../../shots/setup';
+import { frameAspect } from '../../shots/setup';
 import { ConceptImageEditor } from '../../images/ConceptImageEditor';
 import { useBlobUrl } from '../../images/useBlobUrl';
 import { shotImagePrompt, shotReferences, type ShotCapture, type ShotReference } from '../../images/shotImages';
@@ -44,14 +44,15 @@ export function ShotImagePanel({ project, shot, capture }: {project:Project;shot
     finally { if (mounted.current) setBusy(undefined); }
   };
   const letterCount = shot.lettering?.length ?? 0;
+  const comic = mediumOf(project) === 'comic';
   const changePrompt = (value:string) => dispatch(setShotImagePrompt(shot.id,value));
   return <div className="inspector shot-image-panel">
-    <button className="btn primary" disabled={!capture || Boolean(busy)} onClick={() => void prepare('image')}>{busy === 'image' ? 'Preparing references…' : 'Generate Shot Image'}</button>
-    <button className="btn" disabled={!capture || Boolean(busy)} onClick={() => void prepare('video')}>{busy === 'video' ? 'Preparing…' : 'Generate Shot Video'}</button>
+    <button className="btn primary" disabled={!capture || Boolean(busy)} onClick={() => void prepare('image')}>{busy === 'image' ? 'Preparing references…' : comic ? 'Generate Panel Image' : 'Generate Shot Image'}</button>
+    {!comic && <button className="btn" disabled={!capture || Boolean(busy)} onClick={() => void prepare('video')}>{busy === 'video' ? 'Preparing…' : 'Generate Shot Video'}</button>}
     <button className="btn" disabled={(!capture && !shot.image) || Boolean(busy)} onClick={() => void openLettering()}>{busy === 'lettering' ? 'Opening…' : letterCount ? `Edit Lettering (${letterCount})` : 'Add Lettering'}</button>
     {video && <video className="shot-video-inline" src={video} controls playsInline aria-label={`Video for shot ${shot.number}`} />}
     {error && <p className="error small" role="alert">{error}</p>}
-    {bundle?.kind === 'image' && <ConceptImageEditor subject={{id:shot.id,name:`Shot ${shot.number}`,image:shot.image}} kind="shot" defaultPrompt={shot.imagePrompt ?? ''} reference={bundle.capture.blob} references={bundle.references} imageContext={{frameProgress:bundle.capture.progress,aspect:aspectOf(bundle.project)}} buildPrompt={(extra) => shotImagePrompt(bundle.project,bundle.shot,bundle.capture,bundle.references,extra)} onPromptChange={changePrompt} onClose={() => setBundle(undefined)} />}
+    {bundle?.kind === 'image' && <ConceptImageEditor subject={{id:shot.id,name:`${comic ? 'Panel' : 'Shot'} ${shot.number}`,image:shot.image}} kind="shot" defaultPrompt={shot.imagePrompt ?? ''} reference={bundle.capture.blob} references={bundle.references} imageContext={{frameProgress:bundle.capture.progress,aspect:frameAspect(bundle.project,bundle.shot)}} buildPrompt={(extra) => shotImagePrompt(bundle.project,bundle.shot,bundle.capture,bundle.references,extra)} onPromptChange={changePrompt} onClose={() => setBundle(undefined)} />}
     {lettering && <LetteringEditor shot={shot} art={lettering.art} artLabel={lettering.label} onClose={() => setLettering(undefined)} />}
     {bundle?.kind === 'video' && <ShotVideoEditor project={bundle.project} shot={shot} previsFrame={{blob:bundle.capture.blob,characterIds:bundle.capture.characterIds}} onClose={() => setBundle(undefined)} />}
   </div>;

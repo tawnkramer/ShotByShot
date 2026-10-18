@@ -26,7 +26,7 @@ describe('breakdownScript', () => {
   const lines = load(SAMPLE_SCRIPT);
 
   it('covers every non-front-matter line exactly once, in order', () => {
-    for (const mode of ['line', 'pair', 'mixed'] as const) {
+    for (const mode of ['line', 'pair', 'mixed', 'panels'] as const) {
       const shots = breakdownScript(lines, mode, id);
       const covered = shots.flatMap((s) => s.lineIds);
       const expected = lines.filter((l) => l.type !== 'title' && l.type !== 'description').map((l) => l.id);
@@ -35,7 +35,7 @@ describe('breakdownScript', () => {
   });
 
   it('never crosses a scene heading', () => {
-    for (const mode of ['line', 'pair', 'mixed'] as const) {
+    for (const mode of ['line', 'pair', 'mixed', 'panels'] as const) {
       for (const shot of breakdownScript(lines, mode, id)) {
         const sceneIdx = shot.lineIds.findIndex((i) => lines.find((l) => l.id === i)!.type === 'scene');
         expect(sceneIdx === -1 || sceneIdx === 0).toBe(true);

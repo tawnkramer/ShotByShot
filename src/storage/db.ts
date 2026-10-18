@@ -5,6 +5,7 @@ export interface ProjectSummary {
   id: string;
   name: string;
   aspect: string;
+  medium?: Project['medium'];
   updatedAt: number;
   lastExportedAt?: number;
 }
@@ -71,6 +72,7 @@ export async function saveProject(project: Project): Promise<void> {
     id: project.id,
     name: project.name,
     aspect: project.aspect,
+    medium: project.medium,
     updatedAt: project.updatedAt,
     lastExportedAt: prev?.lastExportedAt,
   });

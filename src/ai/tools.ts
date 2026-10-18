@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Command } from '../state/commands';
 import {
-  AGE_BANDS, BUILDS, BREAKDOWN_MODES, COMPOSITE_SHAPES, LIBRARY_ITEMS, LINE_TYPES, POSES, PRIMITIVE_SHAPES, PROP_ITEMS, SEXES, STEPS,
+  AGE_BANDS, BUILDS, BREAKDOWN_MODES, COMPOSITE_SHAPES, LIBRARY_ITEMS, LINE_TYPES, POSES, PRIMITIVE_SHAPES, PROP_ITEMS, SEXES, STEPS, stepsFor,
   newId, type ActorKey, type CameraState, type ObjectSource, type Project, type Shot, type Stage, type Step,
 } from '../state/schema';
 import { applyBreakdown, editLineText, setLineTypes } from '../story/commands';
@@ -11,7 +11,7 @@ import { addCharacters, updateCharacter, type CharacterPatch } from '../characte
 import { OPENAI_VOICES } from '../audio/voices';
 import { addProp, updateProp } from '../props/commands';
 import { addActor, addShotProp, mergeWithNext, setBlocking, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
-import { aspectOf, effectiveShot, effectiveShots, poseHeight, sceneLineOf, shotLines, subjectsFor, type EffectiveShot } from '../shots/setup';
+import { effectiveShot, frameAspect, effectiveShots, poseHeight, sceneLineOf, shotLines, subjectsFor, type EffectiveShot } from '../shots/setup';
 import { isContainer, objectExtent, worldRect, type Rect } from '../staging/placement';
 import { SHEET_MOMENTS, type SheetMoment, type SheetView } from '../export/contactSheet';
 import { skillById, skillsFor } from './skills';
@@ -118,6 +118,7 @@ function sourceFrom(o: { item?: string; shape?: string; size?: Record<string, nu
 // ---------- shared ----------
 
 const goToStep = tool('go_to_step', 'Switch the app to another workflow step.', z.object({ step: z.enum(STEPS) }), (a, ctx) => {
+  if (!stepsFor(ctx.project()).includes(a.step)) throw new Error(`This project has no ${a.step} step.`);
   ctx.navigate(`/p/${ctx.project().id}/${a.step}`);
   return `Opened ${a.step}. Its tools are available on your next message.`;
 });
@@ -171,7 +172,7 @@ const setShotBreaks = tool(
   },
 );
 
-const breakdownMode = tool('use_breakdown_mode', 'Re-run a rule-based breakdown: one shot per line, per two lines, or mixed.', z.object({ mode: z.enum(BREAKDOWN_MODES) }), (a, ctx) => {
+const breakdownMode = tool('use_breakdown_mode', 'Re-run a rule-based breakdown: one shot per line, per two lines, mixed (film), or panels (comics: up to three balloons between two people per panel).', z.object({ mode: z.enum(BREAKDOWN_MODES) }), (a, ctx) => {
   ctx.dispatch(applyBreakdown(a.mode));
   return `Broke the script down with "${a.mode}": ${ctx.project().shots.length} shots.`;
 });
@@ -462,7 +463,7 @@ const frameCamera = tool(
     const subjects = subjectsFor(p, eff.setup, ids, eff.stageId);
     if (!subjects.length) throw new Error('Nobody to frame: add characters to the shot first.');
     const elevation = a.height === 'high' ? 25 : a.height === 'low' ? -12 : undefined;
-    const cam = frameSubjects(subjects, a.size, aspectOf(p), { azimuth: subjects[0].yaw + (a.angle ?? 0), elevation, lens: a.lens });
+    const cam = frameSubjects(subjects, a.size, frameAspect(p, shot), { azimuth: subjects[0].yaw + (a.angle ?? 0), elevation, lens: a.lens });
     ctx.dispatch(setCamera(shot.id, a.at ?? 'start', cam));
     return `Camera: ${a.size} on ${a.subjects?.join(' and ') ?? 'everyone'}, ${Math.round(cam.lens)} mm at ${cam.distance.toFixed(1)} m.`;
   },
@@ -854,7 +855,7 @@ function frameShot(p: Project, eff: EffectiveShot, shotNumber: string, f: Framin
 }
 
 function frameUnclipped(p: Project, eff: EffectiveShot, shotNumber: string, f: Framing, which: 'start' | 'end', line?: { from: string; to: string; side: 'left' | 'right' }): CameraState {
-  const aspect = aspectOf(p);
+  const aspect = frameAspect(p, p.shots.find((s) => s.number === shotNumber));
   const charId = (n: string) => {
     const c = byName(p.characters, n);
     if (!c || !eff.setup.actors.some((a) => a.characterId === c.id)) throw new Error(`Shot ${shotNumber}: "${n}" isn't in the shot. Block them first.`);

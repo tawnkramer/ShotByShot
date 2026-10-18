@@ -6,6 +6,25 @@ export const SCHEMA_VERSION = 1;
 export const STEPS = ['story', 'staging', 'characters', 'props', 'shots', 'previs', 'export'] as const;
 export type Step = (typeof STEPS)[number];
 
+export const MEDIA = ['film', 'comic'] as const;
+export type Medium = (typeof MEDIA)[number];
+
+/** Comics have no timeline, sound or video yet: panels are the last step. */
+const COMIC_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots'];
+
+/** Projects saved before comics existed have no medium: they're films. */
+export function mediumOf(project: Pick<Project, 'medium'>): Medium {
+  return project.medium === 'comic' ? 'comic' : 'film';
+}
+
+export function stepsFor(project: Pick<Project, 'medium'>): readonly Step[] {
+  return mediumOf(project) === 'comic' ? COMIC_STEPS : STEPS;
+}
+
+export function stepLabel(step: Step, project?: Pick<Project, 'medium'>): string {
+  return step === 'shots' && project && mediumOf(project) === 'comic' ? 'Panels' : STEP_LABELS[step];
+}
+
 export const STEP_LABELS: Record<Step, string> = {
   story: 'Story',
   staging: 'Staging',
@@ -27,9 +46,21 @@ export const ASPECT_RATIOS = [
   { id: '4:3', label: 'TV 4:3', ratio: 4 / 3 },
   { id: '16:9', label: 'HD / YouTube 16:9', ratio: 16 / 9 },
   { id: '9:16', label: 'YouTube Short 9:16', ratio: 9 / 16 },
+  { id: '1:1', label: 'Square 1:1', ratio: 1 },
+  { id: '3:4', label: 'Tall 3:4', ratio: 3 / 4 },
 ] as const;
 export type AspectRatioId = (typeof ASPECT_RATIOS)[number]['id'];
 const aspectIds = ASPECT_RATIOS.map((a) => a.id) as [AspectRatioId, ...AspectRatioId[]];
+
+/** Panel shapes offered in comic projects, widest first. */
+export const PANEL_SHAPES: { id: AspectRatioId; label: string }[] = [
+  { id: '2.00:1', label: 'Wide 2:1' },
+  { id: '16:9', label: 'Wide 16:9' },
+  { id: '4:3', label: 'Standard 4:3' },
+  { id: '1:1', label: 'Square' },
+  { id: '3:4', label: 'Tall 3:4' },
+  { id: '9:16', label: 'Tall 9:16' },
+];
 
 export const LINE_TYPES = ['title', 'description', 'character', 'dialogue', 'action', 'scene', 'camera'] as const;
 
@@ -166,7 +197,7 @@ export const propSchema = z.object({
 });
 export type Prop = z.infer<typeof propSchema>;
 
-export const BREAKDOWN_MODES = ['line', 'pair', 'mixed'] as const;
+export const BREAKDOWN_MODES = ['line', 'pair', 'mixed', 'panels'] as const;
 export type BreakdownMode = (typeof BREAKDOWN_MODES)[number];
 
 /** Where something is in a shot: on the floor plane, turned about Y (degrees; 0 faces +Z). */
@@ -251,12 +282,17 @@ export const shotSchema = z.looseObject({
   durationLocked: z.boolean().optional(),
   /** Comic lettering over the shot's art, in drawing order. */
   lettering: z.array(letterElementSchema).optional(),
+  /** Comic projects: this panel's shape, if not the project's default. */
+  panel: z.object({ shape: z.enum(aspectIds).optional() }).optional(),
 });
 
 export const projectSchema = z.object({
   schemaVersion: z.number().int(),
   id: z.string(),
   name: z.string(),
+  /** Film or comic. Older projects have none and are films. */
+  medium: z.enum(MEDIA).optional(),
+  /** Film: the frame. Comic: the default panel shape. */
   aspect: z.enum(aspectIds),
   fps: z.number().int().positive(),
   step: z.enum(STEPS),
@@ -291,18 +327,20 @@ export function newId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-export function createProject(name: string): Project {
+export function createProject(name: string, medium: Medium = 'film'): Project {
   const now = Date.now();
+  const comic = medium === 'comic';
   return {
     schemaVersion: SCHEMA_VERSION,
     id: newId(),
     name,
-    aspect: '2.39:1',
+    ...(comic ? { medium } : {}),
+    aspect: comic ? '4:3' : '2.39:1',
     fps: 24,
     step: 'story',
     script: [],
-    breakdownMode: 'mixed',
-    shotNumbering: 'scene.shot',
+    breakdownMode: comic ? 'panels' : 'mixed',
+    shotNumbering: comic ? 'sequential' : 'scene.shot',
     shots: [],
     stages: [],
     characters: [],

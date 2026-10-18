@@ -6,8 +6,8 @@ import { useCallback } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useProjectStore } from '../../state/store';
-import type { CameraState, Transform } from '../../state/schema';
-import { aspectOf, captionsOf, effectiveShot } from '../../shots/setup';
+import { mediumOf, type CameraState, type Transform } from '../../state/schema';
+import { captionsOf, effectiveShot, frameAspect } from '../../shots/setup';
 import { captionAt, keyOf } from '../../shots/timing';
 import { setActorKey, setCamera, setDuration, setShotPropKey, setStageOverride } from '../../shots/commands';
 import { ShotRig, type RigId } from '../../three/shotRig';
@@ -26,7 +26,9 @@ export function ShotEditor({ shotId }: { shotId: string }) {
   const dispatch = useProjectStore((s) => s.dispatch);
   const shot = project.shots.find((s) => s.id === shotId)!;
   const eff = effectiveShot(project, shotId)!;
-  const aspect = aspectOf(project);
+  const aspect = frameAspect(project, shot);
+  // A comic panel is one frozen moment: no timeline, sound or Start/End keys.
+  const comic = mediumOf(project) === 'comic';
   const rig = useMemo(() => new ShotRig(), []);
   useEffect(() => () => rig.dispose(), [rig]);
 
@@ -133,7 +135,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
               }}
             />
           )}
-          {caption && !showingArtwork && (
+          {caption && !showingArtwork && !comic && (
             <div className="caption">
               {caption.speaker && <span className="caption-speaker">{caption.speaker}</span>}
               <span>{caption.text}</span>
@@ -142,7 +144,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
           <div className="frame-badges">
             <span className="badge">{shot.number}</span>
             {showingArtwork && <span className="badge key">Image</span>}
-            {!showingArtwork && !playing && (blocking || camMoving) && <span className="badge key">{editKey === 'start' ? 'Start' : 'End'}</span>}
+            {!showingArtwork && !playing && !comic && (blocking || camMoving) && <span className="badge key">{editKey === 'start' ? 'Start' : 'End'}</span>}
           </div>
           {blocking && !playing && (
             <div className="frame-tools">
@@ -164,7 +166,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
         </div>
       </div>
 
-      <Timeline
+      {!comic && <Timeline
         u={u}
         durationSec={eff.durationSec}
         locked={!!shot.durationLocked}
@@ -183,7 +185,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
         }}
         onKey={goToKey}
         onDuration={(sec) => dispatch(setDuration(shotId, sec))}
-      />
+      />}
 
       <div className="mode-tabs segmented" role="tablist">
         <button role="tab" aria-selected={blocking} className={blocking ? 'on' : ''} onClick={() => setMode('blocking')}>
@@ -205,11 +207,11 @@ export function ShotEditor({ shotId }: { shotId: string }) {
       </div>
 
       <div className="split-panel">
-        {mode !== 'image' && <AudioPanel project={project} lineIds={shot.lineIds} compact />}
+        {mode !== 'image' && !comic && <AudioPanel project={project} lineIds={shot.lineIds} compact />}
         {mode === 'image' ? <ShotImagePanel key={shotId} project={project} shot={shot} capture={capture} /> : blocking ? (
-          <BlockingPanel project={project} shot={shot} eff={eff} editKey={editKey} selected={selected} onSelect={setSelected} />
+          <BlockingPanel project={project} shot={shot} eff={eff} editKey={comic ? 'start' : editKey} selected={selected} onSelect={setSelected} />
         ) : (
-          <CameraPanel project={project} shot={shot} eff={eff} editKey={editKey} current={shownCamera} />
+          <CameraPanel project={project} shot={shot} eff={eff} editKey={comic ? 'start' : editKey} current={shownCamera} />
         )}
       </div>
     </div>

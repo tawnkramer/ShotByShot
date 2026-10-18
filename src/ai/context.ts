@@ -1,5 +1,5 @@
 import type { Project, ScriptLine, Step } from '../state/schema';
-import { ASPECT_RATIOS, PROP_ITEMS, SET_ITEMS, PRIMITIVE_SHAPES } from '../state/schema';
+import { ASPECT_RATIOS, mediumOf, PROP_ITEMS, SET_ITEMS, PRIMITIVE_SHAPES } from '../state/schema';
 import { buildSequence } from '../shots/sequence';
 import { effectiveShots, sceneLineOf, shotLines, summaryLine } from '../shots/setup';
 import { speakerOf } from '../story/classify';
@@ -25,6 +25,9 @@ export const STEP_GUIDE: Record<Step, string> = {
   previs: 'The user is watching the whole film in sequence. Offer to adjust shots (open_shot) or the breakdown.',
   export: 'The user is exporting the film. Help with settings questions; open shots to fix problems they notice.',
 };
+
+/** Comics reuse shots as panels; the film-only parts don't apply. */
+export const COMIC_GUIDE = 'This project is a COMIC. Each shot is a panel: one frozen moment, read rather than watched. Use only the start keyframe: never set "end" positions or camera moves, durations or voices. Frame each panel so its dialogue balloons have room (usually above the heads). There is no Previs or Export step; Panels is the last step.';
 
 /** A compact description of what the user is looking at, for the system prompt. */
 export function describeContext(project: Project, step: Step, opts: { shotId?: string; stageId?: string }): string {
@@ -184,6 +187,7 @@ export function systemPrompt(project: Project, step: Step, opts: PromptOptions):
     'Refer to lines by number, shots by their shot number exactly as listed, and everything else by its exact name.',
     "After acting, reply in one or two short sentences saying what you did. If the request needs another step's tools, use go_to_step or open_shot and say so. Don't invent features the app lacks.",
     STEP_GUIDE[step],
+    ...(mediumOf(project) === 'comic' ? [COMIC_GUIDE] : []),
     ...(skill ? [skill.text] : []),
     '--- Current state ---',
     describeContext(project, step, opts),

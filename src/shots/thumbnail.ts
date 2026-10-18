@@ -3,7 +3,7 @@ import type { Project } from '../state/schema';
 import { ShotRig } from '../three/shotRig';
 import { applyCamera } from '../three/camera';
 import { hashKey, renderView } from '../three/thumbnails';
-import { aspectOf, effectiveShot } from './setup';
+import { effectiveShot, frameAspect } from './setup';
 
 /** Everything that affects how a shot's first frame looks. */
 export function shotThumbKey(project: Project, shotId: string): string {
@@ -12,11 +12,11 @@ export function shotThumbKey(project: Project, shotId: string): string {
   const stage = project.stages.find((s) => s.id === eff.stageId);
   const chars = eff.setup.actors.map((a) => project.characters.find((c) => c.id === a.characterId));
   const props = eff.setup.props.map((p) => project.props.find((x) => x.id === p.propId));
-  return `shot:${hashKey(JSON.stringify([project.aspect, eff.setup, eff.camera.start, stage?.objects, chars, props]))}`;
+  return `shot:${hashKey(JSON.stringify([frameAspect(project, project.shots.find((s) => s.id === shotId)), eff.setup, eff.camera.start, stage?.objects, chars, props]))}`;
 }
 
 export function renderShotThumbnail(project: Project, shotId: string, width = 480): Promise<string | null> {
-  const aspect = aspectOf(project);
+  const aspect = frameAspect(project, project.shots.find((s) => s.id === shotId));
   const height = Math.round(width / aspect);
   return renderView(
     shotThumbKey(project, shotId),

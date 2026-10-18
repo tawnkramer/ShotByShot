@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Project, Shot, Character } from '../state/schema';
+import { mediumOf, type Project, type Shot, type Character } from '../state/schema';
 import { effectiveShot, shotLines } from '../shots/setup';
 import { getBlob } from '../storage/db';
 import { CHARACTER_IMAGE_PRESENTATION, characterImagePrompt } from './generate';
@@ -93,7 +93,7 @@ export function shotImagePrompt(project: Project, shot: Shot, capture: ShotCaptu
     `Create a cinematic illustrated frame for shot ${shot.number}.`,
     'Image 1 is a rough greyscale previs approximation for camera framing, perspective, and composition, not an exact depiction of the final pose or action. Use its spatial layout as a guide. Replace mannequins with the referenced characters and interpret their anatomy and movement naturally. Written story context and additional direction take precedence over the previs for poses, gestures, expressions, interactions, and on-screen actions. Apply requested changes even when they differ from the mannequin blocking; retain the camera framing and composition where compatible with those changes. Do not copy neutral reference backgrounds into the scene. No labels, captions, text, grid lines, or editing handles. The descriptions below are appearance notes: ignore their original generation instructions about neutral backgrounds, standing poses, or excluding people.',
     SHOT_COMPOSITION_GUIDANCE,
-    `Preview aspect ratio: ${project.aspect}.`,
+    `Preview aspect ratio: ${(mediumOf(project) === 'comic' && shot.panel?.shape) || project.aspect}.`,
     ...references.map((r, i) => `Image ${i + 2} is the ${r.kind} appearance reference for ${r.name}. Use it for ${r.kind === 'stage' ? 'set design, materials, colors, lighting, and atmosphere' : 'identity, face, hair, clothing, and proportions'}.`),
     stage?.image?.prompt ? `Stage description (${stage.name}): ${stage.image.prompt.replace(/(?:^|\n)Stage objects:[^\n]*/g, '').trim()}` : stage ? `Location: ${stage.name}.` : '',
     stage && capture.stageObjectIds?.length ? `Stage objects visible in this frame: ${stage.objects.filter((o) => capture.stageObjectIds!.includes(o.id)).map((o) => o.name).join(', ')}.` : '',

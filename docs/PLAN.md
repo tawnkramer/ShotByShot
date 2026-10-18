@@ -779,6 +779,22 @@ AI tools only depend on M1.
   (e.g. Wild Words), kept in IndexedDB, never in project files; the first one
   is the default lettering font.
 
+- **C1 (Comic projects) done:** **New project** asks Film or Comic (also
+  switchable in Project settings; film-only data is kept, just hidden).
+  `project.medium` is `'comic'` for comics and absent for films, so older
+  projects stay films. Comics run Story → Staging → Characters → Props →
+  **Panels**; Previs and Export are hidden until C4/C5. Defaults: Standard
+  4:3 panels, sequential numbers, and the **Panels** breakdown (dialogue
+  packs into a panel up to three balloons, ~35 words and two speakers;
+  action gets its own panel; the scene's establishing panel can carry one
+  short action line). The panel editor has no timeline, audio, Start/End
+  keys or moving camera; the Camera tab has **Panel shape** (Wide 2:1, Wide
+  16:9, Standard 4:3, Square, Tall 3:4, Tall 9:16) stored per panel
+  (`shot.panel.shape`) and used by the viewport, thumbnails, framing tools,
+  image generation and lettering. Lists, menus and the Image tab say
+  "panel"; the assistant is told it's a comic (start keys only, leave room
+  for balloons).
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or
