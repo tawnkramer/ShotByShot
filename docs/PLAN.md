@@ -835,6 +835,19 @@ AI tools only depend on M1.
   the sides, arrow keys or Previous/Next, with **Edit panel** to jump to
   the panel editor.
 
+- **C5 (Comic export) done:** comics get an **Export** step after Pages.
+  Each page is drawn at the chosen width (1200/1600/2400 px): the panel's
+  image, or a previs render of panels without one (one offscreen renderer
+  per panel shape), with its lettering in the loaded fonts. **Make page
+  images** zips `Page01.jpg…` and `cover.jpg` (JPEG or PNG; lettering on the
+  cover is optional, off by default). **Make PDF** writes the cover then
+  every page with a small built-in PDF writer that embeds the JPEGs as-is
+  (pages 8.5 in wide). **Make site package** zips `comics/<slug>/` with the
+  pages and cover, `comics-entry.json` (slug, title, cover path, page
+  count, tags, ready for the site's `comics.json`) and a README; slug,
+  title and tags are edited on the screen and saved in the project
+  (`comic.publish`), and the entry can be copied directly.
+
 **Mixed (rule-based) breakdown:** action lines get one shot each, except that a
 scene's establishing shot can carry one short follow-up action line. A speaker
 continuing stays in the same shot, and two short lines in a row (8 words or

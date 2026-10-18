@@ -9,6 +9,8 @@ import { saveFile } from '../../shell/download';
 import { exportProjectFile } from '../../storage/projectIO';
 import { safeFileName } from '../../storage/projectFile';
 import { AudioPanel } from '../common/AudioPanel';
+import { mediumOf } from '../../state/schema';
+import { ComicExport } from './ComicExport';
 
 const CODEC_NAMES: Record<string, string> = { avc: 'H.264', hevc: 'HEVC', vp9: 'VP9', av1: 'AV1', aac: 'AAC', opus: 'Opus' };
 
@@ -20,7 +22,13 @@ interface Result {
   note?: string;
 }
 
+/** Films export video and stills; comics export pages, a PDF and a site package. */
 export function ExportStep() {
+  const comic = useProjectStore((s) => s.project && mediumOf(s.project) === 'comic');
+  return comic ? <ComicExport /> : <FilmExport />;
+}
+
+function FilmExport() {
   const project = useProjectStore((s) => s.project)!;
   const seq = useMemo(() => buildSequence(project), [project]);
   const aspect = aspectOf(project);

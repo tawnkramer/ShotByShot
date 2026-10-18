@@ -752,3 +752,6 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .reader-foot { padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
 .reader-page { flex: 1; min-height: 0; display: grid; place-items: center; padding: 8px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .reader-page img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.json-entry { margin: 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; }
+.row.wrap { flex-wrap: wrap; }
+.export-page p code { padding: 1px 5px; font-size: 0.85em; border-radius: 4px; }

@@ -11,7 +11,7 @@ export type Medium = (typeof MEDIA)[number];
 
 const FILM_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots', 'previs', 'export'];
 /** Comics have no timeline, sound or video: panels go onto pages instead. */
-const COMIC_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots', 'pages'];
+const COMIC_STEPS: readonly Step[] = ['story', 'staging', 'characters', 'props', 'shots', 'pages', 'export'];
 
 /** Projects saved before comics existed have no medium: they're films. */
 export function mediumOf(project: Pick<Project, 'medium'>): Medium {
@@ -315,6 +315,8 @@ export const projectSchema = z.object({
     leftOut: z.array(z.string()).optional(),
     /** The panel used for the cover; default the first page. */
     coverId: z.string().optional(),
+    /** How the comic appears on the user's comic site (its comics.json entry). */
+    publish: z.object({ slug: z.string().optional(), title: z.string().optional(), tags: z.array(z.string()).optional() }).optional(),
   }).optional(),
   /** Lettering style defaults for this project, per kind. */
   lettering: letteringDefaultsSchema.optional(),
