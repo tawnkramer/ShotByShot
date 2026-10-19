@@ -10,7 +10,8 @@ import { DEFAULT_IMAGE_MODEL, generateCharacterImage, generateStageImage, genera
 import { estimateImageCost, formatImageCost } from './cost';
 import { useBlobUrl } from './useBlobUrl';
 import { Overlay } from '../shell/Overlay';
-import { saveFile } from '../shell/download';
+import { pickFile, saveFile } from '../shell/download';
+import { prepareUpload, UPLOAD_MODEL } from './upload';
 import { newId, type Character } from '../state/schema';
 import { useProjectStore } from '../state/store';
 import { getBlob, getSetting, putBlob, setSetting } from '../storage/db';
@@ -36,7 +37,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   const pending = useRef(false);
   const projectId = useRef(useProjectStore.getState().project?.id).current;
   const [prompt, setPrompt] = useState(kind === 'shot' ? defaultPrompt : c.image?.prompt ?? defaultPrompt);
-  const [model, setModel] = useState<string>(c.image?.model ?? DEFAULT_IMAGE_MODEL);
+  const [model, setModel] = useState<string>(c.image?.model && c.image.model !== UPLOAD_MODEL ? c.image.model : DEFAULT_IMAGE_MODEL);
   const [quality, setQuality] = useState<ImageQuality>('medium');
   const [preferencesReady, setPreferencesReady] = useState(false);
   useEffect(() => {
@@ -139,17 +140,28 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
       if (controller.current === abort) { pending.current = false; setBusy(false); setStatus(''); }
     }
   };
+  // An image from the user's own device: previewed like a generated one, then saved with Use image.
+  const upload = async () => {
+    const file = await pickFile('image/*');
+    if (!file) return;
+    setError('');
+    try {
+      setDraft({ blob: await prepareUpload(file), prompt: '', model: UPLOAD_MODEL, additionalPrompt: '' });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
   const save = async () => {
     if (!draft || pending.current) return;
+    const uploaded = draft.model === UPLOAD_MODEL;
     pending.current = true; setBusy(true); setSaving(true); setError('');
     try {
       const blob = `${kind}-image-${newId()}`;
       await putBlob(blob, draft.blob);
       const store = useProjectStore.getState();
       if (!store.project || store.project.id !== projectId || !store.project[kind === 'shot' ? 'shots' : kind === 'stage' ? 'stages' : kind === 'prop' ? 'props' : 'characters'].some((x) => x.id === c.id)) throw new Error(`This ${kind} is no longer open. Download the image to keep it.`);
-      const guidanceBlob = reference ? `${kind}-guidance-${newId()}` : undefined;
+      // Uploads weren't made from the 3D view, so it isn't kept as their guidance.
+      const guidanceBlob = reference && !uploaded ? `${kind}-guidance-${newId()}` : undefined;
       if (guidanceBlob && reference) await putBlob(guidanceBlob, reference);
-      const image = { blob, prompt: draft.prompt, model: draft.model, createdAt: Date.now(), guidanceBlob, ...(kind === 'shot' ? { ...imageContext, additionalPrompt: draft.additionalPrompt, referenceImages: references.map(({data: _data, ...ref}) => ref) } : {}) };
+      const image = { blob, prompt: draft.prompt, model: draft.model, createdAt: Date.now(), guidanceBlob, ...(kind === 'shot' ? { ...imageContext, additionalPrompt: draft.additionalPrompt, ...(uploaded ? {} : { referenceImages: references.map(({data: _data, ...ref}) => ref) }) } : {}) };
       store.dispatch(kind === 'shot' ? setShotImage(c.id, image) : kind === 'stage' ? setStageImage(c.id, image) : kind === 'prop' ? updateProp(c.id, { image }) : updateCharacter(c.id, { image }));
       await store.flush();
       if (useProjectStore.getState().saving === 'error') throw new Error('Could not save the project. Download the image as a backup.');
@@ -194,12 +206,13 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
           <p className="small muted">Creates one {kind === 'shot' ? 'shot' : kind === 'stage' ? 'landscape' : kind === 'prop' ? 'square' : 'portrait'} image using your {comfy ? 'Comfy Cloud' : 'OpenAI'} key. {comfy ? 'Comfy Cloud charges apply.' : 'API charges apply.'} This artwork is separate from the 3D {kind === 'shot' ? 'scene' : kind === 'stage' ? 'stage' : kind === 'prop' ? 'model' : 'mannequin'}.</p>
           {hasKey === false && <Link className="btn" to="/settings" onClick={onClose}>Add key in Settings</Link>}
           {error && <p className="error small" role="alert">{error}</p>}
-          <p className="small muted" role="status">{busy ? status || 'Working… This can take a few minutes. Keep this page open.' : draft ? `Preview ready. Use image to save it to this ${kind}.` : ''}</p>
+          <p className="small muted" role="status">{busy ? status || 'Working… This can take a few minutes. Keep this page open.' : draft ? `${draft.model === UPLOAD_MODEL ? 'Your image is ready' : 'Preview ready'}. Use image to save it to this ${kind}.` : ''}</p>
           <div className="small" aria-live="polite">
             {comfy ? <><strong>Cost estimate unavailable</strong><p className="muted">{size.replace('x', '×')} aspect · one image. Comfy Cloud bills GPU run time on your plan.</p></> : <><strong>{estimate ? `Estimated ${referenceCount ? 'output + prompt' : 'cost'}: ${formatImageCost(estimate.subtotal)}` : 'Cost estimate unavailable for this model'}</strong>
             <p className="muted">{size} · one image. {referenceCount > 0 && estimate ? `${referenceCount} reference image${referenceCount === 1 ? '' : 's'} billed additionally at $${estimate.imageRate} per million image input tokens; excluded from this estimate. ` : ''}Approximate, not a guaranteed charge. <a href="https://developers.openai.com/api/docs/guides/image-generation#cost-and-latency" target="_blank" rel="noreferrer">Pricing</a></p></>}
           </div>
           <button className="btn primary" disabled={busy || !preferencesReady || (kind !== 'shot' && !prompt.trim()) || hasKey === false} onClick={() => void generate()}>{busy ? 'Working…' : draft || c.image ? 'Generate another image' : 'Generate image'}</button>
+          <button className="btn" disabled={busy} onClick={() => void upload()}>Upload image</button>
           {busy && !saving && <button className="btn" onClick={() => { controller.current?.abort(); controller.current = null; pending.current = false; setBusy(false); }}>Cancel request</button>}
           <div className="row gap">
             {draft && <button className="btn primary grow" disabled={busy} onClick={() => void save()}>Use image</button>}

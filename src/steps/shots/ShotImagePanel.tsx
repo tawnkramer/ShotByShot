@@ -47,7 +47,7 @@ export function ShotImagePanel({ project, shot, capture }: {project:Project;shot
   const comic = mediumOf(project) === 'comic';
   const changePrompt = (value:string) => dispatch(setShotImagePrompt(shot.id,value));
   return <div className="inspector shot-image-panel">
-    <button className="btn primary" disabled={!capture || Boolean(busy)} onClick={() => void prepare('image')}>{busy === 'image' ? 'Preparing references…' : comic ? 'Generate Panel Image' : 'Generate Shot Image'}</button>
+    <button className="btn primary" disabled={!capture || Boolean(busy)} onClick={() => void prepare('image')}>{busy === 'image' ? 'Preparing references…' : shot.image ? `${comic ? 'Panel' : 'Shot'} Image…` : 'Generate or Upload Image'}</button>
     {!comic && <button className="btn" disabled={!capture || Boolean(busy)} onClick={() => void prepare('video')}>{busy === 'video' ? 'Preparing…' : 'Generate Shot Video'}</button>}
     <button className="btn" disabled={(!capture && !shot.image) || Boolean(busy)} onClick={() => void openLettering()}>{busy === 'lettering' ? 'Opening…' : letterCount ? `Edit Lettering (${letterCount})` : 'Add Lettering'}</button>
     {video && <video className="shot-video-inline" src={video} controls playsInline aria-label={`Video for shot ${shot.number}`} />}

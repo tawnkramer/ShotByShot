@@ -42,7 +42,7 @@ it('edits a comic panel as one frozen moment with its own shape', async () => {
   expect(useProjectStore.getState().project!.shots[0].panel).toEqual({ shape: '3:4' });
   expect(host.querySelector('[data-testid="canvas"]')?.getAttribute('data-aspect')).toBe(String(3 / 4));
   await act(async () => tab('Image').click());
-  expect(buttons('.shot-image-panel > button')).toEqual(['Generate Panel Image', 'Add Lettering']);
+  expect(buttons('.shot-image-panel > button')).toEqual(['Generate or Upload Image', 'Add Lettering']);
 });
 
 it('keeps the film tools in film projects', async () => {

@@ -73,7 +73,7 @@ export function PropEditor({ prop: p, onBack }: { prop: Prop; onBack: () => void
           </button>
         </div>
         <div className="inspector">
-          <button className="btn" disabled={!ready || capturing} onClick={() => void openImage()}>{capturing ? 'Capturing preview…' : p.image ? 'View / generate prop image' : 'Generate prop image'}</button>
+          <button className="btn" disabled={!ready || capturing} onClick={() => void openImage()}>{capturing ? 'Capturing preview…' : p.image ? 'Prop image…' : 'Generate or upload image'}</button>
           <p className="small muted">Uses the current 3D view as guidance. Frame your prop before generating.</p>
           {error && <p className="error small" role="alert">{error}</p>}
           <label className="field">
