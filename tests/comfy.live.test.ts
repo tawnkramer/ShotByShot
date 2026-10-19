@@ -1,8 +1,9 @@
 // @vitest-environment node
 /**
  * Runs a real workflow on Comfy Cloud with the app's own client and binder.
- * Skipped unless COMFY_API_KEY is set; the run is billed to that account.
- *   COMFY_API_KEY=comfyui-… npx vitest run tests/comfy.live.test.ts
+ * Runs only when asked for with LIVE_COMFY=1 and a key; each run is a billed
+ * job on that account. A key in the environment alone never runs it.
+ *   LIVE_COMFY=1 COMFY_API_KEY=comfyui-… npx vitest run tests/comfy.live.test.ts
  * COMFY_WORKFLOW points at another API-format text-to-image export.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -11,7 +12,7 @@ import { testComfyKey } from '../src/comfy/client';
 import { runWorkflow } from '../src/comfy/run';
 import { parseWorkflow } from '../src/comfy/workflow';
 
-const key = process.env.COMFY_API_KEY;
+const key = process.env.LIVE_COMFY ? process.env.COMFY_API_KEY : undefined;
 
 it.skipIf(!key)('generates an image on Comfy Cloud', async () => {
   expect(await testComfyKey(key!)).toMatchObject({ ok: true });

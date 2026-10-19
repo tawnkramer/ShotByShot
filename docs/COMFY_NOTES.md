@@ -10,7 +10,7 @@ State of branch `comfy-cloud-video` (handoff between sessions).
 - Comfy API v2 client (src/comfy/client.ts) and shared runner (src/comfy/run.ts).
 - Shot video panel (src/video/ShotVideoEditor.tsx) with built-in Seedance 2.5 preset and cost estimate.
 - Comfy workflows in the image editor's model menu (src/images/ConceptImageEditor.tsx).
-- Live test: `COMFY_API_KEY=… npx vitest run tests/comfy.live.test.ts` (Qwen Image 2.1 fixture).
+- Live test: `LIVE_COMFY=1 COMFY_API_KEY=… npx vitest run tests/comfy.live.test.ts` (Qwen Image 2.1 fixture; a billed job each run, never part of `npm test`).
 
 ## CORS findings (checked 2026-10-11 with Origin: https://tawnkramer.github.io)
 - `/api/v2/jobs`, `/api/v2/assets`: preflight → 401, no Access-Control-* headers. Browser blocked.
