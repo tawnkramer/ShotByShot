@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
+import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { execSync } from 'node:child_process';
@@ -12,6 +13,9 @@ function commit(): string {
     return 'dev';
   }
 }
+
+/** A live test was asked for by name; see tests/*.live.test.ts. */
+const LIVE = Boolean(process.env.LIVE_AGENT || process.env.LIVE_COMFY || process.env.LIVE_RENDER);
 
 // GitHub Pages can't set response headers, so the Content Security Policy is a
 // <meta> tag. It is only added to production builds because the dev server
@@ -70,5 +74,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['tests/setup.ts'],
+    // Live tests call real, billed services (OpenAI, Gemini, Comfy Cloud). They never run in a
+    // plain `npm test`, even when API keys are in the environment: set LIVE_AGENT, LIVE_COMFY or
+    // LIVE_RENDER to run one on purpose (see each file).
+    exclude: [...configDefaults.exclude, ...(LIVE ? [] : ['tests/**/*.live.test.ts'])],
   },
 });

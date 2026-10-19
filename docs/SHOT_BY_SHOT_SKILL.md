@@ -106,7 +106,7 @@ Judgment for the model: B1, B4, B5, C5, C6, C9, C10.
 - `src/export/render.ts`: `FilmRenderer(project, w, h, { captions:false, shotNumbers:true })`,
   `renderShot(shotId, u)` and `toBlob()`. It already renders any shot offscreen; used by
   `renderPrevisClip` in `src/video/shotVideo.ts`.
-- `tests/comfy.live.test.ts`: the pattern for a live test gated on an env var.
+- `tests/comfy.live.test.ts`: the pattern for a live test. It needs an explicit `LIVE_*` flag, not just a key: live files are left out of `npm test` (vite.config.ts) and `tests/setup.ts` blocks outside requests otherwise.
 
 ## Work plan
 
@@ -184,7 +184,7 @@ Keep it compact. Cap the number of lines.
   - `tests/agentSkills.test.ts`: skill loading, multi-shot tools on the sample project (import
     `samples/cold_coffee.txt` through the app's import path, build a cafe stage
     programmatically), Undo of a whole pass.
-- **Live (manual):** `tests/agent.live.test.ts`, skipped unless `OPENAI_API_KEY` is set.
+- **Live (manual):** `tests/agent.live.test.ts`, run with `LIVE_AGENT=1` and `OPENAI_API_KEY` (never by plain `npm test`).
   - Loads the sample project with a cafe stage.
   - Runs `runTurn` with "Block the scene", then "Plan the camera".
   - Prints `check_coverage` results and writes a contact sheet PNG for review.

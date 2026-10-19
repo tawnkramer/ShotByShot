@@ -114,8 +114,14 @@ alone). Speech workflows can be imported and checked but aren't used yet.
 To check a workflow against Comfy Cloud outside the browser:
 
 ```sh
-COMFY_API_KEY=comfyui-… npx vitest run tests/comfy.live.test.ts
+LIVE_COMFY=1 COMFY_API_KEY=comfyui-… npx vitest run tests/comfy.live.test.ts
 ```
+
+Each run is a billed Comfy Cloud job. Live tests (`tests/*.live.test.ts`) never
+run in a plain `npm test`, even with API keys in the environment: they need
+`LIVE_COMFY`, `LIVE_AGENT` or `LIVE_RENDER` set. The normal test run also
+refuses any request to an outside server, so a test can't reach a paid API by
+accident.
 
 It runs `tests/fixtures/qwen_image_2_1_t2i.json` (or `COMFY_WORKFLOW=path`) with
 the app's own client and writes `comfy-live-output.png`. The run is billed.
