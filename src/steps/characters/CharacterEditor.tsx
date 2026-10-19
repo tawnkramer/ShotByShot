@@ -54,7 +54,7 @@ export function CharacterEditor({ character: c, onBack }: { character: Character
           </button>
         </div>
         <div className="inspector">
-          <button className="btn" onClick={() => setImageEditor(true)}>{c.image ? 'View / generate character image' : 'Generate character image'}</button>
+          <button className="btn" onClick={() => setImageEditor(true)}>{c.image ? 'Character image…' : 'Generate or upload image'}</button>
           <label className="field">
             <span>Name</span>
             <input

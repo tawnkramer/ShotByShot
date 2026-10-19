@@ -177,7 +177,7 @@ export function StagingStep() {
         </div>
       </div>
       <div className="split-panel">
-        <div className="stage-image-action"><button className="btn" disabled={capturing} onClick={() => void openImage()}>{capturing ? 'Capturing preview…' : stage.image ? 'View / generate stage image' : 'Generate stage image'}</button>
+        <div className="stage-image-action"><button className="btn" disabled={capturing} onClick={() => void openImage()}>{capturing ? 'Capturing preview…' : stage.image ? 'Stage image…' : 'Generate or upload image'}</button>
         <p className="small muted">Uses the current 3D view as guidance. Frame your stage before generating.</p>
         {captureError && <p role="alert" className="error small">{captureError}</p>}</div>
         {selected ? (
