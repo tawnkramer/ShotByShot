@@ -1298,8 +1298,8 @@ interface PhotoInfo { width: number; height: number; lens35?: number }  // EXIF 
 ```
 
 - EXIF: a small JPEG APP1 reader (`src/pose/exif.ts`) for
-  `FocalLengthIn35mmFilm`, falling back to `FocalLength` ×
-  crop factor when both are present. HEIC/PNG: no lens, use the slider.
+  `FocalLengthIn35mmFilm`. Without it (no tag, HEIC, PNG) the lens is
+  fitted, held near 35 mm, and the slider can override it.
 
 ### 14.3 Pose solve (`src/pose/solvePose.ts`, pure)
 
@@ -1473,6 +1473,32 @@ azimuth` (checked against `applyCamera`). As built:
 Tests: `tests/solvePose.test.ts` (round trips through fake detections made
 from the posed mannequin: turned, from behind, tilted and rolled camera,
 other sizes, noise, crouch, sitting, lying, hidden joints, handedness).
+
+P3 done: `matchPhoto(request)` in `src/pose/solveCamera.ts` does all three
+modes and returns the new key, the camera, the crop, the mean miss and
+warnings for the preview. Parts: `cropToAspect`, `shotLensFromPhoto`,
+`fitCamera` (Levenberg–Marquardt in `src/pose/lm.ts`, over camera position,
+pan, tilt, roll and, when unknown, the lens), `lens35FromJpeg`. As built:
+- **Which way is up.** MediaPipe's 3D points are in the camera's axes, so a
+  camera tilted down sees exactly what a level camera sees of a body leaning
+  back; the pose and camera fits can't tell them apart (both fit with zero
+  error). `uprightCamera` breaks the tie from the body: a standing person's
+  ankles-to-shoulders line (hips-to-shoulders when sitting or the legs don't
+  show) is vertical, and a lying person's chest faces up. A real lean in the
+  photo therefore comes out as camera tilt (a test bounds this). Pose-only
+  matches use this too, not the shot camera.
+- Known limit: a photo looking straight down at someone lying reads like a
+  level photo of someone standing. A "lying down" choice in the dialog
+  would settle it if it comes up.
+- The crop is centred on the person, so its lens offset becomes a small
+  change of aim; framing still matches.
+- Hips must be visible (as in P2); MediaPipe usually still reports them in a
+  waist-up shot.
+Tests: `tests/solveCamera.test.ts` (camera round trips through
+`applyCamera`: wide, medium, low and high angle, roll, from behind; pose
+and camera together; other photo shapes; unknown lens; lens slider; cut off
+below the hips; pose-only and camera-only; too little in frame; leaning
+body; up from standing, low angle and lying; EXIF in both byte orders).
 
 ### 14.9 Open questions
 

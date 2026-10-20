@@ -70,6 +70,41 @@ const square = (a: V, n: V) => a.clone().addScaledVector(n, -a.dot(n));
 const angle = (a: V, b: V) => RAD(a.angleTo(b));
 
 /**
+ * The photo camera's tilt and roll, from the body: a camera tilted down sees
+ * exactly what a level camera sees of a body leaning back, so something has
+ * to say which way is up. Assumed: someone upright has their ankles-to-
+ * shoulders line (hips-to-shoulders if the legs don't show) vertical, and
+ * someone whose torso is far from the photo's vertical is lying on their
+ * back, chest up. A lean in the photo becomes a camera tilt.
+ */
+export function uprightCamera(person: DetectedPerson): Required<PoseSolveOptions> {
+  const seen = (n: LandmarkName) => (person.image[LM[n]]?.visibility ?? 0) >= MIN_VISIBILITY && !!person.world[LM[n]];
+  // Three's camera axes (x right, y up, z toward the viewer).
+  const at = (n: LandmarkName): V => {
+    const [x, y, z] = person.world[LM[n]];
+    return v(x, -y, -z);
+  };
+  const level = { cameraTilt: 0, cameraRoll: 0 };
+  if (!(['shoulderL', 'shoulderR', 'hipL', 'hipR'] as const).every(seen)) return level;
+  const shoulders = at('shoulderL').add(at('shoulderR')).multiplyScalar(0.5);
+  const hips = at('hipL').add(at('hipR')).multiplyScalar(0.5);
+  const torso = shoulders.clone().sub(hips).normalize();
+  let up: V;
+  if (angle(torso, UP) > LYING) {
+    // Lying: the chest faces up.
+    up = at('hipL').sub(at('hipR')).cross(torso).normalize();
+  } else if (seen('ankleL') && seen('ankleR') && seen('kneeL') && seen('kneeR')) {
+    const ankles = at('ankleL').add(at('ankleR')).multiplyScalar(0.5);
+    const legs = hips.clone().sub(ankles).normalize();
+    // Straight legs carry the line down to the feet; sitting or crouching, the torso alone.
+    up = angle(legs, torso) < 30 ? shoulders.clone().sub(ankles).normalize() : torso;
+  } else up = torso;
+  const roll = Math.atan2(up.x, up.y);
+  const tilt = Math.atan2(up.z, Math.hypot(up.x, up.y));
+  return { cameraTilt: RAD(tilt), cameraRoll: RAD(roll) };
+}
+
+/**
  * Turns a person found in a photo into joint angles for the mannequin. Only
  * bone directions are used, so the person's size doesn't matter. Joints the
  * photo doesn't show keep the preset's angles. A forward bend of the torso
