@@ -30,6 +30,7 @@ through the same commands the UI uses, so all its actions can be undone.
 | Publishing | Repo goes public when ready; the site lives at `tawnkramer.github.io/ShotByShot/` (no custom domain) |
 | Audio | **Text-to-speech** for dialogue, voice per character, included in previs and the MP4 |
 | Comics | Same app, same project format: a project's **medium** is `film` or `comic`. Comics swap timing, audio and video for panels, pages and lettering (§13) |
+| Match a photo | Pose a character and/or frame the camera from an uploaded photo. Pose detection runs **in the browser (MediaPipe)**, so no paid API calls; one person at a time first (§14) |
 
 ---
 
@@ -1233,3 +1234,224 @@ produces panel art).
   references help; a per-project style prompt may be needed).
 - Whether lettering should also be offered to film projects as burned-in
   titles or storyboard captions (cheap once C2 exists).
+
+---
+
+## 14. Match a photo
+
+Upload a photo of a person and the shot copies it: the character takes the
+person's pose, the camera takes the photo's framing, or both. One person and
+one character at a time for now.
+
+Pose detection runs **in the browser** with Google's **MediaPipe Pose
+Landmarker** (Apache 2.0, bundled with the app). It costs nothing, works
+offline and gives the same answer every time, so the feature makes no paid
+API calls and none of its tests can either. Everything after detection is
+plain geometry in our own code.
+
+### 14.1 Workflow
+
+On a shot (film or comic), **Match photo** in the shot editor:
+
+1. **Pick a photo** (camera roll or file). The original file is read once for
+   its EXIF lens before `prepareUpload` scales it (scaling drops EXIF).
+2. **Detect.** If more than one person is found, tap the one to use
+   (outlines drawn on the photo, largest first).
+3. **Pick the character**: the shot's selected character, else its only
+   one, else a list of the shot's characters.
+4. **Choose** ☑ Pose character, ☑ Match camera (both on by default).
+5. **Preview**: the shot view with the photo laid over it at adjustable
+   opacity, and crop marks where the photo's frame and the project's aspect
+   differ. Lens slider when the photo had no EXIF lens.
+6. **Apply**: one command (one undo) that sets the key being edited, start
+   or end, and/or the camera at that key.
+
+What changes:
+
+| Choice | Character | Camera |
+|---|---|---|
+| Pose only | Joint angles from the photo; position and yaw kept | Kept |
+| Camera only | Kept (the photo pose is solved but only used for the fit) | Moved so the character sits in the frame as the person does in the photo |
+| Both | Pose from the photo; position and yaw kept | Moved as above |
+
+The character never moves; the camera comes to it. This keeps the blocking
+of everyone else in the shot valid.
+
+### 14.2 Detection (`src/pose/detect.ts`)
+
+- `@mediapipe/tasks-vision` `PoseLandmarker`, image mode, up to 4 people.
+  The `pose_landmarker_full` model (~9 MB) and the WASM files ship in
+  `public/mediapipe/` and are loaded only when Match photo opens. They are
+  left out of the PWA precache (the `globPatterns` in `vite.config.ts` only
+  take js/css/html/fonts, keep it that way) and cached at runtime after the
+  first use instead.
+- GPU delegate, falling back to CPU.
+- Output per person, our own type so nothing else imports MediaPipe:
+
+```ts
+interface DetectedPerson {
+  image: { x: number; y: number; visibility: number }[];  // 33 points, 0..1 of the photo
+  world: [x: number, y: number, z: number][];             // 33 points, metres, hip-centred, camera axes
+  box: [x: number, y: number, w: number, h: number];
+}
+interface PhotoInfo { width: number; height: number; lens35?: number }  // EXIF FocalLengthIn35mmFilm
+```
+
+- EXIF: a small JPEG APP1 reader (`src/pose/exif.ts`) for
+  `FocalLengthIn35mmFilm`, falling back to `FocalLength` ×
+  crop factor when both are present. HEIC/PNG: no lens, use the slider.
+
+### 14.3 Pose solve (`src/pose/solvePose.ts`, pure)
+
+Turns `world` points into rotations for the mannequin's 11 joints
+(`pelvis, spine, neck, shoulderL/R, elbowL/R, hipL/R, kneeL/R`).
+
+- **Axes.** MediaPipe world points are in camera axes (x right, y down, z
+  away). Convert to a body frame first: the pelvis frame from the hip line
+  and the hips-to-shoulders direction. The rotation of that frame relative
+  to the camera is kept separately; the camera solve uses it (§14.4). The
+  character's left is MediaPipe's "left" (the subject's, not the image's);
+  a test pins this down.
+- **Torso.** `pelvis` takes the pelvis frame's tilt relative to upright
+  (yaw is the character's own yaw, so not set here). `spine` is the turn and
+  bend from the hip line to the shoulder line. `neck` points from mid-
+  shoulders to the head centre (ears and nose), with the head's turn from
+  the nose relative to the ears.
+- **Limbs.** Each limb hangs along −Y from its joint. Upper arm and thigh:
+  the rotation that takes −Y to the bone's direction in the parent frame,
+  with the twist set so the elbow or knee bends in the plane of the three
+  points. Elbow and knee: one bend angle from the inner angle. No wrists,
+  hands, ankles or feet (the mannequin has no such joints).
+- **Limits.** Clamp to human ranges (knees and elbows bend one way only,
+  etc.) so a noisy point can't fold a limb backwards.
+- **Hidden points.** Points with visibility < 0.5 (a person cut off at the
+  waist): those joints keep the preset's angles.
+- **Preset.** The key's `pose` is still set, because seating and platform
+  logic (`src/shots/body.ts`) and the walk cycle read it: torso near
+  horizontal → `lying`; hips and knees both bent past ~60° → `sitting`;
+  otherwise `standing`. A sitting match on a chair is still lifted to its
+  seat.
+- **Floor.** The body's root height is set so the lowest ankle (or the hips,
+  lying down) rests on the floor, as presets do.
+
+Only bone **directions** are used, never lengths, so a tall person in the
+photo matches a short character without stretching anything.
+
+### 14.4 Camera solve (`src/pose/solveCamera.ts`, pure)
+
+Find the camera that, looking at the posed character where it stands,
+projects its joints where the person's points are in the photo.
+
+- **Points:** shoulders, elbows, wrists, hips, knees, ankles, nose, ears
+  (visible ones only), matched to the same points on the posed mannequin
+  in world space. In camera-only mode the photo pose is still solved and
+  used for the fit, so limbs line up.
+- **Frame.** The photo is cropped to the project's aspect around the
+  person before fitting (points outside the crop are dropped). The crop is
+  what the preview's crop marks show. The lens is converted so a 35 mm-
+  equivalent photo lens means the same field of view across the crop.
+- **Unknowns:** camera position (3), pan, tilt, roll, and the lens when it
+  isn't known. Solved by Levenberg–Marquardt on the reprojection error, with
+  a small hand-written solver (numeric Jacobian, ~100 lines, no
+  dependency).
+- **Start point:** azimuth from the body's turn relative to the photo's
+  camera (§14.3) added to the character's yaw; elevation from the torso's
+  apparent tilt; distance from the person's height in the photo and the
+  lens. This lands close enough that the fit converges in a few steps.
+- **Lens.** EXIF lens when present, fixed. Otherwise fit, but pulled toward
+  35 mm, because lens and distance trade off when the person is small in
+  the frame; the slider overrides it.
+- **Back to the orbit camera.** `CameraState` orbits a target, so the
+  target is put on the view ray at the character's depth. Orbit, pan and
+  dolly then behave as usual around the subject.
+- **Quality.** The mean reprojection error (as a fraction of the frame) is
+  shown; above a threshold the preview says the match is rough and why
+  (person too small, too few points visible).
+
+### 14.5 Data model
+
+```ts
+// ActorKey gains an optional joint override
+const jointsSchema = z.partialRecord(z.enum(JOINTS), z.tuple([z.number(), z.number(), z.number()]));  // degrees, XYZ
+actorKeySchema = placementSchema.extend({ pose: z.enum(POSES), joints: jointsSchema.optional() });
+```
+
+- When `joints` is set, `applyPose` uses its angles over the preset's (named
+  joints only; the rest come from the preset). Degrees, like `yaw`, so the
+  project file and the assistant read naturally.
+- Choosing a preset pose in the blocking panel clears `joints` (undoable).
+  The panel shows "Matched from photo" with a Clear button while set.
+- Moving shots: each key has its own joints, switched at the midpoint as
+  presets are today (`src/shots/timing.ts`). Blending joint angles between
+  keys is a possible later step. A walking move still uses the walk cycle.
+- `shotRig` caches the last pose by name; the cache key becomes the preset
+  plus a hash of the joints.
+- The photo itself is not stored (open question, §14.9).
+- Old projects need no migration (the field is optional).
+
+### 14.6 Elsewhere in the app
+
+- **Assistant context** (`src/ai/context.ts`) prints a matched key as
+  `standing (posed from photo)`, so the model knows not to replace it with
+  a preset casually. The existing pose tools clear `joints` like the UI.
+- **Comic heads** (`src/comic/heads.ts`) place the head at a fixed share of
+  standing height, which is wrong for a crouch or a bend. With `joints` set
+  they take the head from `jointPositions` instead, so balloon tails follow
+  a matched pose.
+- **Forward kinematics** (`src/pose/skeleton.ts`, pure): world positions of
+  every joint for a character and key, with the same proportions and angles
+  as `buildMannequin` but no scene. The camera solve and comic heads use it;
+  a test checks it against the built mannequin.
+- **Shot images.** The previs already guides framing and composition; a
+  matched pose makes it a much better guide with no prompt change.
+
+### 14.7 Tests (no network, no billing)
+
+Nothing in these tests loads MediaPipe or calls an API; `tests/setup.ts`
+already rejects outside requests.
+
+- **Pose round trip:** pose the mannequin with known joint angles, read its
+  joint positions back as fake "world" points (in camera axes, with noise),
+  solve, and check the angles come back within a few degrees. Includes
+  left/right handedness, a sitting case and a lying case.
+- **Camera round trip:** pose, project through a known `CameraState` to
+  fake image points, solve from a perturbed start, and check the camera
+  comes back. Cases: wide, medium, close-up, low and high angle, roll,
+  known and unknown lens, and a person cut off at the waist.
+- **Fixtures:** a few recorded `DetectedPerson` JSON files from real
+  photos, made once with a script in the existing Playwright setup
+  (`tests/live/`, `LIVE_POSE=1`; free, local, just slow). Normal runs only
+  read the JSON.
+- **EXIF:** tiny JPEG headers built in the test.
+- **Schema and rig:** joints round trip through the project file; preset
+  change clears them; undo restores them; `applyPose` with overrides.
+- **UI** (jsdom, detection module mocked): pick person, pick character,
+  options, Apply as a single undo.
+
+### 14.8 Milestones
+
+| # | Milestone | Scope | Exit criteria |
+|---|---|---|---|
+| **P1** | Joint poses | `joints` on `ActorKey`, `applyPose` overrides, forward kinematics, rig cache key, preset clears, blocking panel label, assistant context, comic heads | A hand-written joint set renders, saves, reloads and undoes |
+| **P2** | Pose solve | `solvePose` with limits, hidden-point fallback, preset choice, floor contact; round-trip tests | Synthetic poses come back within tolerance |
+| **P3** | Camera solve | `solveCamera` (LM), start point, aspect crop, lens handling, EXIF reader, quality measure; round-trip tests | Synthetic cameras come back within tolerance |
+| **P4** | Detection and UI | MediaPipe bundled and lazy-loaded, runtime caching, Match photo dialog, person pick, overlay preview, lens slider, Apply | On a phone: photo in, posed and framed shot out, one undo |
+| **P5** | Polish | Recorded fixtures from real photos, rough-match warnings, tuning from real use | A handful of real photos match well enough to use as-is |
+
+P1 to P3 need no UI and no MediaPipe, so they can be built and tested
+first; P4 joins them up.
+
+### 14.9 Open questions
+
+- **Keep the photo?** Storing it on the shot as a reference (overlay toggle
+  later, or a reference image for shot art) is useful but costs storage.
+  Not in v1.
+- **Several people:** match each detected person to a character and fit one
+  camera to all of them. The camera solver already takes any set of points,
+  so this is mainly UI.
+- **Gemini extras**, all optional and off unless a key is set: a one-line
+  pose description for image prompts, or a fallback when MediaPipe finds no
+  one (drawings, odd angles).
+- **Hands and feet:** the mannequin has no wrist or ankle joints; adding
+  them would let gestures match too.
+- **Blending** matched poses between start and end keys in moving shots.
