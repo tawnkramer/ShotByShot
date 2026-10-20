@@ -152,6 +152,7 @@ export function sample<T>(track: Keyframed<T>, u: number, lerpFn: (a: T, b: T, u
 
 export interface ActorFrame extends Placement {
   pose: ActorKey['pose'];
+  joints?: ActorKey['joints'];
   /** 0..1 phase of the walk cycle while walking between keyframes, else undefined. */
   walkPhase?: number;
 }
@@ -167,7 +168,8 @@ export function sampleActor(track: Keyframed<ActorKey>, u: number): ActorFrame {
     // Walk while covering ground, with the cycle tied to distance so feet don't slide much.
     return { ...p, pose: 'standing', walkPhase: ((dist * e) / STRIDE_M) % 1 };
   }
-  return { ...p, pose: u < 0.5 ? track.start.pose : track.end.pose };
+  const k = u < 0.5 ? track.start : track.end;
+  return { ...p, pose: k.pose, ...(k.joints ? { joints: k.joints } : {}) };
 }
 
 /** Same as `track` but with one keyframe replaced; editing End on a static track makes it move. */

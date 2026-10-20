@@ -59,13 +59,19 @@ export function removeActor(shotId: string, characterId: string): Command {
   });
 }
 
-/** Changes one keyframe of a character. Editing End on a still character makes them move. */
+/**
+ * Changes one keyframe of a character. Editing End on a still character
+ * makes them move. Choosing a preset pose drops joint angles (a pose matched
+ * from a photo) unless the patch sets them too; `joints: undefined` clears them.
+ */
 export function setActorKey(shotId: string, characterId: string, which: Which, patch: Partial<ActorKey>, mergeKey?: string): Command {
   return shotCommand('Move character', shotId, (s) => {
     const a = s.setup!.actors.find((x) => x.characterId === characterId);
     if (!a) return;
     const base = which === 'end' ? (a.motion.end ?? a.motion.start) : a.motion.start;
-    a.motion = withKey(plain(a.motion), which, { ...plain(base), ...patch } as ActorKey);
+    const next = { ...plain(base), ...patch } as ActorKey;
+    if (!next.joints || ('pose' in patch && !('joints' in patch))) delete next.joints;
+    a.motion = withKey(plain(a.motion), which, next);
   }, mergeKey);
 }
 

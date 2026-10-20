@@ -88,6 +88,11 @@ export function BlockingPanel({ project, shot, eff, editKey, selected, onSelect 
                     </option>
                   ))}
                 </select>
+                {key.joints && (
+                  <button className="link-btn" title="This pose was matched from a photo. Clear it to go back to the preset pose." onClick={() => dispatch(setActorKey(shot.id, c.id, editKey, { joints: undefined }))}>
+                    Clear photo pose
+                  </button>
+                )}
                 {a.motion.mode === 'moving' && (
                   <button className="link-btn" onClick={() => dispatch(setActorStill(shot.id, c.id))}>
                     Stay still

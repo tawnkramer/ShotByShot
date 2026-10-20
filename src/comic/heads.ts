@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Project, Shot } from '../state/schema';
 import { effectiveShot, frameAspect, subjectsFor } from '../shots/setup';
 import { applyCamera } from '../three/camera';
+import { bodyPoints } from '../pose/skeleton';
 
 /** Where a character's head is in a panel, in 0..1 of the panel (y down). */
 export interface HeadSpot {
@@ -36,8 +37,12 @@ export function panelHeads(project: Project, shot: Shot): HeadSpot[] {
   const subjects = subjectsFor(project, eff.setup, undefined, eff.stageId);
   return eff.setup.actors.map((a, i) => {
     const s = subjects[i];
-    const head = new THREE.Vector3(s.position[0], s.position[1] + s.height * HEAD, s.position[2]);
-    const mouth = new THREE.Vector3(s.position[0], s.position[1] + s.height * MOUTH, s.position[2]);
+    const k = a.motion.start;
+    const c = project.characters.find((x) => x.id === a.characterId);
+    // A pose matched from a photo can put the head anywhere: find it on the posed body.
+    const posed = k.joints && c ? bodyPoints(c, k, s.position) : undefined;
+    const head = posed ? new THREE.Vector3(...posed.head) : new THREE.Vector3(s.position[0], s.position[1] + s.height * HEAD, s.position[2]);
+    const mouth = posed ? new THREE.Vector3(...posed.mouth) : new THREE.Vector3(s.position[0], s.position[1] + s.height * MOUTH, s.position[2]);
     const edge = head.clone().addScaledVector(up, HEAD_RADIUS_M);
     const view = head.clone().applyMatrix4(camera.matrixWorldInverse);
     const [h, m, e] = [head, mouth, edge].map((v) => toPanel(v.clone().project(camera)));

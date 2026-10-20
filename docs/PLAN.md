@@ -1396,12 +1396,13 @@ actorKeySchema = placementSchema.extend({ pose: z.enum(POSES), joints: jointsSch
   a preset casually. The existing pose tools clear `joints` like the UI.
 - **Comic heads** (`src/comic/heads.ts`) place the head at a fixed share of
   standing height, which is wrong for a crouch or a bend. With `joints` set
-  they take the head from `jointPositions` instead, so balloon tails follow
+  they take the head and mouth from `bodyPoints` instead, so balloon tails follow
   a matched pose.
-- **Forward kinematics** (`src/pose/skeleton.ts`, pure): world positions of
-  every joint for a character and key, with the same proportions and angles
-  as `buildMannequin` but no scene. The camera solve and comic heads use it;
-  a test checks it against the built mannequin.
+- **Forward kinematics** (`src/pose/skeleton.ts`): `bodyPoints(character,
+  key, base)` gives world positions of every joint plus the head, mouth,
+  wrists and ankles. It poses the same joint frame the mannequin is built on
+  (`buildSkeleton`, no meshes), so the two can't drift apart; a test checks
+  them against each other. The camera solve and comic heads use it.
 - **Shot images.** The previs already guides framing and composition; a
   matched pose makes it a much better guide with no prompt change.
 
@@ -1430,6 +1431,11 @@ already rejects outside requests.
 
 ### 14.8 Milestones
 
+First version scope: **one still pose** per character key, no animation of
+joint angles and no blending between keys (a moving shot switches pose at
+the midpoint, as presets do; a walk still uses the walk cycle). No hands or
+feet.
+
 | # | Milestone | Scope | Exit criteria |
 |---|---|---|---|
 | **P1** | Joint poses | `joints` on `ActorKey`, `applyPose` overrides, forward kinematics, rig cache key, preset clears, blocking panel label, assistant context, comic heads | A hand-written joint set renders, saves, reloads and undoes |
@@ -1440,6 +1446,13 @@ already rejects outside requests.
 
 P1 to P3 need no UI and no MediaPipe, so they can be built and tested
 first; P4 joins them up.
+
+**Progress:** P1 done: `joints` on `ActorKey` (degrees), `applyPose`
+overrides, `buildSkeleton` + `bodyPoints`, rig pose cache keyed on the
+joints, preset choice clears them, **Clear photo pose** in the blocking
+panel, assistant context and blocking tools keep them, comic heads use the
+posed head. Tests: `tests/jointPose.test.ts`, `tests/blockingPhotoPose.test.tsx`.
+Nothing sets joints from the UI yet; that comes with P4.
 
 ### 14.9 Open questions
 
