@@ -6,6 +6,17 @@ import '@fontsource/bangers/latin-400.css';
 import '@fontsource/permanent-marker/latin-400.css';
 import '@fontsource/architects-daughter/latin-400.css';
 import '@fontsource/covered-by-your-grace/latin-400.css';
+import '@fontsource/gochi-hand/latin-400.css';
+import '@fontsource/shantell-sans/latin-400.css';
+import '@fontsource/shantell-sans/latin-700.css';
+import '@fontsource/schoolbell/latin-400.css';
+import '@fontsource/luckiest-guy/latin-400.css';
+import '@fontsource/titan-one/latin-400.css';
+import '@fontsource/bowlby-one-sc/latin-400.css';
+import '@fontsource/chewy/latin-400.css';
+import '@fontsource/creepster/latin-400.css';
+import '@fontsource/rubik-wet-paint/latin-400.css';
+import '@fontsource/bungee/latin-400.css';
 import { deleteSetting, getBlob, getSetting, putBlob, setSetting } from '../storage/db';
 import { hashKey } from '../util/hash';
 import { DEFAULT_FONT } from './model';
@@ -23,6 +34,16 @@ export const BUILTIN_FONTS = [
   { family: 'Permanent Marker', label: 'Permanent Marker' },
   { family: 'Architects Daughter', label: 'Architects Daughter (handwritten)' },
   { family: 'Covered By Your Grace', label: 'Covered By Your Grace (casual)' },
+  { family: 'Gochi Hand', label: 'Gochi Hand (dialogue)' },
+  { family: 'Shantell Sans', label: 'Shantell Sans (dialogue)' },
+  { family: 'Schoolbell', label: 'Schoolbell (captions)' },
+  { family: 'Luckiest Guy', label: 'Luckiest Guy (titles)' },
+  { family: 'Titan One', label: 'Titan One (SFX)' },
+  { family: 'Bowlby One SC', label: 'Bowlby One SC (SFX)' },
+  { family: 'Chewy', label: 'Chewy (bubbly)' },
+  { family: 'Creepster', label: 'Creepster (horror)' },
+  { family: 'Rubik Wet Paint', label: 'Rubik Wet Paint (rough)' },
+  { family: 'Bungee', label: 'Bungee (sci-fi)' },
 ] as const;
 
 export const USER_FONTS_SETTING = 'lettering-fonts';
