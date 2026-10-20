@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import type { ActorKey, Character, Joint } from '../state/schema';
 import { applyPose, buildSkeleton } from '../three/mannequin';
 
-/** Points on the figure that can be located: the joints, plus the head (its center), mouth, wrists and ankles. */
-export type BodyPoint = Joint | 'head' | 'mouth' | 'wristL' | 'wristR' | 'ankleL' | 'ankleR';
+/** Points on the figure that can be located: the joints, plus the head (its center), mouth, nose tip, ears, wrists and ankles. */
+export type BodyPoint = Joint | 'head' | 'mouth' | 'noseTip' | 'earL' | 'earR' | 'wristL' | 'wristR' | 'ankleL' | 'ankleR';
 export const BODY_POINTS: BodyPoint[] = [
-  'pelvis', 'spine', 'neck', 'head', 'mouth',
+  'pelvis', 'spine', 'neck', 'head', 'mouth', 'noseTip', 'earL', 'earR',
   'shoulderL', 'elbowL', 'wristL', 'shoulderR', 'elbowR', 'wristR',
   'hipL', 'kneeL', 'ankleL', 'hipR', 'kneeR', 'ankleR',
 ];

@@ -150,7 +150,7 @@ const torsoLength = (p: Proportions) => p.torso * 0.88;
 
 /**
  * The jointed frame of the figure with no meshes: the joints, plus the head,
- * mouth, wrists and ankles as markers. The mannequin is built on it, and
+ * mouth, nose tip, ears, wrists and ankles as markers. The mannequin is built on it, and
  * joint positions can be read from it without drawing anything.
  */
 export function buildSkeleton(c: Pick<Character, 'heightCm' | 'sex' | 'build'>): THREE.Group {
@@ -168,7 +168,8 @@ export function buildSkeleton(c: Pick<Character, 'heightCm' | 'sex' | 'build'>):
   spine.add(neck);
   const head = marker('head', 0, p.neck + p.headR * 0.95, 0);
   neck.add(head);
-  head.add(marker('mouth', 0, -p.headR * 0.7, p.headR * 0.8));
+  head.add(marker('mouth', 0, -p.headR * 0.7, p.headR * 0.8), marker('noseTip', 0, -p.headR * 0.08, p.headR * 1.1));
+  head.add(marker('earL', p.headR * 0.9, 0, 0), marker('earR', -p.headR * 0.9, 0, 0));
   for (const [side, s] of [['L', 1], ['R', -1]] as const) {
     const shoulder = joint(`shoulder${side}`, s * p.shoulderHalf, torsoLen * 0.93, 0);
     spine.add(shoulder);
@@ -237,9 +238,9 @@ export function buildMannequin(c: Pick<Character, 'heightCm' | 'sex' | 'build' |
     const knee = at(`knee${side}`);
     knee.add(ball(p.limbR * 1.2, LEGS), capsule(p.limbR * 1.1, p.shin, LEGS));
     const foot = new THREE.Mesh(new THREE.BoxGeometry(p.limbR * 2.2, p.foot, p.height * 0.15), greyMaterial(0.35));
-    foot.position.set(0, -p.shin - p.foot / 2, p.height * 0.045);
+    foot.position.set(0, -p.foot / 2, p.height * 0.045);
     foot.userData.shade = 0.35;
-    knee.add(foot);
+    at(`ankle${side}`).add(foot);
   }
 
   applyPose(root, c, pose, joints);
@@ -260,7 +261,8 @@ export function buildMannequin(c: Pick<Character, 'heightCm' | 'sex' | 'build' |
  * Sets joint rotations for a pose. Joints not named by the pose return to
  * rest. `joints` (degrees) replace the pose's angles for the joints they
  * name, e.g. a pose matched from a photo; the pose still sets the body's
- * height and lie.
+ * height and lie. A standing body with its own leg angles (a crouch, a
+ * kneel) is lowered or raised so its lowest foot or knee is on the floor.
  */
 export function applyPose(root: THREE.Object3D, c: Pick<Character, 'heightCm' | 'sex' | 'build'>, pose: PoseId, joints?: JointAngles): void {
   const p = proportions(c);
@@ -277,6 +279,35 @@ export function applyPose(root: THREE.Object3D, c: Pick<Character, 'heightCm' | 
   pelvis.position.y = def.pelvisHeight ? def.pelvisHeight(p) : p.hipY;
   body.rotation.set(...(def.root?.rotation ?? [0, 0, 0]));
   body.position.set(0, def.root?.lift?.(p) ?? 0, 0);
+  for (const side of ['L', 'R']) root.getObjectByName(`ankle${side}`)?.rotation.set(0, 0, 0);
+  if (joints && !def.pelvisHeight && !def.root) settleOnFloor(root, pelvis, p);
+}
+
+/** How far a foot turns at the ankle to stay flat. */
+const ANKLE_MAX = deg(60);
+
+/**
+ * Turns the feet flat to the body (as far as an ankle can), then moves the
+ * pelvis up or down so the lowest ankle (over its foot) or knee touches the
+ * floor.
+ */
+function settleOnFloor(root: THREE.Object3D, pelvis: THREE.Object3D, p: Proportions): void {
+  root.updateMatrixWorld(true);
+  const body = root.children[0];
+  for (const side of ['L', 'R']) {
+    const ankle = root.getObjectByName(`ankle${side}`)!;
+    // The shin's turn relative to the body, undone at the ankle.
+    const shin = body.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(ankle.parent!.getWorldQuaternion(new THREE.Quaternion()));
+    const flat = shin.invert();
+    const turn = 2 * Math.acos(Math.min(1, Math.abs(flat.w)));
+    if (turn > ANKLE_MAX) flat.slerp(new THREE.Quaternion(), 1 - ANKLE_MAX / turn);
+    ankle.quaternion.copy(flat);
+  }
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  const height = (name: string) => root.worldToLocal(root.getObjectByName(name)!.getWorldPosition(v)).y;
+  const gap = Math.min(height('ankleL') - p.foot, height('ankleR') - p.foot, height('kneeL') - p.limbR * 1.2, height('kneeR') - p.limbR * 1.2);
+  pelvis.position.y -= gap;
 }
 
 const JOINT_SET = Object.fromEntries(JOINTS.map((j) => [j, true])) as Record<Joint, true>;

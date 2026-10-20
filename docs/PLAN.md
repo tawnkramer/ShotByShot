@@ -1454,6 +1454,26 @@ panel, assistant context and blocking tools keep them, comic heads use the
 posed head. Tests: `tests/jointPose.test.ts`, `tests/blockingPhotoPose.test.tsx`.
 Nothing sets joints from the UI yet; that comes with P4.
 
+P2 done: `solvePose(person, { cameraTilt, cameraRoll })` in
+`src/pose/solvePose.ts` (types in `src/pose/landmarks.ts`). It returns the
+preset (standing, sitting, lying), joint angles, and `facing`: the body's
+yaw seen from the photo's camera, so in a shot `yaw = facing + camera
+azimuth` (checked against `applyCamera`). As built:
+- A forward bend goes to the pelvis; the spine takes only the shoulders'
+  turn against the hips.
+- The neck needs the nose and both ears; in a profile shot it keeps the
+  preset.
+- Limits: elbows and knees bend one way only, up to 150° and 160°. Other
+  joints are not clamped yet.
+- Sitting needs level thighs, bent knees and near-hanging shins (a crouch
+  has sloping shins and stays standing).
+- A standing body with its own angles is settled so its lowest foot or knee
+  is on the floor, and its feet are kept flat to the body (up to 60° at the
+  ankle). This is not a posed ankle; presets are unchanged.
+Tests: `tests/solvePose.test.ts` (round trips through fake detections made
+from the posed mannequin: turned, from behind, tilted and rolled camera,
+other sizes, noise, crouch, sitting, lying, hidden joints, handedness).
+
 ### 14.9 Open questions
 
 - **Keep the photo?** Storing it on the shot as a reference (overlay toggle
