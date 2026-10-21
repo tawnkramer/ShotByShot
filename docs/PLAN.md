@@ -1500,6 +1500,38 @@ and camera together; other photo shapes; unknown lens; lens slider; cut off
 below the hips; pose-only and camera-only; too little in frame; leaning
 body; up from standing, low angle and lying; EXIF in both byte orders).
 
+P4 done:
+- `@mediapipe/tasks-vision` pinned at 1.0.1. `src/pose/detect.ts` is the
+  only module that imports it, lazily. GPU, falling back to CPU; SIMD or
+  no-SIMD WASM picked by a feature test.
+- The model (`pose_landmarker_full.task`, 9.4 MB) is committed in
+  `public/mediapipe/`. The WASM runtime (~12 MB each for SIMD and no-SIMD)
+  is not committed: a small Vite plugin serves it from the package in dev
+  and emits it to `mediapipe/wasm/` in builds. The PWA precache skips
+  `mediapipe/`; the service worker caches it on first use (CacheFirst).
+- **Match photo** button on the shot frame (Blocking and Camera tabs) opens
+  `MatchPhotoSheet`: choose a photo, pick the person if there are several,
+  pick the character (the selected one by default), pose and/or camera,
+  preview (the shot with the match rendered, photo over it with an opacity
+  slider), lens slider when the photo has no EXIF lens, warnings, Apply
+  (`applyPhotoMatch`: one undo).
+- Checked in the production build in Chromium (CSP on): detection and match
+  of a 1000 × 667 photo took about 6 s in the container (software WebGL,
+  including loading 30 MB from a local server).
+- Live test `LIVE_POSE=1 npx vitest run tests/pose.live.test.ts` (free,
+  local; downloads MediaPipe's own test photo): records
+  `tests/fixtures/pose/warrior.json` and draws the match over the photo.
+  `tests/poseFixture.test.ts` checks the real detection in normal runs.
+- Tuned on the real photo: the fit was trading a believable camera (a 9 mm
+  lens at 1 m, looking up 27°) for a slightly better fit of a body built
+  differently from the mannequin. The lens is now held near its guess and
+  the tilt and roll near what the body says (`PULL`), several starting arcs
+  are tried, and a wide stance takes up from the torso. Rough-match warning
+  at 5% of the frame height (proportions alone give ~3%).
+- Known: MediaPipe's face points understate a head turn (a near-profile
+  read as ~30°). Other characters near the matched one can end up in front
+  of the new camera; move them or the camera after.
+
 ### 14.9 Open questions
 
 - **Keep the photo?** Storing it on the shot as a reference (overlay toggle

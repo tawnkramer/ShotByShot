@@ -35,6 +35,28 @@ export function renderShotThumbnail(project: Project, shotId: string, width = 48
   );
 }
 
+/** The shot at its start or end key, e.g. to preview a change before it's made. */
+export function renderShotAt(project: Project, shotId: string, which: 'start' | 'end', width = 480): Promise<string | null> {
+  const aspect = frameAspect(project, project.shots.find((s) => s.id === shotId));
+  const eff = effectiveShot(project, shotId);
+  const key = `shot-at:${hashKey(JSON.stringify([shotThumbKey(project, shotId), which, eff?.camera]))}`;
+  return renderView(
+    key,
+    async () => {
+      const rig = new ShotRig();
+      rig.sync(project, shotId);
+      await rig.ready();
+      const cam = new THREE.PerspectiveCamera();
+      const state = rig.setTime(which === 'start' ? 0 : 1);
+      if (state) applyCamera(cam, state, aspect);
+      const object = new THREE.Group();
+      object.add(rig.root, ...lights());
+      return { object, camera: cam, cleanup: () => rig.dispose() };
+    },
+    { width, height: Math.round(width / aspect) },
+  );
+}
+
 /** The same lighting as the live views. */
 export function lights(): THREE.Object3D[] {
   const hemi = new THREE.HemisphereLight(0xffffff, 0x55555c, 1.1);

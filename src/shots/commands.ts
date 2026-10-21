@@ -132,6 +132,18 @@ export function setCamera(shotId: string, which: Which, state: CameraState, merg
   }, mergeKey);
 }
 
+/**
+ * A match from a photo as one undoable change: the character's key (its
+ * pose) and/or the camera. `cameraKey` is the camera keyframe to set.
+ */
+export function applyPhotoMatch(shotId: string, characterId: string, which: Which, match: { key?: ActorKey; camera?: CameraState; cameraKey?: Which }): Command {
+  return shotCommand('Match photo', shotId, (s) => {
+    const a = s.setup!.actors.find((x) => x.characterId === characterId);
+    if (a && match.key) a.motion = withKey(plain(a.motion), which, match.key);
+    if (match.camera) s.camera = withKey(plain(s.camera!), match.cameraKey ?? 'start', match.camera);
+  });
+}
+
 export function setCameraFixed(shotId: string): Command {
   return shotCommand('Fixed camera', shotId, (s) => {
     s.camera!.mode = 'static';

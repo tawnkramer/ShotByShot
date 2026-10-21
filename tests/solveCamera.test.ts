@@ -164,7 +164,7 @@ describe('camera fit', () => {
     const gap = cameraGap(r.camera!, truth);
     expect(gap.place).toBeLessThan(0.1);
     const offset = THREE.MathUtils.radToDeg(Math.atan(Math.abs(r.crop.y + r.crop.h / 2 - 0.5) * 2 * Math.tan(THREE.MathUtils.degToRad(lensToVFov(35, 4 / 3)) / 2)));
-    expect(Math.abs(gap.aim - offset)).toBeLessThan(0.5);
+    expect(Math.abs(gap.aim - offset)).toBeLessThan(1);
   });
 
   it('fits an unknown lens from where the body points fall', () => {

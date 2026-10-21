@@ -25,12 +25,21 @@ export interface Crop {
 const FULL_FRAME_DIAGONAL = Math.hypot(36, 24);
 /** Lens assumed when the photo doesn't say (35 mm equivalent): a typical phone or kit-zoom view. */
 export const DEFAULT_PHOTO_LENS = 35;
-/** How strongly an unknown lens is held near the default (per unit of log lens, in frame heights). */
-const LENS_PULL = 0.02;
+/**
+ * How strongly an unknown lens is held near its guess (per unit of log
+ * lens), and the camera's tilt and roll near what the body says is up (per
+ * radian), in frame heights. A body that isn't built quite like the
+ * character can be fitted a little better by an odd lens or a steep tilt
+ * (perspective stretches limbs); these keep the fit from trading a believable
+ * camera for that.
+ */
+const PULL = { lens: 0.2, level: 1 };
+/** Turns (degrees) from the body's facing to start camera fits from. */
+const START_TURNS = [0, -35, 35];
 /** Fewer points than this in the frame can't place a camera reliably. */
 const MIN_POINTS = 6;
 /** Mean miss above this (fraction of the frame height) is a rough match. */
-const ROUGH = 0.03;
+const ROUGH = 0.05;
 /** A person shorter than this in the frame (fraction of its height) is too small to match well. */
 const SMALL = 0.15;
 
@@ -77,6 +86,8 @@ export function pointsInCrop(person: DetectedPerson, crop: Crop): Seen[] {
 
 export interface CameraFit {
   camera: CameraState;
+  /** What the fit minimised: squared misses plus the pulls on lens, tilt and roll. */
+  cost: number;
   /** Mean miss between the photo's points and the posed character's, as a fraction of the frame height. */
   error: number;
 }
@@ -101,6 +112,8 @@ export function fitCamera(
   aspect: number,
   start: CameraState,
   lens: { fixed?: number; guess: number },
+  /** What the body says the camera's tilt and roll are (degrees), to hold the fit near. */
+  level?: { tilt: number; roll: number },
 ): CameraFit {
   const world = seen.map((s) => new THREE.Vector3(...points[s.point]));
   const centre = world.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, world.length));
@@ -126,7 +139,8 @@ export function fitCamera(
       // In frame heights both ways, so a miss across counts the same as one up or down.
       out.push((((v.x + 1) / 2 - seen[i].u) * aspect), ((1 - v.y) / 2 - seen[i].v));
     });
-    if (free) out.push(LENS_PULL * (full[6] - Math.log(lens.guess)));
+    if (free) out.push(PULL.lens * (full[6] - Math.log(lens.guess)));
+    if (level) out.push(PULL.level * THREE.MathUtils.degToRad(full[4] - level.tilt), PULL.level * THREE.MathUtils.degToRad(full[5] - level.roll));
     return out;
   };
   const steps = [1e-4, 1e-4, 1e-4, 1e-3, 1e-3, 1e-3, 1e-4];
@@ -141,7 +155,7 @@ export function fitCamera(
   const r = misses(fit.params);
   let sum = 0;
   for (let i = 0; i < seen.length; i++) sum += Math.hypot(r[2 * i], r[2 * i + 1]);
-  return { camera, error: sum / Math.max(1, seen.length) };
+  return { camera, cost: fit.cost, error: sum / Math.max(1, seen.length) };
 }
 
 export interface MatchRequest {
@@ -201,14 +215,22 @@ export function matchPhoto(req: MatchRequest): MatchResult | null {
   }
   const guess = shotLensFromPhoto(req.photo.lens35 ?? DEFAULT_PHOTO_LENS, photoAspect, crop.w);
   const fixed = req.lens ?? (req.photo.lens35 ? guess : undefined);
+  const level = { tilt: upright.cameraTilt, roll: upright.cameraRoll };
   let fit: CameraFit | undefined;
   // Perspective in the photo can nudge the tilt the body gave; the pose follows it once.
   for (let round = 0; round < 2; round++) {
     const posed = withPose(m);
     const points = bodyPoints(req.character, posed, req.base(posed));
-    const start = fit?.camera ?? { ...startCamera(points, seen, posed.yaw - m.facing, req.aspect, fixed ?? guess), elevation: upright.cameraTilt, roll: upright.cameraRoll };
-    fit = fitCamera(points, seen, req.aspect, start, { fixed, guess });
-    if (round === 0) m = solvePose(req.person, { cameraTilt: fit.camera.elevation, cameraRoll: fit.camera.roll }) ?? m;
+    if (fit) fit = fitCamera(points, seen, req.aspect, fit.camera, { fixed, guess }, level);
+    else {
+      // A body seen from slightly different sides can look much the same: try a few and keep the best.
+      const first = { ...startCamera(points, seen, posed.yaw - m.facing, req.aspect, fixed ?? guess), elevation: level.tilt, roll: level.roll };
+      for (const turn of START_TURNS) {
+        const f = fitCamera(points, seen, req.aspect, { ...first, azimuth: first.azimuth + turn }, { fixed, guess }, level);
+        if (!fit || f.cost < fit.cost) fit = f;
+      }
+    }
+    if (round === 0) m = solvePose(req.person, { cameraTilt: fit!.camera.elevation, cameraRoll: fit!.camera.roll }) ?? m;
   }
   const height = Math.max(...seen.map((s) => s.v)) - Math.min(...seen.map((s) => s.v));
   if (height < SMALL) warnings.push('The person is small in the photo, so the camera match is rough.');
