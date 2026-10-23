@@ -44,6 +44,7 @@ describe('shot video', () => {
     expect(text).toContain('<Subject 1> is Ana from <Picture 2>: Ana in a red coat');
     expect(text).toContain('Ana waits at the bus stop.');
     expect(text).toContain('Locked-off camera');
+    expect(text).toContain('audio:\nVoices and natural sound effects only. No music, no score, no soundtrack.');
     expect(text).toMatch(/additional direction \(highest priority\):\nRain starts\.$/);
   });
 
