@@ -50,6 +50,22 @@ export interface ToolSpec {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }
 
+/** The browser's own words for a failed request ("Load failed", "The network connection was lost."…), to show with ours. */
+export function networkDetail(e: unknown): string {
+  const m = e instanceof Error ? e.message.trim() : '';
+  return m ? ` (${m.replace(/\.$/, '')})` : '';
+}
+
+/** Reads the next chunk of a streamed response, turning a dropped connection into a readable error. */
+export async function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>, provider: string): Promise<ReadableStreamReadResult<Uint8Array>> {
+  try {
+    return await reader.read();
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    throw new ChatError(`The connection to ${provider} dropped while it was answering${networkDetail(e)}. Try again.`);
+  }
+}
+
 export class ChatError extends Error {
   constructor(
     message: string,
@@ -130,7 +146,9 @@ type StreamEvent = {
   delta?: string;
   item?: { type: string; call_id?: string; name?: string; arguments?: string };
   message?: string;
-  response?: { error?: { message?: string }; incomplete_details?: { reason?: string } };
+  code?: string;
+  error?: { message?: string; code?: string };
+  response?: { error?: { message?: string; code?: string }; incomplete_details?: { reason?: string } };
 };
 
 /**
@@ -161,7 +179,7 @@ export async function streamChat(
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ChatError("Couldn't reach OpenAI. Check your connection.");
+    throw new ChatError(`Couldn't reach OpenAI${networkDetail(e)}. Check your connection.`);
   }
   if (!res.ok || !res.body) {
     let detail = '';
@@ -199,14 +217,18 @@ export async function streamChat(
       if (it.type === 'function_call') toolCalls.push({ id: it.call_id || `call_${toolCalls.length}`, type: 'function', function: { name: it.name ?? '', arguments: it.arguments || '{}' } });
       else if (it.type === 'reasoning') reasoning.push(it);
     } else if (ev.type === 'error' || ev.type === 'response.failed') {
-      throw new ChatError(`OpenAI error: ${ev.message ?? ev.response?.error?.message ?? 'the response failed.'}`);
+      // The message can be on the event, under error, or under response.error; the code alone still says what went wrong.
+      const err = ev.response?.error ?? ev.error;
+      const message = ev.message ?? err?.message;
+      const code = ev.code ?? err?.code;
+      throw new ChatError(`OpenAI error: ${message ?? 'the response failed'}${code && !message?.includes(code) ? ` (${code})` : ''}${message ? '' : '.'}`);
     } else if (ev.type === 'response.incomplete' && !content && !toolCalls.length) {
       throw new ChatError(`OpenAI stopped early (${ev.response?.incomplete_details?.reason ?? 'incomplete'}).`);
     }
   };
 
   for (;;) {
-    const { value, done } = await reader.read();
+    const { value, done } = await readChunk(reader, 'OpenAI');
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     let nl: number;
