@@ -14,6 +14,10 @@ export function UpdateBanner() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
   } = useRegisterSW({
+    // Left alone, the plugin reloads the page the moment the new worker takes
+    // control, so the banner only flashed and the open project wasn't saved
+    // first. Showing the banner lets Update save, then reload.
+    onNeedReload: () => setReplaced(true),
     onRegisteredSW(_url, registration) {
       if (!registration) return;
       const check = () => void registration.update().catch(() => {});
