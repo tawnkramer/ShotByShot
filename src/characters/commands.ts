@@ -63,7 +63,7 @@ export function updateCharacter(id: string, patch: CharacterPatch, mergeKey?: st
       // A new sex gets a fitting voice unless the voice was chosen by hand for this sex already.
       if (patch.sex && !patch.voice) {
         const others = d.characters.filter((x) => x.id !== id).map((x) => x.voice.voiceId);
-        c.voice = { ...suggestVoice(patch.sex, others), speed: c.voice.speed, instructions: c.voice.instructions };
+        c.voice = { ...suggestVoice(patch.sex, others, c.voice.provider === 'gemini' ? 'gemini' : 'openai'), speed: c.voice.speed, instructions: c.voice.instructions };
       }
     },
   };

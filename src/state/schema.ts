@@ -164,7 +164,7 @@ export type Build = (typeof BUILDS)[number];
 export type PoseId = (typeof POSES)[number];
 
 export const voiceSchema = z.object({
-  provider: z.enum(['openai', 'browser']),
+  provider: z.enum(['openai', 'gemini', 'browser']),
   voiceId: z.string(),
   speed: z.number().min(0.25).max(4),
   /** Speaking style, e.g. "gravelly, tired". */

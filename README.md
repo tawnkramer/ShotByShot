@@ -27,7 +27,22 @@ pick the **Assistant model** there. The picker lists the chat models each saved 
 can use, read fresh whenever Settings opens, so new models appear without an app
 update. **Automatic** uses OpenAI when an OpenAI key is saved and Gemini otherwise;
 for Gemini it picks the newest stable Pro or Flash model, checking again once a day. Each key is stored only in this browser and sent only to
-its own provider. Images and dialogue voices always use the OpenAI key.
+its own provider.
+
+## Gemini images and voices
+
+With a Gemini key saved, the image editor's **Model** list adds a **Google Gemini**
+group (Nano Banana image models such as `gemini-3-pro-image`, read from the key's own
+model list). The 3D preview and any reference images go in with the prompt, the image
+uses the closest aspect ratio Gemini supports, and **High** quality asks for a 2K
+image. Gemini images have no cost estimate; they're billed per image on your Google
+AI Studio account.
+
+Each character's **Voice** list also has Gemini's prebuilt voices (Kore, Charon,
+Puck…). Gemini has no speed setting, so the voice's speed and speaking style are
+sent as directions ahead of each line. Settings → Gemini → **Speech model** picks
+the model; Automatic uses the newest stable one. Gemini clips are saved as WAV.
+Characters can mix providers: each line is voiced with its own character's key.
 
 ## Character images
 

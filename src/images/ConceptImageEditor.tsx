@@ -19,6 +19,8 @@ import { safeFileName } from '../storage/projectFile';
 import { COMFY_KEY_SETTING } from '../comfy/client';
 import { listWorkflows, type ComfyWorkflow } from '../comfy/settings';
 import { asPng, placeImages, runWorkflow } from '../comfy/run';
+import { GEMINI_KEY_SETTING } from '../ai/gemini';
+import { GEMINI_IMAGE_MODELS, generateGeminiImage, geminiAspectRatio, geminiImageModels, isGeminiImageModel } from './gemini';
 
 export const IMAGE_PREFERENCES_SETTING = 'image-generation-preferences';
 /** Model values for imported Comfy workflows: `comfy:<workflow id>`. */
@@ -44,7 +46,7 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     let active = true;
     void getSetting<{ model?: string; quality?: ImageQuality }>(IMAGE_PREFERENCES_SETTING).then((saved) => {
       if (!active) return;
-      if (saved?.model && (IMAGE_MODELS.includes(saved.model as typeof IMAGE_MODELS[number]) || saved.model.startsWith(COMFY_PREFIX))) setModel(saved.model);
+      if (saved?.model && (IMAGE_MODELS.includes(saved.model as typeof IMAGE_MODELS[number]) || saved.model.startsWith(COMFY_PREFIX) || isGeminiImageModel(saved.model))) setModel(saved.model);
       if (saved?.quality && ['low', 'medium', 'high'].includes(saved.quality)) setQuality(saved.quality);
     }).catch(() => {}).finally(() => { if (active) setPreferencesReady(true); });
     return () => { active = false; };
@@ -56,9 +58,13 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   // Comfy workflows: text-to-image for characters, image editing where a 3D preview guides the result.
   const [comfyWorkflows, setComfyWorkflows] = useState<ComfyWorkflow[]>([]);
   const comfy = model.startsWith(COMFY_PREFIX) ? comfyWorkflows.find((w) => COMFY_PREFIX + w.id === model) : undefined;
+  const gemini = isGeminiImageModel(model);
+  const [geminiModels, setGeminiModels] = useState<string[]>(GEMINI_IMAGE_MODELS);
+  const provider = comfy ? 'Comfy Cloud' : gemini ? 'Gemini' : 'OpenAI';
   const [status, setStatus] = useState('');
   const size = kind === 'shot' ? shotImageSize(imageContext?.aspect ?? 1, model) : kind === 'prop' ? '1024x1024' : kind === 'stage' ? '1536x1024' : '1024x1536';
-  const estimate = comfy ? undefined : estimateImageCost(model, quality, size, buildPrompt ? buildPrompt(prompt) : prompt);
+  const aspect = kind === 'shot' ? imageContext?.aspect ?? 1 : kind === 'prop' ? 1 : kind === 'stage' ? 3 / 2 : 2 / 3;
+  const estimate = comfy || gemini ? undefined : estimateImageCost(model, quality, size, buildPrompt ? buildPrompt(prompt) : prompt);
   const referenceCount = reference ? 1 + references.length : 0;
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,8 +79,8 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
   }, [reference]);
   const [preview, setPreview] = useState(false);
   const savedUrl = useBlobUrl(c.image?.blob);
-  const [keys, setKeys] = useState<{ openai?: boolean; comfy?: boolean }>({});
-  const hasKey = model.startsWith(COMFY_PREFIX) ? keys.comfy : keys.openai;
+  const [keys, setKeys] = useState<{ openai?: boolean; comfy?: boolean; gemini?: boolean }>({});
+  const hasKey = model.startsWith(COMFY_PREFIX) ? keys.comfy : gemini ? keys.gemini : keys.openai;
   // Built-in workflows are offered once a Comfy key is saved; imported ones always show.
   const shownComfy = comfyWorkflows.filter((w) => !w.builtin || keys.comfy || COMFY_PREFIX + w.id === model);
   useEffect(() => {
@@ -88,8 +94,9 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
     vv?.addEventListener('resize', fitScreen);
     vv?.addEventListener('scroll', fitScreen);
     window.addEventListener('resize', fitScreen);
-    void Promise.all([getSetting<string>(API_KEY_SETTING), getSetting<string>(COMFY_KEY_SETTING)])
-      .then(([openai, comfyKey]) => setKeys({ openai: Boolean(openai), comfy: Boolean(comfyKey) })).catch(() => setKeys({ openai: false, comfy: false }));
+    void Promise.all([getSetting<string>(API_KEY_SETTING), getSetting<string>(COMFY_KEY_SETTING), getSetting<string>(GEMINI_KEY_SETTING)])
+      .then(([openai, comfyKey, geminiKey]) => setKeys({ openai: Boolean(openai), comfy: Boolean(comfyKey), gemini: Boolean(geminiKey) })).catch(() => setKeys({ openai: false, comfy: false, gemini: false }));
+    void geminiImageModels().then(setGeminiModels).catch(() => {});
     // Characters have no input image; elsewhere editing workflows take the 3D preview, and text-to-image ones work from the prompt alone.
     void (kind === 'character' ? listWorkflows('image', true) : Promise.all([listWorkflows('edit', true), listWorkflows('image', true)]).then((lists) => lists.flat()))
       .then(setComfyWorkflows).catch(() => {});
@@ -128,10 +135,18 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
         if (!abort.signal.aborted) setDraft({ blob: await asPng(blob), prompt: renderedPrompt, model, additionalPrompt: prompt });
         return;
       }
+      if (kind !== 'character' && !reference) throw new Error('Capture a 3D preview before generating.');
+      if (gemini) {
+        const geminiKey = await getSetting<string>(GEMINI_KEY_SETTING);
+        if (!geminiKey) { setKeys((k) => ({ ...k, gemini: false })); throw new Error('Add your Gemini API key in Settings first.'); }
+        const images = reference ? [reference, ...references.map((r) => r.data)] : [];
+        const blob = await generateGeminiImage({ apiKey: geminiKey, model, prompt: renderedPrompt, aspect, quality, references: images, signal: abort.signal });
+        if (!abort.signal.aborted) setDraft({ blob: await asPng(blob), prompt: renderedPrompt, model, additionalPrompt: prompt });
+        return;
+      }
       const apiKey = await getSetting<string>(API_KEY_SETTING);
       if (!apiKey) { setKeys((k) => ({ ...k, openai: false })); throw new Error('Add your OpenAI API key in Settings first.'); }
       const options = { apiKey, prompt: renderedPrompt, model, quality, signal: abort.signal };
-      if (kind !== 'character' && !reference) throw new Error('Capture a 3D preview before generating.');
       const blob = await (kind === 'shot' ? generateShotImage({ ...options, reference: reference!, referenceImages: references.map((r) => r.data), aspect: imageContext?.aspect ?? 1 }) : kind === 'prop' ? generatePropImage({ ...options, reference: reference! }) : kind === 'stage' ? generateStageImage({ ...options, reference: reference! }) : generateCharacterImage(options));
       if (!abort.signal.aborted) setDraft({ blob, prompt: renderedPrompt, model, additionalPrompt: prompt });
     } catch (e) {
@@ -197,18 +212,19 @@ export function ConceptImageEditor({ subject: c, defaultPrompt, kind, reference,
           <button className="btn ghost" disabled={busy} onClick={() => { setPrompt(defaultPrompt); onPromptChange?.(defaultPrompt); }}>Reset from {kind} details</button>
           <div className="row gap">
             <label className="field grow"><span>Model</span><select value={model} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(e.target.value, quality)}>
-              {[...new Set([...IMAGE_MODELS, ...(model.startsWith(COMFY_PREFIX) ? [] : [model])])].map((m) => <option key={m}>{m}</option>)}
+              {[...new Set([...IMAGE_MODELS, ...(model.startsWith(COMFY_PREFIX) || gemini ? [] : [model])])].map((m) => <option key={m}>{m}</option>)}
+              {(keys.gemini || gemini) && <optgroup label="Google Gemini">{[...new Set([...geminiModels, ...(gemini ? [model] : [])])].map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>}
               {shownComfy.length > 0 && <optgroup label="ComfyUI Cloud">{shownComfy.map((w) => <option key={w.id} value={COMFY_PREFIX + w.id}>{w.name}{kind !== 'character' && w.category === 'image' ? ' (prompt only)' : ''}</option>)}</optgroup>}
               {model.startsWith(COMFY_PREFIX) && !comfy && <option value={model}>Comfy workflow (not imported)</option>}
             </select></label>
             {!comfy && <label className="field"><span>Quality</span><select value={quality} disabled={busy || !preferencesReady} onChange={(e) => choosePreferences(model, e.target.value as ImageQuality)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>}
           </div>
-          <p className="small muted">Creates one {kind === 'shot' ? 'shot' : kind === 'stage' ? 'landscape' : kind === 'prop' ? 'square' : 'portrait'} image using your {comfy ? 'Comfy Cloud' : 'OpenAI'} key. {comfy ? 'Comfy Cloud charges apply.' : 'API charges apply.'} This artwork is separate from the 3D {kind === 'shot' ? 'scene' : kind === 'stage' ? 'stage' : kind === 'prop' ? 'model' : 'mannequin'}.</p>
+          <p className="small muted">Creates one {kind === 'shot' ? 'shot' : kind === 'stage' ? 'landscape' : kind === 'prop' ? 'square' : 'portrait'} image using your {provider} key. {comfy ? 'Comfy Cloud charges apply.' : 'API charges apply.'} This artwork is separate from the 3D {kind === 'shot' ? 'scene' : kind === 'stage' ? 'stage' : kind === 'prop' ? 'model' : 'mannequin'}.</p>
           {hasKey === false && <Link className="btn" to="/settings" onClick={onClose}>Add key in Settings</Link>}
           {error && <p className="error small" role="alert">{error}</p>}
           <p className="small muted" role="status">{busy ? status || 'Working… This can take a few minutes. Keep this page open.' : draft ? `${draft.model === UPLOAD_MODEL ? 'Your image is ready' : 'Preview ready'}. Use image to save it to this ${kind}.` : ''}</p>
           <div className="small" aria-live="polite">
-            {comfy ? <><strong>Cost estimate unavailable</strong><p className="muted">{size.replace('x', '×')} aspect · one image. Comfy Cloud bills GPU run time on your plan.</p></> : <><strong>{estimate ? `Estimated ${referenceCount ? 'output + prompt' : 'cost'}: ${formatImageCost(estimate.subtotal)}` : 'Cost estimate unavailable for this model'}</strong>
+            {comfy ? <><strong>Cost estimate unavailable</strong><p className="muted">{size.replace('x', '×')} aspect · one image. Comfy Cloud bills GPU run time on your plan.</p></> : gemini ? <><strong>Cost estimate unavailable for Gemini</strong><p className="muted">{geminiAspectRatio(aspect)} · one image{quality === 'high' ? ' at 2K' : ''}{referenceCount ? ` · ${referenceCount} reference image${referenceCount === 1 ? '' : 's'}` : ''}. Billed per image on your Google AI Studio account. <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noreferrer">Pricing</a></p></> : <><strong>{estimate ? `Estimated ${referenceCount ? 'output + prompt' : 'cost'}: ${formatImageCost(estimate.subtotal)}` : 'Cost estimate unavailable for this model'}</strong>
             <p className="muted">{size} · one image. {referenceCount > 0 && estimate ? `${referenceCount} reference image${referenceCount === 1 ? '' : 's'} billed additionally at $${estimate.imageRate} per million image input tokens; excluded from this estimate. ` : ''}Approximate, not a guaranteed charge. <a href="https://developers.openai.com/api/docs/guides/image-generation#cost-and-latency" target="_blank" rel="noreferrer">Pricing</a></p></>}
           </div>
           <button className="btn primary" disabled={busy || !preferencesReady || (kind !== 'shot' && !prompt.trim()) || hasKey === false} onClick={() => void generate()}>{busy ? 'Working…' : draft || c.image ? 'Generate another image' : 'Generate image'}</button>
