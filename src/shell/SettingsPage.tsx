@@ -7,6 +7,7 @@ import { DEFAULT_TTS_MODEL, TTS_MODEL_SETTING } from '../audio/tts';
 import { buildLabel } from '../version';
 import { AUTO_CHAT_MODEL_SETTING, CHAT_MODEL_SETTING, PREFERRED_CHAT_MODELS, chatModel as resolveChatModel, openAIChatModels, chosenChatModel } from '../ai/chat';
 import { AUTO_GEMINI_MODEL_SETTING, GEMINI_KEY_SETTING, PREFERRED_GEMINI_MODELS, rememberGeminiModels, testGeminiKey } from '../ai/gemini';
+import { GEMINI_TTS_MODELS, GEMINI_TTS_MODEL_SETTING, geminiTtsModels } from '../audio/gemini';
 import { ComfySettings } from '../comfy/ComfySettings';
 import { OpenArtSettings } from '../openart/OpenArtSettings';
 import { LetteringFontsSettings } from '../comic/LetteringFontsSettings';
@@ -18,6 +19,8 @@ export function SettingsPage() {
   const [openaiModels, setOpenaiModels] = useState<string[] | undefined>();
   const [geminiModels, setGeminiModels] = useState<string[] | undefined>();
   const [ttsModel, setTtsModel] = useState('');
+  const [geminiTts, setGeminiTts] = useState('');
+  const [geminiTtsOptions, setGeminiTtsOptions] = useState<string[]>(GEMINI_TTS_MODELS);
   const [chatModel, setChatModel] = useState('');
   const [autoModel, setAutoModel] = useState<string | undefined>();
   const [storage, setStorage] = useState<{ used: number; quota: number; persisted: boolean } | null>(null);
@@ -31,6 +34,8 @@ export function SettingsPage() {
 
   useEffect(() => {
     void getSetting<string>(TTS_MODEL_SETTING).then((m) => setTtsModel(m ?? ''));
+    void getSetting<string>(GEMINI_TTS_MODEL_SETTING).then((m) => setGeminiTts(m ?? ''));
+    void geminiTtsModels().then(setGeminiTtsOptions);
     void chosenChatModel().then((m) => setChatModel(m ?? ''));
     void loadAutoModel();
     void loadStorage().then(setStorage);
@@ -91,8 +96,9 @@ export function SettingsPage() {
           <section className="panel">
             <h2>Google Gemini API key</h2>
             <p className="muted small">
-              The assistant can use Gemini models from your own Google AI Studio account (get a key at aistudio.google.com). Images and voices still use
-              OpenAI. The key is stored only in this browser, is sent only to generativelanguage.googleapis.com, and is never included in project files.
+              The assistant, concept images (Nano Banana) and character voices can use Gemini models from your own Google AI Studio account (get a key at
+              aistudio.google.com). Pick a Gemini image model in the image editor, or a Gemini voice for a character. The key is stored only in this browser,
+              is sent only to generativelanguage.googleapis.com, and is never included in project files.
             </p>
             <KeyField
               setting={GEMINI_KEY_SETTING}
@@ -103,9 +109,29 @@ export function SettingsPage() {
                 setGeminiModels(models);
                 // A fresh list may have a newer model: make it the automatic choice.
                 if (models?.length) void rememberGeminiModels(models).then(loadAutoModel);
+                // The key's speech models were saved with the list.
+                void geminiTtsModels().then(setGeminiTtsOptions);
               }}
               afterChange={loadAutoModel}
             />
+            <label className="field">
+              <span>Speech model</span>
+              <select
+                value={geminiTts}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  setGeminiTts(m);
+                  void (m ? setSetting(GEMINI_TTS_MODEL_SETTING, m) : deleteSetting(GEMINI_TTS_MODEL_SETTING));
+                }}
+              >
+                <option value="">Automatic (newest)</option>
+                {[...new Set([...geminiTtsOptions, ...(geminiTts ? [geminiTts] : [])])].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
           </section>
 
           <section className="panel">

@@ -20,7 +20,7 @@ export interface MediaOption {
   data?: Blob;
 }
 
-const MIME: Record<string, string> = { png: 'image/png', mp3: 'audio/mpeg', mp4: 'video/mp4' };
+const MIME: Record<string, string> = { png: 'image/png', mp3: 'audio/mpeg', wav: 'audio/wav', mp4: 'video/mp4' };
 export const PREVIS_CLIP = 'previs-clip';
 export const SHOT_VIDEO = 'shot-video';
 
@@ -38,7 +38,7 @@ export function mediaOptions(project: Project, shot: Shot, previsFrame?: { blob:
   const stage = project.stages.find((s) => s.id === eff.stageId);
   if (stage?.image) options.push({ id: 'stage', kind: 'image', label: `${stage.name} (stage)`, role: `the set reference for ${stage.name}`, fileName: 'stage.png', blobKey: stage.image.blob });
   for (const c of captionsOf(project, shot, eff.durationSec)) {
-    if (c.audioBlob) options.push({ id: `line:${c.lineId}`, kind: 'audio', label: `${c.speaker ? `${c.speaker}: ` : ''}${clip(c.text, 40)}`, role: `the recorded dialogue${c.speaker ? ` spoken by ${c.speaker}` : ''} starting ${c.inSec.toFixed(1)} s into the shot: "${c.text}"`, fileName: 'dialogue.mp3', blobKey: c.audioBlob });
+    if (c.audioBlob) options.push({ id: `line:${c.lineId}`, kind: 'audio', label: `${c.speaker ? `${c.speaker}: ` : ''}${clip(c.text, 40)}`, role: `the recorded dialogue${c.speaker ? ` spoken by ${c.speaker}` : ''} starting ${c.inSec.toFixed(1)} s into the shot: "${c.text}"`, fileName: c.audioBlob.startsWith('tts-wav-') ? 'dialogue.wav' : 'dialogue.mp3', blobKey: c.audioBlob });
   }
   options.push({ id: PREVIS_CLIP, kind: 'video', label: 'Previs clip (camera and blocking)', role: 'a rough greyscale previs of the camera movement and blocking. Follow its camera motion, timing and positions, not its look', fileName: 'previs.mp4' });
   if (shot.video) options.push({ id: SHOT_VIDEO, kind: 'video', label: 'Current shot video (previous take)', role: 'the previous take of this shot. Keep what works in it and change what the prompt asks for', fileName: 'shot-video.mp4', blobKey: shot.video.blob });

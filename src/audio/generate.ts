@@ -4,11 +4,15 @@ import { hashKey } from '../util/hash';
 import { linesNeedingAudio, type SpokenLine } from './clips';
 import type { GeneratedClip } from './commands';
 import { synthesizeSpeech } from './tts';
+import { synthesizeGeminiSpeech } from './gemini';
 import { decodeDuration } from './player';
 
 export interface GenerateOptions {
-  apiKey: string;
+  /** OpenAI key and speech model, for lines spoken with OpenAI voices. */
+  apiKey?: string;
   model: string;
+  /** Gemini key and speech model, for lines spoken with Gemini voices. */
+  gemini?: { apiKey: string; model: string };
   signal?: AbortSignal;
   onProgress?: (done: number, total: number) => void;
   /** Saves each batch as it finishes, so a cancel or error keeps what's done. */
@@ -32,9 +36,21 @@ export async function generateDialogue(project: Project, opts: GenerateOptions, 
     while (next < lines.length && !error && !opts.signal?.aborted) {
       const s = lines[next++];
       try {
-        const audio = await synthesizeSpeech({ apiKey: opts.apiKey, model: opts.model, voice: { ...s.voice, instructions: s.instructions }, text: s.line.text, signal: opts.signal });
+        const voice = { ...s.voice, instructions: s.instructions };
+        const name = s.character.name;
+        let audio: Blob;
+        let blob: string;
+        if (voice.provider === 'gemini') {
+          if (!opts.gemini) throw new Error(`${name} has a Gemini voice. Add your Gemini API key in Settings to voice them.`);
+          audio = await synthesizeGeminiSpeech({ ...opts.gemini, voice, text: s.line.text, signal: opts.signal });
+          // "wav" in the key tells shot videos the clip is WAV, not MP3.
+          blob = `tts-wav-${hashKey(`${opts.gemini.model}|${s.sig}`)}`;
+        } else {
+          if (!opts.apiKey) throw new Error(`${name} has an OpenAI voice. Add your OpenAI API key in Settings, or pick a Gemini voice.`);
+          audio = await synthesizeSpeech({ apiKey: opts.apiKey, model: opts.model, voice, text: s.line.text, signal: opts.signal });
+          blob = `tts-${hashKey(`${opts.model}|${s.sig}`)}`;
+        }
         const durationSec = await decodeDuration(audio);
-        const blob = `tts-${hashKey(`${opts.model}|${s.sig}`)}`;
         await putBlob(blob, audio);
         pending.push({ lineId: s.line.id, sig: s.sig, blob, durationSec });
         done++;

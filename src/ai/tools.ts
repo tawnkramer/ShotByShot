@@ -9,6 +9,7 @@ import { isFrontMatter, numberShots } from '../story/breakdown';
 import { addObject, createStage, quatFromDegrees, eulerDegrees, removeObject, updateObject, placeProp } from '../staging/commands';
 import { addCharacters, updateCharacter, type CharacterPatch } from '../characters/commands';
 import { OPENAI_VOICES } from '../audio/voices';
+import { GEMINI_VOICE_NAMES } from '../audio/gemini';
 import { addProp, updateProp } from '../props/commands';
 import { addActor, addShotProp, mergeWithNext, setBlocking, removeActor, setActorKey, setCamera, setCameraFixed, setDuration, setShotPropKey, setShotStage, splitShot } from '../shots/commands';
 import { effectiveShot, frameAspect, effectiveShots, poseHeight, sceneLineOf, shotLines, subjectsFor, type EffectiveShot } from '../shots/setup';
@@ -302,7 +303,7 @@ const characterFields = {
   build: z.enum(BUILDS).optional(),
   age: z.enum(AGE_BANDS).optional(),
   notes: z.array(z.string()).optional(),
-  voice: z.enum(OPENAI_VOICES).optional(),
+  voice: z.enum([...OPENAI_VOICES, ...GEMINI_VOICE_NAMES]).optional().describe('OpenAI voices are lowercase (coral, onyx…); Gemini voices are capitalized (Kore, Charon…). Keep to the provider the character already uses unless asked.'),
   voice_speed: z.number().min(0.5).max(2).optional(),
   voice_style: z.string().optional().describe('Speaking style, e.g. "gravelly, tired".'),
 };
@@ -316,7 +317,8 @@ function characterPatch(p: Project, name: string, a: { sex?: string; height_cm?:
   if (a.age) patch.ageBand = a.age as CharacterPatch['ageBand'];
   if (a.notes) patch.attributes = a.notes;
   if (c && (a.voice || a.voice_speed || a.voice_style !== undefined)) {
-    patch.voice = { ...c.voice, provider: 'openai', voiceId: a.voice ?? c.voice.voiceId, speed: a.voice_speed ?? c.voice.speed, instructions: a.voice_style ?? c.voice.instructions };
+    const provider = a.voice ? ((GEMINI_VOICE_NAMES as readonly string[]).includes(a.voice) ? 'gemini' : 'openai') : c.voice.provider;
+    patch.voice = { ...c.voice, provider, voiceId: a.voice ?? c.voice.voiceId, speed: a.voice_speed ?? c.voice.speed, instructions: a.voice_style ?? c.voice.instructions };
   }
   return patch;
 }

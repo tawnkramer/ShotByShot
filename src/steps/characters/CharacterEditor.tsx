@@ -11,6 +11,8 @@ import { OPENAI_VOICES } from '../../audio/voices';
 import { DEFAULT_TTS_MODEL, playBlob, speakWithBrowser, stopPlayback, synthesizeSpeech, TTS_MODEL_SETTING } from '../../audio/tts';
 import { getSetting } from '../../storage/db';
 import { API_KEY_SETTING } from '../../ai/openai';
+import { GEMINI_KEY_SETTING } from '../../ai/gemini';
+import { GEMINI_VOICES, GEMINI_VOICE_NAMES, geminiTtsModel, synthesizeGeminiSpeech } from '../../audio/gemini';
 import { CharacterImageEditor } from './CharacterImageEditor';
 import { useBlobUrl } from '../../images/useBlobUrl';
 import { Slider } from '../staging/fields';
@@ -170,18 +172,20 @@ function VoiceEditor({ character: c, previewText, onChange }: { character: Chara
   const voice = c.voice;
   useEffect(() => () => stopPlayback(), []);
 
+  const gemini = voice.provider === 'gemini';
   const preview = async () => {
     setStatus(null);
-    const apiKey = await getSetting<string>(API_KEY_SETTING);
+    const apiKey = await getSetting<string>(gemini ? GEMINI_KEY_SETTING : API_KEY_SETTING);
+    const provider = gemini ? 'Gemini' : 'OpenAI';
     if (!apiKey) {
       const ok = speakWithBrowser(previewText, voice, c.sex);
-      setStatus(ok ? 'Playing with the browser\'s voice. Add an OpenAI key in Settings to hear the real voice.' : 'Add an OpenAI key in Settings to hear voices.');
+      setStatus(ok ? `Playing with the browser's voice. Add a ${provider} key in Settings to hear the real voice.` : `Add a ${provider} key in Settings to hear voices.`);
       return;
     }
     setBusy(true);
     try {
-      const model = (await getSetting<string>(TTS_MODEL_SETTING)) || DEFAULT_TTS_MODEL;
-      await playBlob(await synthesizeSpeech({ apiKey, model, voice, text: previewText }));
+      if (gemini) await playBlob(await synthesizeGeminiSpeech({ apiKey, model: await geminiTtsModel(), voice, text: previewText }));
+      else await playBlob(await synthesizeSpeech({ apiKey, model: (await getSetting<string>(TTS_MODEL_SETTING)) || DEFAULT_TTS_MODEL, voice, text: previewText }));
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
@@ -193,12 +197,28 @@ function VoiceEditor({ character: c, previewText, onChange }: { character: Chara
     <div className="field voice">
       <span>Voice</span>
       <div className="row gap">
-        <select className="grow" value={voice.voiceId} onChange={(e) => onChange({ ...voice, provider: 'openai', voiceId: e.target.value })}>
-          {OPENAI_VOICES.map((v) => (
-            <option key={v} value={v}>
-              {v[0].toUpperCase() + v.slice(1)}
-            </option>
-          ))}
+        <select
+          className="grow"
+          value={`${gemini ? 'gemini' : 'openai'}:${voice.voiceId}`}
+          onChange={(e) => {
+            const [provider, voiceId] = e.target.value.split(':') as ['openai' | 'gemini', string];
+            onChange({ ...voice, provider, voiceId });
+          }}
+        >
+          <optgroup label="OpenAI">
+            {OPENAI_VOICES.map((v) => (
+              <option key={v} value={`openai:${v}`}>
+                {v[0].toUpperCase() + v.slice(1)}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Google Gemini">
+            {GEMINI_VOICE_NAMES.map((v) => (
+              <option key={v} value={`gemini:${v}`}>
+                {v} · {GEMINI_VOICES[v]}
+              </option>
+            ))}
+          </optgroup>
         </select>
         <button className="btn" disabled={busy} onClick={preview}>
           {busy ? '…' : '▶ Preview'}

@@ -135,7 +135,7 @@ describe('Gemini keys and models', () => {
 
   it('tests a key by listing its chat models, newest first', async () => {
     const ok = await testGeminiKey('k', models(['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash-image', 'gemini-embedding-001', 'gemma-3-27b-it']));
-    expect(ok).toEqual({ ok: true, message: 'Key works. 2 models available.', models: ['gemini-3.5-flash', 'gemini-2.5-flash'] });
+    expect(ok).toEqual({ ok: true, message: 'Key works: 2 chat models, 1 image model and 0 speech models.', models: ['gemini-3.5-flash', 'gemini-2.5-flash'] });
     const bad = await testGeminiKey('k', (async () => new Response(JSON.stringify({ error: { message: 'API key not valid.' } }), { status: 400 })) as unknown as typeof fetch);
     expect(bad).toMatchObject({ ok: false, message: 'Google rejected this key.' });
   });

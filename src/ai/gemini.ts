@@ -24,9 +24,19 @@ export async function geminiApiKey(): Promise<string | undefined> {
 /** Gemini models that aren't for chat with tools (images, speech, embeddings, live audio…). */
 const NOT_CHAT = /(image|tts|embedding|audio|live|aqa|robotics|computer-use)/;
 
-/** The ids of models this key can chat with, without the "models/" prefix. */
+/** Every Gemini model the key last listed (chat, image and speech), so image and voice pickers can offer new ones. */
+export const GEMINI_MODELS_SETTING = 'gemini.models';
+
+export async function savedGeminiModels(): Promise<string[] | undefined> {
+  return getSetting<string[]>(GEMINI_MODELS_SETTING).catch(() => undefined);
+}
+
+/**
+ * The ids of models this key can chat with, without the "models/" prefix.
+ * Every Gemini model it lists is remembered for the image and speech pickers.
+ */
 async function listModels(key: string, fetchImpl: typeof fetch): Promise<Response | string[]> {
-  const ids: string[] = [];
+  const all: string[] = [];
   let page = '';
   for (let i = 0; i < 5; i++) {
     const res = await fetchImpl(`${GEMINI_BASE}/models?pageSize=1000${page ? `&pageToken=${encodeURIComponent(page)}` : ''}`, { headers: { 'x-goog-api-key': key } });
@@ -34,12 +44,58 @@ async function listModels(key: string, fetchImpl: typeof fetch): Promise<Respons
     const body = (await res.json()) as { models?: { name: string; supportedGenerationMethods?: string[] }[]; nextPageToken?: string };
     for (const m of body.models ?? []) {
       const id = m.name.replace(/^models\//, '');
-      if (isGeminiModel(id) && !NOT_CHAT.test(id) && (!m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))) ids.push(id);
+      if (/^(gemini-|nano-banana)/.test(id) && (!m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))) all.push(id);
     }
     if (!body.nextPageToken) break;
     page = body.nextPageToken;
   }
-  return sortGeminiModels(ids);
+  await setSetting(GEMINI_MODELS_SETTING, all).catch(() => undefined);
+  return sortGeminiModels(all.filter((id) => isGeminiModel(id) && !NOT_CHAT.test(id)));
+}
+
+/**
+ * Newest first for model families the chat ranking doesn't cover (image, speech):
+ * by version, then stable before preview, then full before lite.
+ */
+export function sortByVersion(ids: string[]): string[] {
+  const key = (id: string) => {
+    const v = /^gemini-(\d+)(?:\.(\d+))?-/.exec(id);
+    return v ? [0, -+v[1], -+(v[2] ?? 0), +/preview/.test(id), +/lite/.test(id)] : [1, 0, 0, 0, 0];
+  };
+  return [...new Set(ids)].sort((a, b) => {
+    const ka = key(a), kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+    return a.localeCompare(b);
+  });
+}
+
+/** One generateContent request (images, speech), with Google's errors made readable. */
+export async function geminiGenerate(
+  { apiKey, model, body, signal, what }: { apiKey: string; model: string; body: unknown; signal?: AbortSignal; what: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ parts: Part[]; finishReason?: string; blockReason?: string }> {
+  let res: Response;
+  try {
+    res = await fetchImpl(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError' || signal?.aborted) throw e;
+    throw new Error(`Couldn't reach Google Gemini${networkDetail(e)}. Check your connection and try again.`);
+  }
+  if (!res.ok) {
+    const detail = await errorDetail(res);
+    if (keyRejected(res.status, detail)) throw new Error('Google rejected the Gemini API key. Update it in Settings.');
+    if (res.status === 429) throw new Error('Gemini is rate-limited or your account is out of quota. Check your Google AI Studio billing and try later.');
+    if (res.status === 404) throw new Error(`${model} isn't available to this key${detail ? `: ${detail}` : '.'} Choose another model.`);
+    throw new Error(`${what} failed (${res.status})${detail ? `: ${detail}` : '.'}`);
+  }
+  const data = (await res.json().catch(() => ({}))) as StreamChunk;
+  const cand = data.candidates?.[0];
+  return { parts: cand?.content?.parts ?? [], finishReason: cand?.finishReason, blockReason: data.promptFeedback?.blockReason };
 }
 
 const TIERS = ['pro', 'flash', 'flash-lite'];
@@ -88,7 +144,12 @@ export async function testGeminiKey(key: string, fetchImpl: typeof fetch = fetch
   } catch (e) {
     return { ok: false, message: `Couldn't reach Google${networkDetail(e)}. Check your connection.` };
   }
-  if (Array.isArray(result)) return { ok: true, message: `Key works. ${result.length} models available.`, models: result };
+  if (Array.isArray(result)) {
+    const all = (await savedGeminiModels()) ?? [];
+    const count = (n: number, what: string) => `${n} ${what} model${n === 1 ? '' : 's'}`;
+    const media = [count(all.filter((id) => /image|nano-banana/.test(id)).length, 'image'), count(all.filter((id) => /tts/.test(id)).length, 'speech')];
+    return { ok: true, message: `Key works: ${count(result.length, 'chat')}, ${media.join(' and ')}.`, models: result };
+  }
   const detail = await errorDetail(result);
   if (keyRejected(result.status, detail)) return { ok: false, message: 'Google rejected this key.' };
   if (result.status === 429) return { ok: false, message: 'The key works, but it is rate-limited or out of quota.' };
