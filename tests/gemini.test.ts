@@ -73,6 +73,13 @@ describe('streamGeminiChat', () => {
     await expect(streamGeminiChat({ apiKey: 'k', model: 'm', messages: [] }, quota)).rejects.toThrow(/quota/);
     const blocked = (async () => sse([{ promptFeedback: { blockReason: 'SAFETY' } }])) as unknown as typeof fetch;
     await expect(streamGeminiChat({ apiKey: 'k', model: 'm', messages: [] }, blocked)).rejects.toThrow(/blocked the request \(SAFETY\)/);
+    const unreachable = (async () => {
+      throw new TypeError('Load failed');
+    }) as unknown as typeof fetch;
+    await expect(streamGeminiChat({ apiKey: 'k', model: 'm', messages: [] }, unreachable)).rejects.toThrow("Couldn't reach Google Gemini (Load failed). Check your connection.");
+    const dropped = (async () =>
+      new Response(new ReadableStream({ start: (c) => (c.enqueue(new TextEncoder().encode('data: {}\n')), c.error(new TypeError('The network connection was lost.'))) }), { status: 200 })) as unknown as typeof fetch;
+    await expect(streamGeminiChat({ apiKey: 'k', model: 'm', messages: [] }, dropped)).rejects.toThrow('The connection to Gemini dropped while it was answering (The network connection was lost). Try again.');
     const malformed = (async () => sse([{ candidates: [{ finishReason: 'MALFORMED_FUNCTION_CALL' }] }])) as unknown as typeof fetch;
     await expect(streamGeminiChat({ apiKey: 'k', model: 'm', messages: [] }, malformed)).rejects.toThrow(/stopped early \(MALFORMED_FUNCTION_CALL\)/);
   });

@@ -1,5 +1,5 @@
 /** Minimal Google Gemini client for the browser. The key is the user's own and is only sent to generativelanguage.googleapis.com. */
-import { ChatError, type ChatMessage, type StreamResult, type ToolCall, type ToolSpec } from './chat';
+import { ChatError, networkDetail, readChunk, type ChatMessage, type StreamResult, type ToolCall, type ToolSpec } from './chat';
 import type { KeyCheck } from './openai';
 import { getSetting, setSetting } from '../storage/db';
 
@@ -85,8 +85,8 @@ export async function testGeminiKey(key: string, fetchImpl: typeof fetch = fetch
   let result: Response | string[];
   try {
     result = await listModels(key, fetchImpl);
-  } catch {
-    return { ok: false, message: "Couldn't reach Google. Check your connection." };
+  } catch (e) {
+    return { ok: false, message: `Couldn't reach Google${networkDetail(e)}. Check your connection.` };
   }
   if (Array.isArray(result)) return { ok: true, message: `Key works. ${result.length} models available.`, models: result };
   const detail = await errorDetail(result);
@@ -212,7 +212,7 @@ export async function streamGeminiChat(
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ChatError("Couldn't reach Google Gemini. Check your connection.");
+    throw new ChatError(`Couldn't reach Google Gemini${networkDetail(e)}. Check your connection.`);
   }
   if (!res.ok || !res.body) {
     const detail = await errorDetail(res);
@@ -260,7 +260,7 @@ export async function streamGeminiChat(
   };
 
   for (;;) {
-    const { value, done } = await reader.read();
+    const { value, done } = await readChunk(reader, 'Gemini');
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     let nl: number;

@@ -52,6 +52,14 @@ describe('streamChat', () => {
     await expect(streamChat({ apiKey: 'k', model: 'm', messages: [] }, denied)).rejects.toThrow(/rejected the API key/);
     const failed = (async () => sse([{ type: 'response.failed', response: { error: { message: 'Overloaded.' } } }])) as unknown as typeof fetch;
     await expect(streamChat({ apiKey: 'k', model: 'm', messages: [] }, failed)).rejects.toThrow(/Overloaded\./);
+    const codeOnly = (async () => sse([{ type: 'response.failed', response: { status: 'failed', error: { code: 'server_error' } } }])) as unknown as typeof fetch;
+    await expect(streamChat({ apiKey: 'k', model: 'm', messages: [] }, codeOnly)).rejects.toThrow('OpenAI error: the response failed (server_error).');
+    const nested = (async () => sse([{ type: 'error', error: { message: 'Invalid schema for function.', code: 'invalid_function_parameters' } }])) as unknown as typeof fetch;
+    await expect(streamChat({ apiKey: 'k', model: 'm', messages: [] }, nested)).rejects.toThrow('OpenAI error: Invalid schema for function. (invalid_function_parameters)');
+    const unreachable = (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as unknown as typeof fetch;
+    await expect(streamChat({ apiKey: 'k', model: 'm', messages: [] }, unreachable)).rejects.toThrow("Couldn't reach OpenAI (Failed to fetch). Check your connection.");
   });
 });
 
