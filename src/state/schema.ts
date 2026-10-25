@@ -204,7 +204,13 @@ export type BreakdownMode = (typeof BREAKDOWN_MODES)[number];
 
 /** Where something is in a shot: on the floor plane, turned about Y (degrees; 0 faces +Z). */
 export const placementSchema = z.object({ position: vec3, yaw: z.number() });
-export const actorKeySchema = placementSchema.extend({ pose: z.enum(POSES) });
+/** The mannequin's joints, parent before child. */
+export const JOINTS = ['pelvis', 'spine', 'neck', 'shoulderL', 'elbowL', 'shoulderR', 'elbowR', 'hipL', 'kneeL', 'hipR', 'kneeR'] as const;
+export type Joint = (typeof JOINTS)[number];
+/** Joint rotations in degrees (XYZ), e.g. a pose matched from a photo. Joints not listed keep the preset's angles. */
+export const jointAnglesSchema = z.partialRecord(z.enum(JOINTS), vec3);
+export type JointAngles = z.infer<typeof jointAnglesSchema>;
+export const actorKeySchema = placementSchema.extend({ pose: z.enum(POSES), joints: jointAnglesSchema.optional() });
 export type Placement = z.infer<typeof placementSchema>;
 export type ActorKey = z.infer<typeof actorKeySchema>;
 

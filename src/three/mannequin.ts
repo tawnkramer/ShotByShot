@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Build, Character, PoseId, Sex } from '../state/schema';
+import { JOINTS, type Build, type Character, type Joint, type JointAngles, type PoseId, type Sex } from '../state/schema';
 import { greyMaterial } from './materials';
 
 /**
@@ -13,10 +13,7 @@ import { greyMaterial } from './materials';
  * side swings it outward.
  */
 
-export type Joint =
-  | 'pelvis' | 'spine' | 'neck'
-  | 'shoulderL' | 'elbowL' | 'shoulderR' | 'elbowR'
-  | 'hipL' | 'kneeL' | 'hipR' | 'kneeR';
+export type { Joint };
 
 type Rot = [number, number, number];
 interface Pose {
@@ -37,6 +34,8 @@ export interface Proportions {
   headR: number;
   upperArm: number;
   forearm: number;
+  /** Elbow to wrist. */
+  wrist: number;
   shoulderHalf: number;
   hipHalf: number;
   limbR: number;
@@ -67,6 +66,7 @@ export function proportions(c: Pick<Character, 'heightCm' | 'sex' | 'build'>): P
     headR: 0.065 * H,
     upperArm: 0.186 * H,
     forearm: 0.146 * H + 0.06 * H, // includes the hand
+    wrist: 0.146 * H,
     shoulderHalf: shape.shoulders * H,
     hipHalf: shape.hips * H,
     limbR: 0.024 * H * b,
@@ -124,6 +124,11 @@ function ball(radius: number, shade: number): THREE.Mesh {
 }
 
 function joint(name: Joint, x = 0, y = 0, z = 0): THREE.Group {
+  return marker(name, x, y, z);
+}
+
+/** An empty named point on the frame. */
+function marker(name: string, x = 0, y = 0, z = 0): THREE.Group {
   const g = new THREE.Group();
   g.name = name;
   g.position.set(x, y, z);
@@ -140,43 +145,73 @@ const SKIN = 0.78;
 const BODY = 0.62;
 const LEGS = 0.5;
 
-export function buildMannequin(c: Pick<Character, 'heightCm' | 'sex' | 'build' | 'tint'>, pose: PoseId = 'standing'): THREE.Group {
+/** Length of the torso from the spine joint to the base of the neck. */
+const torsoLength = (p: Proportions) => p.torso * 0.88;
+
+/**
+ * The jointed frame of the figure with no meshes: the joints, plus the head,
+ * mouth, nose tip, ears, wrists and ankles as markers. The mannequin is built on it, and
+ * joint positions can be read from it without drawing anything.
+ */
+export function buildSkeleton(c: Pick<Character, 'heightCm' | 'sex' | 'build'>): THREE.Group {
   const p = proportions(c);
+  const torsoLen = torsoLength(p);
   const root = new THREE.Group();
   root.name = 'mannequin';
   const body = new THREE.Group();
   root.add(body);
-
-  // Pelvis and torso
   const pelvis = joint('pelvis', 0, p.hipY, 0);
   body.add(pelvis);
+  const spine = joint('spine', 0, p.torso * 0.12, 0);
+  pelvis.add(spine);
+  const neck = joint('neck', 0, torsoLen, 0);
+  spine.add(neck);
+  const head = marker('head', 0, p.neck + p.headR * 0.95, 0);
+  neck.add(head);
+  head.add(marker('mouth', 0, -p.headR * 0.7, p.headR * 0.8), marker('noseTip', 0, -p.headR * 0.08, p.headR * 1.1));
+  head.add(marker('earL', p.headR * 0.9, 0, 0), marker('earR', -p.headR * 0.9, 0, 0));
+  for (const [side, s] of [['L', 1], ['R', -1]] as const) {
+    const shoulder = joint(`shoulder${side}`, s * p.shoulderHalf, torsoLen * 0.93, 0);
+    spine.add(shoulder);
+    const elbow = joint(`elbow${side}`, 0, -p.upperArm, 0);
+    shoulder.add(elbow);
+    elbow.add(marker(`wrist${side}`, 0, -p.wrist, 0));
+    const hip = joint(`hip${side}`, s * p.hipHalf, 0, 0);
+    pelvis.add(hip);
+    const knee = joint(`knee${side}`, 0, -p.thigh, 0);
+    hip.add(knee);
+    knee.add(marker(`ankle${side}`, 0, -p.shin, 0));
+  }
+  return root;
+}
+
+export function buildMannequin(c: Pick<Character, 'heightCm' | 'sex' | 'build' | 'tint'>, pose: PoseId = 'standing', joints?: JointAngles): THREE.Group {
+  const p = proportions(c);
+  const root = buildSkeleton(c);
+  const at = (name: string) => root.getObjectByName(name)!;
+
+  // Pelvis and torso
   const hips = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), greyMaterial(BODY));
   hips.scale.set(p.pelvisW / 2, p.torso * 0.22, p.torsoD / 2);
   hips.position.y = p.torso * 0.06;
   hips.userData.shade = BODY;
-  pelvis.add(hips);
+  at('pelvis').add(hips);
 
-  const spine = joint('spine', 0, p.torso * 0.12, 0);
-  pelvis.add(spine);
   const chest = new THREE.Mesh(new THREE.CapsuleGeometry(1, 1, 4, 16), greyMaterial(BODY));
   // A capsule of radius 1 and length 1 is 3 units tall; scale it into a torso.
-  const torsoLen = p.torso * 0.88;
+  const torsoLen = torsoLength(p);
   chest.scale.set(p.torsoW / 2, torsoLen / 3, p.torsoD / 2);
   chest.position.y = torsoLen / 2;
+  chest.name = 'chest';
   chest.userData.shade = BODY;
-  spine.add(chest);
+  at('spine').add(chest);
 
   // Neck and head
-  const neck = joint('neck', 0, torsoLen, 0);
-  spine.add(neck);
   const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(p.headR * 0.42, p.headR * 0.5, p.neck, 10), greyMaterial(SKIN));
   neckMesh.position.y = p.neck / 2;
   neckMesh.userData.shade = SKIN;
-  neck.add(neckMesh);
-  const head = new THREE.Group();
-  head.name = 'head';
-  head.position.y = p.neck + p.headR * 0.95;
-  neck.add(head);
+  at('neck').add(neckMesh);
+  const head = at('head');
   const skull = new THREE.Mesh(new THREE.SphereGeometry(p.headR, 20, 14), greyMaterial(SKIN));
   skull.scale.set(0.9, 1.12, 1);
   skull.userData.shade = SKIN;
@@ -195,32 +230,20 @@ export function buildMannequin(c: Pick<Character, 'heightCm' | 'sex' | 'build' |
   nose.userData.shade = SKIN - 0.08;
   head.add(nose);
 
-  // Arms
-  const shoulderY = torsoLen * 0.93;
-  for (const [side, s] of [['L', 1], ['R', -1]] as const) {
-    const shoulder = joint(`shoulder${side}`, s * p.shoulderHalf, shoulderY, 0);
-    spine.add(shoulder);
-    shoulder.add(ball(p.limbR * 1.45, BODY), capsule(p.limbR * 1.05, p.upperArm, BODY));
-    const elbow = joint(`elbow${side}`, 0, -p.upperArm, 0);
-    shoulder.add(elbow);
-    elbow.add(ball(p.limbR * 0.98, SKIN), capsule(p.limbR * 0.9, p.forearm, SKIN));
-  }
-
-  // Legs
-  for (const [side, s] of [['L', 1], ['R', -1]] as const) {
-    const hip = joint(`hip${side}`, s * p.hipHalf, 0, 0);
-    pelvis.add(hip);
-    hip.add(ball(p.limbR * 1.4, LEGS), capsule(p.limbR * 1.35, p.thigh, LEGS));
-    const knee = joint(`knee${side}`, 0, -p.thigh, 0);
-    hip.add(knee);
+  // Arms and legs
+  for (const side of ['L', 'R'] as const) {
+    at(`shoulder${side}`).add(ball(p.limbR * 1.45, BODY), capsule(p.limbR * 1.05, p.upperArm, BODY));
+    at(`elbow${side}`).add(ball(p.limbR * 0.98, SKIN), capsule(p.limbR * 0.9, p.forearm, SKIN));
+    at(`hip${side}`).add(ball(p.limbR * 1.4, LEGS), capsule(p.limbR * 1.35, p.thigh, LEGS));
+    const knee = at(`knee${side}`);
     knee.add(ball(p.limbR * 1.2, LEGS), capsule(p.limbR * 1.1, p.shin, LEGS));
     const foot = new THREE.Mesh(new THREE.BoxGeometry(p.limbR * 2.2, p.foot, p.height * 0.15), greyMaterial(0.35));
-    foot.position.set(0, -p.shin - p.foot / 2, p.height * 0.045);
+    foot.position.set(0, -p.foot / 2, p.height * 0.045);
     foot.userData.shade = 0.35;
-    knee.add(foot);
+    at(`ankle${side}`).add(foot);
   }
 
-  applyPose(root, c, pose);
+  applyPose(root, c, pose, joints);
 
   root.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -234,14 +257,21 @@ export function buildMannequin(c: Pick<Character, 'heightCm' | 'sex' | 'build' |
   return root;
 }
 
-/** Sets joint rotations for a pose. Joints not named by the pose return to rest. */
-export function applyPose(root: THREE.Object3D, c: Pick<Character, 'heightCm' | 'sex' | 'build'>, pose: PoseId): void {
+/**
+ * Sets joint rotations for a pose. Joints not named by the pose return to
+ * rest. `joints` (degrees) replace the pose's angles for the joints they
+ * name, e.g. a pose matched from a photo; the pose still sets the body's
+ * height and lie. A standing body with its own leg angles (a crouch, a
+ * kneel) is lowered or raised so its lowest foot or knee is on the floor.
+ */
+export function applyPose(root: THREE.Object3D, c: Pick<Character, 'heightCm' | 'sex' | 'build'>, pose: PoseId, joints?: JointAngles): void {
   const p = proportions(c);
   const def = POSE_DEFS[pose];
   const body = root.children[0];
   root.traverse((o) => {
     if ((o.name as Joint) in JOINT_SET) {
-      const r = def.joints[o.name as Joint] ?? [0, 0, 0];
+      const own = joints?.[o.name as Joint];
+      const r = own ? own.map(deg) : (def.joints[o.name as Joint] ?? [0, 0, 0]);
       o.rotation.set(r[0], r[1], r[2]);
     }
   });
@@ -249,11 +279,38 @@ export function applyPose(root: THREE.Object3D, c: Pick<Character, 'heightCm' | 
   pelvis.position.y = def.pelvisHeight ? def.pelvisHeight(p) : p.hipY;
   body.rotation.set(...(def.root?.rotation ?? [0, 0, 0]));
   body.position.set(0, def.root?.lift?.(p) ?? 0, 0);
+  for (const side of ['L', 'R']) root.getObjectByName(`ankle${side}`)?.rotation.set(0, 0, 0);
+  if (joints && !def.pelvisHeight && !def.root) settleOnFloor(root, pelvis, p);
 }
 
-const JOINT_SET: Record<Joint, true> = {
-  pelvis: true, spine: true, neck: true, shoulderL: true, elbowL: true, shoulderR: true, elbowR: true, hipL: true, kneeL: true, hipR: true, kneeR: true,
-};
+/** How far a foot turns at the ankle to stay flat. */
+const ANKLE_MAX = deg(60);
+
+/**
+ * Turns the feet flat to the body (as far as an ankle can), then moves the
+ * pelvis up or down so the lowest ankle (over its foot) or knee touches the
+ * floor.
+ */
+function settleOnFloor(root: THREE.Object3D, pelvis: THREE.Object3D, p: Proportions): void {
+  root.updateMatrixWorld(true);
+  const body = root.children[0];
+  for (const side of ['L', 'R']) {
+    const ankle = root.getObjectByName(`ankle${side}`)!;
+    // The shin's turn relative to the body, undone at the ankle.
+    const shin = body.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(ankle.parent!.getWorldQuaternion(new THREE.Quaternion()));
+    const flat = shin.invert();
+    const turn = 2 * Math.acos(Math.min(1, Math.abs(flat.w)));
+    if (turn > ANKLE_MAX) flat.slerp(new THREE.Quaternion(), 1 - ANKLE_MAX / turn);
+    ankle.quaternion.copy(flat);
+  }
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  const height = (name: string) => root.worldToLocal(root.getObjectByName(name)!.getWorldPosition(v)).y;
+  const gap = Math.min(height('ankleL') - p.foot, height('ankleR') - p.foot, height('kneeL') - p.limbR * 1.2, height('kneeR') - p.limbR * 1.2);
+  pelvis.position.y -= gap;
+}
+
+const JOINT_SET = Object.fromEntries(JOINTS.map((j) => [j, true])) as Record<Joint, true>;
 
 /** A colored ring on the floor with a notch toward the front. */
 function baseMarker(tint: string, p: Proportions): THREE.Group {

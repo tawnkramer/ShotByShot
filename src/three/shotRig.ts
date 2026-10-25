@@ -125,9 +125,12 @@ export class ShotRig {
       if (f.walkPhase !== undefined) {
         applyWalkCycle(item.object, c, f.walkPhase);
         item.pose = 'walk';
-      } else if (item.pose !== f.pose) {
-        applyPose(item.object, c, f.pose);
-        item.pose = f.pose;
+      } else {
+        const sig = f.joints ? `${f.pose}:${JSON.stringify(f.joints)}` : f.pose;
+        if (item.pose !== sig) {
+          applyPose(item.object, c, f.pose, f.joints);
+          item.pose = sig;
+        }
       }
     }
     for (const p of eff.setup.props) {

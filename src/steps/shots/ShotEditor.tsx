@@ -16,6 +16,7 @@ import { ShotCanvas } from './ShotCanvas';
 import { CameraPad } from './CameraPad';
 import { Timeline } from './Timeline';
 import { BlockingPanel } from './BlockingPanel';
+import { MatchPhotoSheet } from './MatchPhotoSheet';
 import { CameraPanel } from './CameraPanel';
 import { AudioPanel } from '../common/AudioPanel';
 import { audioContext, DialoguePlayer, loadBuffer } from '../../audio/player';
@@ -51,6 +52,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
   const [selected, setSelected] = useState<RigId | null>(null);
   const [gizmo, setGizmo] = useState<'translate' | 'rotate'>('translate');
   const [liveCamera, setLiveCamera] = useState<CameraState | null>(null);
+  const [matching, setMatching] = useState(false);
 
   const seek = (next: number) => {
     timeRef.current = next;
@@ -97,6 +99,11 @@ export function ShotEditor({ shotId }: { shotId: string }) {
 
   const blocking = mode === 'blocking';
   const useShotView = !blocking || view === 'shot' || playing;
+  const matchButton = eff.setup.actors.length > 0 && (
+    <button className="btn small-btn" onClick={() => { setPlaying(false); setMatching(true); }}>
+      Match photo
+    </button>
+  );
 
   return (
     <div className="shot-editor">
@@ -139,6 +146,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
               }}
             />
           )}
+          {mode === 'camera' && !playing && matchButton && <div className="frame-tools">{matchButton}</div>}
           {caption && !showingArtwork && !comic && (
             <div className="caption">
               {caption.speaker && <span className="caption-speaker">{caption.speaker}</span>}
@@ -152,6 +160,7 @@ export function ShotEditor({ shotId }: { shotId: string }) {
           </div>
           {blocking && !playing && (
             <div className="frame-tools">
+              {matchButton}
               <button className="btn small-btn" onClick={() => setView((v) => (v === 'shot' ? 'free' : 'shot'))}>
                 {view === 'shot' ? 'Free view' : 'Shot view'}
               </button>
@@ -209,6 +218,17 @@ export function ShotEditor({ shotId }: { shotId: string }) {
         </button>
         <button role="tab" aria-selected={mode === 'image'} className={mode === 'image' ? 'on' : ''} onClick={() => { setMode('image'); setPlaying(false); setLiveCamera(null); }}>Image</button>
       </div>
+
+      {matching && (
+        <MatchPhotoSheet
+          project={project}
+          shot={shot}
+          eff={eff}
+          editKey={comic ? 'start' : editKey}
+          characterId={selected?.startsWith('actor:') ? selected.slice(6) : null}
+          onClose={() => setMatching(false)}
+        />
+      )}
 
       <div className="split-panel">
         {mode !== 'image' && !comic && <AudioPanel project={project} lineIds={shot.lineIds} compact />}

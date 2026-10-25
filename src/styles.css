@@ -760,3 +760,12 @@ input[type='range'] { width: 100%; accent-color: var(--accent); min-height: 28px
 .lettering-rotate-handle { position: absolute; left: 50%; bottom: calc(100% + 34px); width: 36px; height: 36px; margin-left: -18px; border-radius: 50%; background: #4a9eff; border: 3px solid #fff; box-shadow: 0 1px 6px rgb(0 0 0 / 0.5); cursor: grab; touch-action: none; pointer-events: auto; }
 .lettering-color { display: inline-flex; align-items: center; }
 .lettering-color input { width: 40px; height: 40px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: none; }
+
+/* Match photo */
+.match-preview { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; }
+.match-preview img, .match-photo-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+.match-photo-layer { background-repeat: no-repeat; pointer-events: none; }
+.photo-people { position: relative; width: 100%; }
+.photo-people img { display: block; width: 100%; border-radius: 8px; }
+.photo-people button { position: absolute; padding: 0; background: transparent; border: 2px solid rgb(255 255 255 / 0.6); border-radius: 6px; cursor: pointer; }
+.photo-people button.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgb(0 0 0 / 0.4); }

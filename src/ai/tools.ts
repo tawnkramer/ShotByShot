@@ -722,11 +722,14 @@ const blockShots = tool(
           position: [spec.start.x ?? before?.position[0] ?? 0, spec.start.y ?? before?.position[1] ?? 0, spec.start.z ?? before?.position[2] ?? 0],
           yaw: spec.start.yaw ?? before?.yaw ?? 0,
           pose: spec.start.pose ?? before?.pose ?? 'standing',
+          // A pose matched from a photo stays unless a new pose is given.
+          ...(!spec.start.pose && before?.joints ? { joints: before.joints } : {}),
         };
         const end: ActorKey | undefined = spec.end && {
           position: [spec.end.x ?? start.position[0], spec.end.y ?? start.position[1], spec.end.z ?? start.position[2]],
           yaw: spec.end.yaw ?? start.yaw,
           pose: spec.end.pose ?? start.pose,
+          ...(!spec.end.pose && start.joints ? { joints: start.joints } : {}),
         };
         return { c, spec, start, end };
       });

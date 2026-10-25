@@ -36,7 +36,7 @@ describe('mannequin', () => {
 
   it('gives men wider shoulders and heavier builds more girth', () => {
     const w = (sex: Sex, build: Build = 'average') => {
-      const b = bounds(buildMannequin({ ...base, sex, build }).getObjectByName('spine')!.children[0]);
+      const b = bounds(buildMannequin({ ...base, sex, build }).getObjectByName('chest')!);
       return b.max.x - b.min.x;
     };
     expect(w('male')).toBeGreaterThan(w('female'));
